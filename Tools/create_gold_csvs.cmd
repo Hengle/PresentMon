@@ -52,4 +52,3 @@ exit /b 0
     where /q unix2dos
     if %errorlevel% equ 0 unix2dos -q "%~dpn1.csv"
     exit /b 0
-

@@ -184,12 +184,13 @@ private:
 
 struct PMTraceConsumer
 {
-    PMTraceConsumer(bool filteredEvents, bool simple, bool trackedFiltering=false);
+    PMTraceConsumer();
 
     EventMetadata mMetadata;
 
-    bool mFilteredEvents;
-    bool mSimpleMode;
+    bool mFilteredEvents = false;
+    bool mFilteredProcessIds = false;
+    bool mTrackDisplay = true;
 
     // Not all ETW providers start/stop at the same time, so there can be
     // situations where we're only seeing some of the events.  E.g., we may see
@@ -205,7 +206,7 @@ struct PMTraceConsumer
     //
     // We don't wait for existance of Win32K TokenCompositionSurfaceObject
     // events as we just might not be using that path.
-    bool mDxgkProviderInitialized;
+    bool mDxgkProviderInitialized = false;
 
     // Store completed presents until the consumer thread removes them using
     // DequeuePresents().  Completed presents are those that have progressed as
@@ -253,7 +254,7 @@ struct PMTraceConsumer
     // during Win32K events.
 
     // Circular buffer of all Presents, older presents will be considered lost if not completed by the next visit.
-    unsigned int mAllPresentsNextIndex;
+    unsigned int mAllPresentsNextIndex = 0;
     std::vector<std::shared_ptr<PresentEvent>> mAllPresents;
 
     // [thread id]
@@ -326,7 +327,7 @@ struct PMTraceConsumer
     std::map<uint64_t, std::shared_ptr<PresentEvent>> mPresentsByLegacyBlitToken;
 
     // Limit tracking to specified processes
-    bool mEnableTrackedProcessFiltering;
+    bool mEnableTrackedProcessFiltering = false;
     std::set<uint32_t> mTrackedProcessFilter;
     std::shared_mutex mTrackedProcessFilterMutex;
 

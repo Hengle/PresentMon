@@ -111,13 +111,8 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
 #endif
 }
 
-PMTraceConsumer::PMTraceConsumer(bool filteredEvents, bool simple, bool trackedFiltering)
-    : mFilteredEvents(filteredEvents)
-    , mSimpleMode(simple)
-    , mAllPresentsNextIndex(0)
-    , mAllPresents(PRESENTEVENT_CIRCULAR_BUFFER_SIZE)
-    , mEnableTrackedProcessFiltering(trackedFiltering)
-    , mDxgkProviderInitialized(false)
+PMTraceConsumer::PMTraceConsumer()
+    : mAllPresents(PRESENTEVENT_CIRCULAR_BUFFER_SIZE)
 {
 }
 
@@ -126,7 +121,7 @@ void PMTraceConsumer::HandleD3D9Event(EVENT_RECORD* pEventRecord)
     DebugEvent(pEventRecord, &mMetadata);
 
     // Don't start any presents until we've seen backend events
-    if (!mSimpleMode && !mDxgkProviderInitialized) {
+    if (mTrackDisplay && !mDxgkProviderInitialized) {
         return;
     }
 
@@ -184,7 +179,7 @@ void PMTraceConsumer::HandleDXGIEvent(EVENT_RECORD* pEventRecord)
     DebugEvent(pEventRecord, &mMetadata);
 
     // Don't start any presents until we've seen backend events
-    if (!mSimpleMode && !mDxgkProviderInitialized) {
+    if (mTrackDisplay && !mDxgkProviderInitialized) {
         return;
     }
 
@@ -1607,13 +1602,11 @@ void PMTraceConsumer::RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPres
     event.Runtime   = runtime;
     event.TimeTaken = *(uint64_t*) &hdr.TimeStamp - event.QpcTime;
 
-    if (!AllowPresentBatching || mSimpleMode) {
+    if (!AllowPresentBatching || !mTrackDisplay) {
         event.FinalState = AllowPresentBatching ? PresentResult::Presented : PresentResult::Discarded;
         CompletePresent(eventIter->second);
         // CompletePresent removes the entry in mPresentByThreadId.
-    }
-    else
-    {
+    } else {
         // We now remove this present from mPresentByThreadId because any future
         // event related to it (e.g., from DXGK/Win32K/etc.) is not expected to
         // come from this thread.
@@ -1675,7 +1668,7 @@ void PMTraceConsumer::RemoveTrackedProcessForFiltering(uint32_t processID)
 
 bool PMTraceConsumer::IsProcessTrackedForFiltering(uint32_t processID)
 {
-    if (!mEnableTrackedProcessFiltering || processID == DwmProcessId) {
+    if (!mFilteredProcessIds || processID == DwmProcessId) {
         return true;
     }
 
