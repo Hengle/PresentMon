@@ -174,13 +174,13 @@ private:
 
 struct PMTraceConsumer
 {
-    PMTraceConsumer(bool filteredEvents, bool simple);
+    PMTraceConsumer();
     ~PMTraceConsumer();
 
     EventMetadata mMetadata;
 
-    bool mFilteredEvents;
-    bool mSimpleMode;
+    bool mFilteredEvents = false;
+    bool mTrackDisplay = true;
 
     // Store completed presents until the consumer thread removes them using
     // DequeuePresents().  Completed presents are those that have progressed as

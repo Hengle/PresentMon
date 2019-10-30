@@ -182,7 +182,7 @@ void UpdateConsole(uint32_t processId, ProcessInfo const& processInfo)
         uint64_t latencySum = 0;
         uint64_t display0ScreenTime = 0;
         PresentEvent* displayN = nullptr;
-        if (args.mVerbosity > Verbosity::Simple) {
+        if (args.mTrackDisplay) {
             for (uint32_t i = 0; i < chain.mPresentHistoryCount; ++i) {
                 auto const& p = chain.mPresentHistory[(chain.mNextPresentIndex - chain.mPresentHistoryCount + i) % SwapChainData::PRESENT_HISTORY_MAX_COUNT];
                 if (p->FinalState == PresentResult::Presented) {

@@ -74,8 +74,8 @@ Recording options:
   -timed seconds           Stop recording after the provided amount of time.
   -exclude_dropped         Exclude dropped presents from the csv output.
   -scroll_indicator        Enable scroll lock while recording.
-  -simple                  Disable GPU/display tracking.
-  -verbose                 Adds additional data to output not relevant to normal
+  -no_track_display        Disable tracking through GPU and display.
+  -track_debug             Adds additional data to output not relevant to normal
                            usage.
 
 Execution options:
@@ -106,7 +106,7 @@ Beta options:
   -terminate_existing      Terminate any existing PresentMon realtime trace
                            sessions, then exit. Use with -session_name to target
                            particular sessions.
-  -include_mixed_reality   Capture Windows Mixed Reality data to a CSV file with
+  -track_mixed_reality     Capture Windows Mixed Reality data to a CSV file with
                            "_WMR" suffix.
 ```
 
@@ -132,18 +132,18 @@ If `-hotkey` is used, then one CSV is created for each time recording is started
 | Runtime                | The runtime used to present (e.g., D3D9 or DXGI). ||
 | SyncInterval           | The sync interval used in the Present() call. ||
 | PresentFlags           | Flags used in the Present() call. ||
-| PresentMode            | The presentation mode used by the system for this Present().  See the table below for more details. | not `-simple` |
-| AllowsTearing          | Whether tearing is possible (1) or not (0). | not `-simple` |
+| PresentMode            | The presentation mode used by the system for this Present().  See the table below for more details. | not `-no_track_display` |
+| AllowsTearing          | Whether tearing is possible (1) or not (0). | not `-no_track_display` |
 | TimeInSeconds          | The time of the Present() call, in seconds, relative to when the PresentMon started recording. | |
 | QPCTime                | The time of the Present() call, as a [performance counter value](https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter).  If `-qpc_time_s` is used, the value is converted to seconds by dividing by the counter frequency. | `-qpc_time` or `-qpc_time_s` |
 | MsInPresentAPI         | The time spent inside the Present() call, in milliseconds. ||
-| MsUntilRenderComplete  | The time between the Present() call and when the GPU work completed, in milliseconds. | not `-simple` |
-| MsUntilDisplayed       | The time between the Present() call and when the frame was displayed, in milliseconds. | not `-simple` |
+| MsUntilRenderComplete  | The time between the Present() call and when the GPU work completed, in milliseconds. | not `-no_track_display` |
+| MsUntilDisplayed       | The time between the Present() call and when the frame was displayed, in milliseconds. | not `-no_track_display` |
 | Dropped                | Whether the frame was dropped (1) or displayed (0).  Note, if dropped, MsUntilDisplayed will be 0. ||
 | MsBetweenPresents      | The time between this Present() call and the previous one, in milliseconds. ||
-| MsBetweenDisplayChange | How long the previous frame was displayed before this Present() was displayed, in milliseconds. | not `-simple` |
-| WasBatched             | Whether the frame was submitted by the driver on a different thread than the app (1) or not (0). | `-verbose` |
-| DwmNotified            | Whether the desktop compositor was notified about the frame (1) or not (0). | `-verbose` |
+| MsBetweenDisplayChange | How long the previous frame was displayed before this Present() was displayed, in milliseconds. | not `-no_track_display` |
+| WasBatched             | Whether the frame was submitted by the driver on a different thread than the app (1) or not (0). | `-track_debug` |
+| DwmNotified            | Whether the desktop compositor was notified about the frame (1) or not (0). | `-track_debug` |
 
 
 The following values are used in the PresentMode column:
@@ -168,40 +168,40 @@ For more information on the performance implications of these, see:
 
 *Note: Windows Mixed Reality support is in beta, with limited OS support and maintenance.*
 
-If `-include_mixed_reality` is used, a second CSV file will be generated with `_WMR` appended to the filename with the following columns:
+If `-track_mixed_reality` is used, a second CSV file will be generated with `_WMR` appended to the filename with the following columns:
 
 | Column Header | Data Description | Required argument |
 |---|---|---|
-| Application                                  | Process name (if known) | `-include_mixed_reality` |
-| ProcessID                                    | Process ID | `-include_mixed_reality` |
-| DwmProcessID                                 | Compositor Process ID | `-include_mixed_reality` |
-| TimeInSeconds                                | Time since PresentMon recording started | `-include_mixed_reality` |
-| MsBetweenLsrs                                | Time between this Lsr CPU start and the previous one | `-include_mixed_reality` |
-| AppMissed                                    | Whether Lsr is reprojecting a new (0) or old (1) App frame (App GPU work must complete before Lsr CPU start) | `-include_mixed_reality` |
-| LsrMissed                                    | Whether Lsr displayed a new frame (0) or not (1+) at the intended V-Sync (Count V-Syncs with no display change) | `-include_mixed_reality` |
-| MsAppPoseLatency                             | Time between App's pose sample and the intended mid-photon frame display | `-include_mixed_reality` |
-| MsLsrPoseLatency                             | Time between Lsr's pose sample and the intended mid-photon frame display | `-include_mixed_reality` |
-| MsActualLsrPoseLatency                       | Time between Lsr's pose sample and mid-photon frame display | `-include_mixed_reality` |
-| MsTimeUntilVsync                             | Time between Lsr CPU start and the intended V-Sync | `-include_mixed_reality` |
-| MsLsrThreadWakeupToGpuEnd                    | Time between Lsr CPU start and GPU work completion | `-include_mixed_reality` |
-| MsLsrThreadWakeupError                       | Time between intended Lsr CPU start and Lsr CPU start | `-include_mixed_reality` |
-| MsLsrPreemption                              | Time spent preempting the GPU with Lsr GPU work | `-include_mixed_reality` |
-| MsLsrExecution                               | Time spent executing the Lsr GPU work | `-include_mixed_reality` |
-| MsCopyPreemption                             | Time spent preempting the GPU with Lsr GPU cross-adapter copy work (if required) | `-include_mixed_reality` |
-| MsCopyExecution                              | Time spent executing the Lsr GPU cross-adapter copy work (if required) | `-include_mixed_reality` |
-| MsGpuEndToVsync                              | Time between Lsr GPU work completion and V-Sync | `-include_mixed_reality` |
-| MsBetweenAppPresents                         | Time between App's present and the previous one | `-include_mixed_reality` and not `-simple` |
-| MsAppPresentToLsr                            | Time between App's present and Lsr CPU start | `-include_mixed_reality` and not `-simple` |
-| HolographicFrameID                           | App's Holographic Frame ID | `-include_mixed_reality` `-verbose` |
-| MsSourceReleaseFromRenderingToLsrAcquire     | Time between composition end and Lsr acquire | `-include_mixed_reality` `-verbose` |
-| MsAppCpuRenderFrame                          | Time between App's CreateNextFrame() API call and PresentWithCurrentPrediction() API call | `-include_mixed_reality` `-verbose` |
-| MsAppMisprediction                           | Time between App's intended pose time and the intended mid-photon frame display | `-include_mixed_reality` `-verbose` |
-| MsLsrCpuRenderFrame                          | Time between Lsr CPU render start and GPU work submit | `-include_mixed_reality` `-verbose` |
-| MsLsrThreadWakeupToCpuRenderFrameStart       | Time between Lsr CPU start and CPU render start | `-include_mixed_reality` `-verbose` |
-| MsCpuRenderFrameStartToHeadPoseCallbackStart | Time between Lsr CPU render start and pose sample | `-include_mixed_reality` `-verbose` |
-| MsGetHeadPose                                | Time between Lsr pose sample start and pose sample end | `-include_mixed_reality` `-verbose` |
-| MsHeadPoseCallbackStopToInputLatch           | Time between Lsr pose sample end and input latch | `-include_mixed_reality` `-verbose` |
-| MsInputLatchToGpuSubmission                  | Time between Lsr input latch and GPU work submit | `-include_mixed_reality` `-verbose` |
+| Application                                  | Process name (if known) | `-track_mixed_reality` |
+| ProcessID                                    | Process ID | `-track_mixed_reality` |
+| DwmProcessID                                 | Compositor Process ID | `-track_mixed_reality` |
+| TimeInSeconds                                | Time since PresentMon recording started | `-track_mixed_reality` |
+| MsBetweenLsrs                                | Time between this Lsr CPU start and the previous one | `-track_mixed_reality` |
+| AppMissed                                    | Whether Lsr is reprojecting a new (0) or old (1) App frame (App GPU work must complete before Lsr CPU start) | `-track_mixed_reality` |
+| LsrMissed                                    | Whether Lsr displayed a new frame (0) or not (1+) at the intended V-Sync (Count V-Syncs with no display change) | `-track_mixed_reality` |
+| MsAppPoseLatency                             | Time between App's pose sample and the intended mid-photon frame display | `-track_mixed_reality` |
+| MsLsrPoseLatency                             | Time between Lsr's pose sample and the intended mid-photon frame display | `-track_mixed_reality` |
+| MsActualLsrPoseLatency                       | Time between Lsr's pose sample and mid-photon frame display | `-track_mixed_reality` |
+| MsTimeUntilVsync                             | Time between Lsr CPU start and the intended V-Sync | `-track_mixed_reality` |
+| MsLsrThreadWakeupToGpuEnd                    | Time between Lsr CPU start and GPU work completion | `-track_mixed_reality` |
+| MsLsrThreadWakeupError                       | Time between intended Lsr CPU start and Lsr CPU start | `-track_mixed_reality` |
+| MsLsrPreemption                              | Time spent preempting the GPU with Lsr GPU work | `-track_mixed_reality` |
+| MsLsrExecution                               | Time spent executing the Lsr GPU work | `-track_mixed_reality` |
+| MsCopyPreemption                             | Time spent preempting the GPU with Lsr GPU cross-adapter copy work (if required) | `-track_mixed_reality` |
+| MsCopyExecution                              | Time spent executing the Lsr GPU cross-adapter copy work (if required) | `-track_mixed_reality` |
+| MsGpuEndToVsync                              | Time between Lsr GPU work completion and V-Sync | `-track_mixed_reality` |
+| MsBetweenAppPresents                         | Time between App's present and the previous one | `-track_mixed_reality` and not `-no_track_display` |
+| MsAppPresentToLsr                            | Time between App's present and Lsr CPU start | `-track_mixed_reality` and not `-no_track_display` |
+| HolographicFrameID                           | App's Holographic Frame ID | `-track_mixed_reality` `-track_debug` |
+| MsSourceReleaseFromRenderingToLsrAcquire     | Time between composition end and Lsr acquire | `-track_mixed_reality` `-track_debug` |
+| MsAppCpuRenderFrame                          | Time between App's CreateNextFrame() API call and PresentWithCurrentPrediction() API call | `-track_mixed_reality` `-track_debug` |
+| MsAppMisprediction                           | Time between App's intended pose time and the intended mid-photon frame display | `-track_mixed_reality` `-track_debug` |
+| MsLsrCpuRenderFrame                          | Time between Lsr CPU render start and GPU work submit | `-track_mixed_reality` `-track_debug` |
+| MsLsrThreadWakeupToCpuRenderFrameStart       | Time between Lsr CPU start and CPU render start | `-track_mixed_reality` `-track_debug` |
+| MsCpuRenderFrameStartToHeadPoseCallbackStart | Time between Lsr CPU render start and pose sample | `-track_mixed_reality` `-track_debug` |
+| MsGetHeadPose                                | Time between Lsr pose sample start and pose sample end | `-track_mixed_reality` `-track_debug` |
+| MsHeadPoseCallbackStopToInputLatch           | Time between Lsr pose sample end and input latch | `-track_mixed_reality` `-track_debug` |
+| MsInputLatchToGpuSubmission                  | Time between Lsr input latch and GPU work submit | `-track_mixed_reality` `-track_debug` |
 
 
 

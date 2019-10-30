@@ -50,12 +50,6 @@ which is controlled from MainThread based on user input or timer.
 
 #include <unordered_map>
 
-enum class Verbosity {
-    Simple,
-    Normal,
-    Verbose
-};
-
 enum class ConsoleOutput {
     None,
     Simple,
@@ -74,7 +68,9 @@ struct CommandLineArgs {
     UINT mHotkeyModifiers;
     UINT mHotkeyVirtualKeyCode;
     ConsoleOutput mConsoleOutputType;
-    Verbosity mVerbosity;
+    bool mTrackDisplay;
+    bool mTrackDebug;
+    bool mTrackWMR;
     bool mOutputCsvToFile;
     bool mOutputCsvToStdout;
     bool mOutputQpcTime;
@@ -87,7 +83,6 @@ struct CommandLineArgs {
     bool mTerminateAfterTimer;
     bool mHotkeySupport;
     bool mTryToElevate;
-    bool mIncludeWindowsMixedReality;
     bool mMultiCsv;
     bool mStopExistingSession;
 };

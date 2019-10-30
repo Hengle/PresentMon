@@ -107,9 +107,7 @@ PresentEvent::~PresentEvent()
     assert(Completed || gPresentMonTraceConsumer_Exiting);
 }
 
-PMTraceConsumer::PMTraceConsumer(bool filteredEvents, bool simple)
-    : mFilteredEvents(filteredEvents)
-    , mSimpleMode(simple)
+PMTraceConsumer::PMTraceConsumer()
 {
 }
 
@@ -1334,7 +1332,7 @@ void PMTraceConsumer::RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPres
     event.Runtime   = runtime;
     event.TimeTaken = *(uint64_t*) &hdr.TimeStamp - event.QpcTime;
 
-    if (!AllowPresentBatching || mSimpleMode) {
+    if (!AllowPresentBatching || !mTrackDisplay) {
         event.FinalState = AllowPresentBatching ? PresentResult::Presented : PresentResult::Discarded;
         CompletePresent(eventIter->second);
     }

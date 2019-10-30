@@ -36,16 +36,17 @@ static MRTraceConsumer* gMRConsumer = nullptr;
 bool StartTraceSession()
 {
     auto const& args = GetCommandLineArgs();
-    auto simple = args.mVerbosity == Verbosity::Simple;
-    auto includeWinMR = args.mIncludeWindowsMixedReality;
     auto expectFilteredEvents =
         args.mEtlFileName == nullptr && // Scope filtering based on event ID only works for realtime collection
         IsWindows8Point1OrGreater();    // and requires Win8.1+
 
     // Create consumers
-    gPMConsumer = new PMTraceConsumer(expectFilteredEvents, simple);
-    if (includeWinMR) {
-        gMRConsumer = new MRTraceConsumer(simple);
+    gPMConsumer = new PMTraceConsumer();
+    gPMConsumer->mFilteredEvents = expectFilteredEvents;
+    gPMConsumer->mTrackDisplay = args.mTrackDisplay;
+
+    if (args.mTrackWMR) {
+        gMRConsumer = new MRTraceConsumer(args.mTrackDisplay);
     }
 
     // Start the session;
