@@ -329,7 +329,7 @@ static void AddPresents(LateStageReprojectionData* lsrData,
             continue;
         }
 
-        if ((args.mVerbosity > Verbosity::Simple) && (appProcessId == 0)) {
+        if (args.mTrackDisplay && (appProcessId == 0)) {
             continue; // Incomplete event data
         }
 

@@ -184,16 +184,17 @@ private:
 
 struct PMTraceConsumer
 {
-    PMTraceConsumer(bool filteredEvents, bool simple, bool trackedFiltering=false);
+    PMTraceConsumer();
 
     EventMetadata mMetadata;
 
-    bool mFilteredEvents;
-    bool mSimpleMode;
+    bool mFilteredEvents = false;
+    bool mFilteredProcessIds = false;
+    bool mTrackDisplay = true;
 
     // Tracks whether a backend event (e.g., from DXGK) has tried to lookup a
     // present yes, as an indication that the backend providers are running.
-    bool mFindOrCreatePresentCalled;
+    bool mFindOrCreatePresentCalled = false;
 
     // Store completed presents until the consumer thread removes them using
     // DequeuePresents().  Completed presents are those that have progressed as
@@ -241,7 +242,7 @@ struct PMTraceConsumer
     // during Win32K events.
 
     // Circular buffer of all Presents, older presents will be considered lost if not completed by the next visit.
-    unsigned int mAllPresentsNextIndex;
+    unsigned int mAllPresentsNextIndex = 0;
     std::vector<std::shared_ptr<PresentEvent>> mAllPresents;
 
     // [thread id]
@@ -314,7 +315,6 @@ struct PMTraceConsumer
     std::map<uint64_t, std::shared_ptr<PresentEvent>> mPresentsByLegacyBlitToken;
 
     // Limit tracking to specified processes
-    bool mEnableTrackedProcessFiltering;
     std::set<uint32_t> mTrackedProcessFilter;
     std::shared_mutex mTrackedProcessFilterMutex;
 

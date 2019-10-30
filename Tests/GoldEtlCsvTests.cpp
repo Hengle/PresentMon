@@ -60,8 +60,8 @@ public:
         pm.Add(L"-stop_existing_session");
         pm.AddEtlPath(etl_);
         pm.AddCsvPath(testCsv_);
-        if (goldCsv.simple_) pm.Add(L"-simple");
-        if (goldCsv.verbose_) pm.Add(L"-verbose");
+        if (!goldCsv.trackDisplay_) pm.Add(L"-no_track_display");
+        if (goldCsv.trackDebug_) pm.Add(L"-track_debug");
         if (goldCsv.GetColumnIndex("QPCTime") != SIZE_MAX) pm.Add(L"-qpc_time"); // TODO: check if %ull or %.9lf to see if -qpc_time_s
         pm.PMSTART();
         pm.PMEXITED();

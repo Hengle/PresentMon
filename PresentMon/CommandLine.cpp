@@ -307,8 +307,8 @@ static void PrintHelp()
         "-timed seconds",           "Stop recording after the provided amount of time.",
         "-exclude_dropped",         "Exclude dropped presents from the csv output.",
         "-scroll_indicator",        "Enable scroll lock while recording.",
-        "-simple",                  "Disable GPU/display tracking.",
-        "-verbose",                 "Adds additional data to output not relevant to normal usage.",
+        "-no_track_display",        "Disable tracking through GPU and display.",
+        "-track_debug",             "Adds additional data to output not relevant to normal usage.",
 
         "Execution options", nullptr,
         "-session_name name",       "Use the provided name to start a new realtime ETW session, instead"
@@ -330,7 +330,7 @@ static void PrintHelp()
         "-qpc_time_s",              "Output present time as a performance counter value converted to seconds.",
         "-terminate_existing",      "Terminate any existing PresentMon realtime trace sessions, then exit."
                                     " Use with -session_name to target particular sessions.",
-        "-include_mixed_reality",   "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
+        "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
     };
 
     fprintf(stderr, "PresentMon %s\n", PRESENT_MON_VERSION);
@@ -394,13 +394,15 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTimer = 0;
     args->mHotkeyModifiers = MOD_NOREPEAT;
     args->mHotkeyVirtualKeyCode = 0;
+    args->mTrackDisplay = true;
+    args->mTrackDebug = false;
+    args->mTrackWMR = false;
     args->mOutputCsvToFile = true;
     args->mOutputCsvToStdout = false;
     args->mOutputQpcTime = false;
     args->mOutputQpcTimeInSeconds = false;
     args->mScrollLockIndicator = false;
     args->mExcludeDropped = false;
-    args->mVerbosity = Verbosity::Normal;
     args->mConsoleOutputType = ConsoleOutput::Full;
     args->mTerminateExisting = false;
     args->mTerminateOnProcExit = false;
@@ -408,12 +410,12 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTerminateAfterTimer = false;
     args->mHotkeySupport = false;
     args->mTryToElevate = true;
-    args->mIncludeWindowsMixedReality = false;
     args->mMultiCsv = false;
     args->mStopExistingSession = false;
 
-    bool simple = false;
-    bool verbose = false;
+    bool DEPRECATED_simple = false;
+    bool DEPRECATED_verbose = false;
+    bool DEPRECATED_wmr = false;
     for (int i = 1; i < argc; ++i) {
         // Capture target options:
              if (ParseArg(argv[i], "captureall"))   { SetCaptureAll(args);                                         continue; }
@@ -436,8 +438,10 @@ bool ParseCommandLine(int argc, char** argv)
         else if (ParseArg(argv[i], "timed"))            { if (ParseValue(argv, argc, &i, &args->mTimer)) { args->mStartTimer = true; continue; } }
         else if (ParseArg(argv[i], "exclude_dropped"))  { args->mExcludeDropped      = true; continue; }
         else if (ParseArg(argv[i], "scroll_indicator")) { args->mScrollLockIndicator = true; continue; }
-        else if (ParseArg(argv[i], "simple"))           { simple                     = true; continue; }
-        else if (ParseArg(argv[i], "verbose"))          { verbose                    = true; continue; }
+        else if (ParseArg(argv[i], "no_track_display")) { args->mTrackDisplay        = false; continue; }
+        else if (ParseArg(argv[i], "track_debug"))      { args->mTrackDebug          = true; continue; }
+        else if (ParseArg(argv[i], "simple"))           { DEPRECATED_simple          = true; continue; }
+        else if (ParseArg(argv[i], "verbose"))          { DEPRECATED_verbose         = true; continue; }
 
         // Execution options:
         else if (ParseArg(argv[i], "session_name"))           { if (ParseValue(argv, argc, &i, &args->mSessionName)) continue; }
@@ -449,7 +453,8 @@ bool ParseCommandLine(int argc, char** argv)
         // Beta options:
         else if (ParseArg(argv[i], "qpc_time_s"))            { args->mOutputQpcTimeInSeconds     = true; continue; }
         else if (ParseArg(argv[i], "terminate_existing"))    { args->mTerminateExisting          = true; continue; }
-        else if (ParseArg(argv[i], "include_mixed_reality")) { args->mIncludeWindowsMixedReality = true; continue; }
+        else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR                   = true; continue; }
+        else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr                    = true; continue; }
 
         // Provided argument wasn't recognized
         else if (!(ParseArg(argv[i], "?") || ParseArg(argv[i], "h") || ParseArg(argv[i], "help"))) {
@@ -460,16 +465,24 @@ bool ParseCommandLine(int argc, char** argv)
         return false;
     }
 
-    // Set mVerbosity enum based on simple/verbose collection specified.  If
-    // both -simple and -verbose arguments are used, ignore -simple.
-    if (verbose) {
-        if (simple) {
-            fprintf(stderr, "warning: -simple and -verbose arguments are not compatible; ignoring -simple.\n");
-        }
-        args->mVerbosity = Verbosity::Verbose;
+    // Handle deprecated command line arguments: -simple -verbose --include_mixed_reality
+    if (DEPRECATED_simple) {
+        fprintf(stderr, "warning: -simple command line argument has been deprecated; using -no_track_display instead.\n");
+        args->mTrackDisplay = false;
     }
-    else if (simple) {
-        args->mVerbosity = Verbosity::Simple;
+    if (DEPRECATED_verbose) {
+        fprintf(stderr, "warning: -verbose command line argument has been deprecated; using -track_debug instead.\n");
+        args->mTrackDebug = true;
+    }
+    if (DEPRECATED_wmr) {
+        fprintf(stderr, "warning: -include_mixed_reality command line argument has been deprecated; using -track_mixed_reality instead.\n");
+        args->mTrackWMR = true;
+    }
+
+    // Ignore -no_track_display if required for other requested tracking
+    if (args->mTrackDebug && !args->mTrackDisplay) {
+        fprintf(stderr, "warning: -track_debug requires display tracking; ignoring -no_track_display.\n");
+        args->mTrackDisplay = true;
     }
 
     // Enable -qpc_time if only -qpc_time_s was provided, since we use that to
@@ -522,7 +535,7 @@ bool ParseCommandLine(int argc, char** argv)
     // Further, we're currently limited to outputing CSV to either file(s) or
     // stdout, so disallow use of both -output_file and -output_stdout.  Also,
     // since -output_stdout redirects all CSV output to stdout ignore
-    // -multi_csv or -include_mixed_reality in this case.
+    // -multi_csv or -track_mixed_reality in this case.
     if (args->mOutputCsvToStdout) {
         args->mConsoleOutputType = ConsoleOutput::None; // No warning needed if user used -no_top, just swap out Simple for None
 
@@ -537,9 +550,9 @@ bool ParseCommandLine(int argc, char** argv)
             args->mMultiCsv = false;
         }
 
-        if (args->mIncludeWindowsMixedReality) {
-            fprintf(stderr, "warning: -include_mixed_reality and -output_stdout are not compatible; ignoring -include_mixed_reality.\n");
-            args->mIncludeWindowsMixedReality = false;
+        if (args->mTrackWMR) {
+            fprintf(stderr, "warning: -track_mixed_reality and -output_stdout are not compatible; ignoring -track_mixed_reality.\n");
+            args->mTrackWMR = false;
         }
     }
 
@@ -576,11 +589,11 @@ bool ParseCommandLine(int argc, char** argv)
         args->mStartTimer ||
         args->mExcludeDropped ||
         args->mScrollLockIndicator ||
-        simple ||
-        verbose ||
+        !args->mTrackDisplay ||
+        args->mTrackDebug ||
+        args->mTrackWMR ||
         args->mTerminateOnProcExit ||
-        args->mTerminateAfterTimer ||
-        args->mIncludeWindowsMixedReality)) {
+        args->mTerminateAfterTimer)) {
         fprintf(stderr, "warning: -terminate_existing exits without capturing anything; ignoring all capture,\n");
         fprintf(stderr, "         output, and recording arguments.\n");
     }
