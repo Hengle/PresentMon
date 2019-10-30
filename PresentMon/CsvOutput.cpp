@@ -78,7 +78,7 @@ static void WriteCsvHeader(FILE* fp)
         ",TimeInSeconds"
         ",MsInPresentAPI"
         ",MsBetweenPresents");
-    if (args.mVerbosity > Verbosity::Simple) {
+    if (args.mTrackDisplay) {
         fprintf(fp,
             ",AllowsTearing"
             ",PresentMode"
@@ -86,7 +86,7 @@ static void WriteCsvHeader(FILE* fp)
             ",MsUntilDisplayed"
             ",MsBetweenDisplayChange");
     }
-    if (args.mVerbosity >= Verbosity::Verbose) {
+    if (args.mTrackDebug) {
         fprintf(fp,
             ",WasBatched"
             ",DwmNotified");
@@ -129,7 +129,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double msUntilDisplayed       = 0.0;
     double msBetweenDisplayChange = 0.0;
 
-    if (args.mVerbosity > Verbosity::Simple) {
+    if (args.mTrackDisplay) {
         if (p.ReadyTime > 0) {
             msUntilRenderComplete = 1000.0 * QpcDeltaToSeconds(p.ReadyTime - p.QpcTime);
         }
@@ -155,7 +155,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
         timeInSeconds,
         msInPresentApi,
         msBetweenPresents);
-    if (args.mVerbosity > Verbosity::Simple) {
+    if (args.mTrackDisplay) {
         fprintf(fp, ",%d,%s,%lf,%lf,%lf",
             p.SupportsTearing,
             PresentModeToString(p.PresentMode),
@@ -163,7 +163,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             msUntilDisplayed,
             msBetweenDisplayChange);
     }
-    if (args.mVerbosity >= Verbosity::Verbose) {
+    if (args.mTrackDebug) {
         fprintf(fp, ",%d,%d",
             p.DriverBatchThreadId != 0,
             p.DwmNotified);
@@ -251,7 +251,7 @@ static OutputCsv CreateOutputCsv(char const* processName)
 
         fopen_s(&outputCsv.mFile, path, "wb");
 
-        if (args.mIncludeWindowsMixedReality) {
+        if (args.mTrackWMR) {
             outputCsv.mWmrFile = CreateLsrCsvFile(path);
         }
     }

@@ -111,13 +111,8 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
 #endif
 }
 
-PMTraceConsumer::PMTraceConsumer(bool filteredEvents, bool simple, bool trackedFiltering)
-    : mFilteredEvents(filteredEvents)
-    , mSimpleMode(simple)
-    , mAllPresentsNextIndex(0)
-    , mAllPresents(PRESENTEVENT_CIRCULAR_BUFFER_SIZE)
-    , mEnableTrackedProcessFiltering(trackedFiltering)
-    , mSeenDxgkPresentInfo(false)
+PMTraceConsumer::PMTraceConsumer()
+    : mAllPresents(PRESENTEVENT_CIRCULAR_BUFFER_SIZE)
 {
 }
 
@@ -1451,8 +1446,9 @@ void PMTraceConsumer::CompletePresent(std::shared_ptr<PresentEvent> p, uint32_t 
     }
 
     // Throw away events until we've seen at least one Dxgk PresentInfo event
-    // (unless we're in simple mode where we don't enable Dxgk provider)
-    if (!mSimpleMode && !mSeenDxgkPresentInfo) {
+    // (unless we're not tracking display in which case we don't enable Dxgk
+    // provider)
+    if (mTrackDisplay && !mSeenDxgkPresentInfo) {
         RemoveLostPresent(p);
         return;
     }
@@ -1622,13 +1618,11 @@ void PMTraceConsumer::RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPres
     event.Runtime   = runtime;
     event.TimeTaken = *(uint64_t*) &hdr.TimeStamp - event.QpcTime;
 
-    if (!AllowPresentBatching || mSimpleMode) {
+    if (!AllowPresentBatching || !mTrackDisplay) {
         event.FinalState = AllowPresentBatching ? PresentResult::Presented : PresentResult::Discarded;
         CompletePresent(eventIter->second);
         // CompletePresent removes the entry in mPresentByThreadId.
-    }
-    else
-    {
+    } else {
         // We now remove this present from mPresentByThreadId because any future
         // event related to it (e.g., from DXGK/Win32K/etc.) is not expected to
         // come from this thread.
@@ -1690,7 +1684,7 @@ void PMTraceConsumer::RemoveTrackedProcessForFiltering(uint32_t processID)
 
 bool PMTraceConsumer::IsProcessTrackedForFiltering(uint32_t processID)
 {
-    if (!mEnableTrackedProcessFiltering || processID == DwmProcessId) {
+    if (!mFilteredProcessIds || processID == DwmProcessId) {
         return true;
     }
 

@@ -223,23 +223,23 @@ FILE* CreateLsrCsvFile(char const* path)
 
     // Print CSV header
     fprintf(fp, "Application,ProcessID,DwmProcessID");
-    if (args.mVerbosity >= Verbosity::Verbose) {
+    if (args.mTrackDebug) {
         fprintf(fp, ",HolographicFrameID");
     }
     fprintf(fp, ",TimeInSeconds");
-    if (args.mVerbosity > Verbosity::Simple) {
+    if (args.mTrackDisplay) {
         fprintf(fp, ",MsBetweenAppPresents,MsAppPresentToLsr");
     }
     fprintf(fp, ",MsBetweenLsrs,AppMissed,LsrMissed");
-    if (args.mVerbosity >= Verbosity::Verbose) {
+    if (args.mTrackDebug) {
         fprintf(fp, ",MsSourceReleaseFromRenderingToLsrAcquire,MsAppCpuRenderFrame");
     }
     fprintf(fp, ",MsAppPoseLatency");
-    if (args.mVerbosity >= Verbosity::Verbose) {
+    if (args.mTrackDebug) {
         fprintf(fp, ",MsAppMisprediction,MsLsrCpuRenderFrame");
     }
     fprintf(fp, ",MsLsrPoseLatency,MsActualLsrPoseLatency,MsTimeUntilVsync,MsLsrThreadWakeupToGpuEnd,MsLsrThreadWakeupError");
-    if (args.mVerbosity >= Verbosity::Verbose) {
+    if (args.mTrackDebug) {
         fprintf(fp, ",MsLsrThreadWakeupToCpuRenderFrameStart,MsCpuRenderFrameStartToHeadPoseCallbackStart,MsGetHeadPose,MsHeadPoseCallbackStopToInputLatch,MsInputLatchToGpuSubmission");
     }
     fprintf(fp, ",MsLsrPreemption,MsLsrExecution,MsCopyPreemption,MsCopyExecution,MsGpuEndToVsync");
@@ -272,11 +272,11 @@ void UpdateLsrCsv(LateStageReprojectionData& lsr, ProcessInfo* proc, LateStageRe
     const double timeInSeconds = QpcToSeconds(p.QpcTime);
 
     fprintf(fp, "%s,%d,%d", proc->mModuleName.c_str(), curr.GetAppProcessId(), curr.ProcessId);
-    if (args.mVerbosity >= Verbosity::Verbose) {
+    if (args.mTrackDebug) {
         fprintf(fp, ",%d", curr.GetAppFrameId());
     }
     fprintf(fp, ",%.6lf", timeInSeconds);
-    if (args.mVerbosity > Verbosity::Simple) {
+    if (args.mTrackDisplay) {
         double appPresentDeltaMilliseconds = 0.0;
         double appPresentToLsrMilliseconds = 0.0;
         if (curr.IsValidAppFrame()) {
@@ -291,11 +291,11 @@ void UpdateLsrCsv(LateStageReprojectionData& lsr, ProcessInfo* proc, LateStageRe
         fprintf(fp, ",%.6lf,%.6lf", appPresentDeltaMilliseconds, appPresentToLsrMilliseconds);
     }
     fprintf(fp, ",%.6lf,%d,%d", deltaMilliseconds, !curr.NewSourceLatched, curr.MissedVsyncCount);
-    if (args.mVerbosity >= Verbosity::Verbose) {
+    if (args.mTrackDebug) {
         fprintf(fp, ",%.6lf,%.6lf", 1000 * QpcDeltaToSeconds(curr.Source.GetReleaseFromRenderingToAcquireForPresentationTime()), 1000.0 * QpcDeltaToSeconds(curr.GetAppCpuRenderFrameTime()));
     }
     fprintf(fp, ",%.6lf", curr.AppPredictionLatencyMs);
-    if (args.mVerbosity >= Verbosity::Verbose) {
+    if (args.mTrackDebug) {
         fprintf(fp, ",%.6lf,%.6lf", curr.AppMispredictionMs, curr.GetLsrCpuRenderFrameMs());
     }
     fprintf(fp, ",%.6lf,%.6lf,%.6lf,%.6lf,%.6lf",
@@ -304,7 +304,7 @@ void UpdateLsrCsv(LateStageReprojectionData& lsr, ProcessInfo* proc, LateStageRe
         curr.TimeUntilVsyncMs,
         curr.GetLsrThreadWakeupStartLatchToGpuEndMs(),
         curr.TotalWakeupErrorMs);
-    if (args.mVerbosity >= Verbosity::Verbose) {
+    if (args.mTrackDebug) {
         fprintf(fp, ",%.6lf,%.6lf,%.6lf,%.6lf,%.6lf",
             curr.ThreadWakeupStartLatchToCpuRenderFrameStartInMs,
             curr.CpuRenderFrameStartToHeadPoseCallbackStartInMs,
@@ -338,7 +338,7 @@ void UpdateConsole(std::unordered_map<uint32_t, ProcessInfo> const& activeProces
             const double fps = lsr.ComputeSourceFps();
             const size_t historySize = lsr.ComputeHistorySize();
 
-            if (args.mVerbosity > Verbosity::Simple) {
+            if (args.mTrackDisplay) {
                 auto const& appProcess = activeProcesses.find(runtimeStats.mAppProcessId)->second;
                 ConsolePrintLn("    App - %s[%d]:", appProcess.mModuleName.c_str(), runtimeStats.mAppProcessId);
                 ConsolePrint("        %.2lf ms/frame (%.1lf fps, %.2lf ms CPU", 1000.0 / fps, fps, runtimeStats.mAppSourceCpuRenderTimeInMs);

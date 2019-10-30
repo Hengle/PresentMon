@@ -37,7 +37,7 @@ goto args_ok
     exit /b 1
 :args_ok
 
-set pmargs=-no_top -stop_existing_session -qpc_time -verbose
+set pmargs=-no_top -stop_existing_session -qpc_time -track_debug
 for /f "tokens=*" %%a in ('dir /s /b /a-d "%rootdir%\*.etl"') do call :create_csv "%%a"
 exit /b 0
 

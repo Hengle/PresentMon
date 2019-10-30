@@ -168,7 +168,7 @@ void UpdateConsole(uint32_t processId, ProcessInfo const& processInfo)
         auto latAvg = 0.0;
 
         PresentEvent* displayN = nullptr;
-        if (args.mVerbosity > Verbosity::Simple) {
+        if (args.mTrackDisplay) {
             uint64_t display0ScreenTime = 0;
             uint64_t latSum = 0;
             uint32_t displayCount = 0;
