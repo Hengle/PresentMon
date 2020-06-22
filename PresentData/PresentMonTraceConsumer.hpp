@@ -92,7 +92,8 @@ struct PresentEvent {
     // Properties deduced by watching events through present pipeline
     uint64_t Hwnd;
     uint64_t TokenPtr;
-    uint32_t QueueSubmitSequence;
+    uint64_t GPUDuration;            // Sum of DMA packet durations (0 if !mTrackGPU)
+    uint32_t QueueSubmitSequence;    // Submit sequence for the Present packet
     Runtime Runtime;
     PresentMode PresentMode;
     PresentResult FinalState;
@@ -179,8 +180,9 @@ struct PMTraceConsumer
 
     EventMetadata mMetadata;
 
-    bool mFilteredEvents = false;
-    bool mTrackDisplay = true;
+    bool mFilteredEvents = false;   // Whether the trace session was configured to filter non-PresentMon events
+    bool mTrackDisplay = true;      // Whether the analysis should track presents to display
+    bool mTrackGPU = false;         // Whether the analysis should track GPU work
 
     // Store completed presents until the consumer thread removes them using
     // DequeuePresents().  Completed presents are those that have progressed as
@@ -199,12 +201,13 @@ struct PMTraceConsumer
     //
     // mPresentByThreadId stores the in-progress present that was last operated
     // on by each thread for event sequences that are known to execute on the
-    // same thread.
+    // same thread.  Only one present will be going through this sequence on any
+    // particular thread at a time.
     //
     // mPresentsByProcess stores each process' in-progress presents in the
     // order that they were presented.  This is used to look up presents across
     // systems running on different threads (DXGI/D3D/DXGK/Win32) and for
-    // batched present tracking, so we know to discard all older presents with
+    // batched present tracking, so we know to discard all older presents when
     // one is completed.
     //
     // mPresentsByProcessAndSwapChain stores each swapchain's in-progress
@@ -217,6 +220,9 @@ struct PMTraceConsumer
     // different than QpcTime order?  If no on these, should we combine
     // mPresentsByProcess and mPresentsByProcessAndSwapChain?
     //
+    // mPresentsBySubmitSequence is used to lookup the active present associated
+    // with a present queue packet.
+    //
     // All flip model presents (windowed flip, dFlip, iFlip) are uniquely
     // identifyed by a Win32K present history token (composition surface,
     // present count, and bind id).  mWin32KPresentHistoryTokens stores the
@@ -227,16 +233,14 @@ struct PMTraceConsumer
     std::map<uint32_t, std::shared_ptr<PresentEvent>> mPresentByThreadId;
 
     // [process id][qpc time]
-    std::map<uint32_t, std::map<uint64_t, std::shared_ptr<PresentEvent>>> mPresentsByProcess;
+    typedef std::map<uint64_t, std::shared_ptr<PresentEvent> > OrderedPresents;
+    std::map<uint32_t, OrderedPresents> mPresentsByProcess;
 
     // [(process id, swapchain address)]
     typedef std::tuple<uint32_t, uint64_t> ProcessAndSwapChainKey;
     std::map<ProcessAndSwapChainKey, std::deque<std::shared_ptr<PresentEvent>>> mPresentsByProcessAndSwapChain;
 
-
-    // Maps from queue packet submit sequence
-    // Used for Flip -> MMIOFlip -> VSyncDPC for FS, for PresentHistoryToken -> MMIOFlip -> VSyncDPC for iFlip,
-    // and for Blit Submission -> Blit completion for FS Blit
+    // [submit sequence]
     std::map<uint32_t, std::shared_ptr<PresentEvent>> mPresentsBySubmitSequence;
 
     // [(composition surface pointer, present count, bind id)]
@@ -286,7 +290,10 @@ struct PMTraceConsumer
 
     // Presents that will be completed by DWM's next present
     std::deque<std::shared_ptr<PresentEvent>> mPresentsWaitingForDWM;
-    // Used to understand that a flip event is coming from the DWM
+
+    // Store the DWM process id, and the last DWM thread id to have started
+    // a present.  This is needed to determine if a flip event is coming from
+    // DWM, but can also be useful for targetting non-DWM processes.
     uint32_t DwmProcessId = 0;
     uint32_t DwmPresentThreadId = 0;
 
@@ -297,6 +304,25 @@ struct PMTraceConsumer
 #ifdef TRACK_PRESENT_PATHS
     uint32_t mAnalysisPathID;
 #endif
+
+    // Tracking for GPU work contributing to each frame.  We need to track execution
+    // on the adapter node to recover the time actually running (as opposed to enqueued).
+    struct Node {
+        uint64_t mStartTime;        // QPC when the current packet started running
+        uint32_t mSequenceId[12];   // Sequence IDs for enqueued packets
+        uint32_t mQueueIndex;       // mSequenceId index for current packet
+        uint32_t mQueueCount;       // Number of enqueued packets
+    };
+
+    struct Context {
+        Node* mNode;
+        uint64_t mAccumulatedGpuWork;
+    };
+
+    std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes; // pDxgAdapter -> NodeOrdinal -> Node
+    std::unordered_map<uint64_t, uint64_t> mDevices;                          // hDevice -> pDxgAdapter
+    std::unordered_map<uint64_t, Context> mContexts;                          // hContext -> Context
+
 
     void DequeueProcessEvents(std::vector<ProcessEvent>& outProcessEvents)
     {
@@ -313,7 +339,7 @@ struct PMTraceConsumer
     void HandleDxgkBlt(EVENT_HEADER const& hdr, uint64_t hwnd, bool redirectedPresent);
     void HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterval, bool mmio);
     void HandleDxgkQueueSubmit(EVENT_HEADER const& hdr, uint32_t packetType, uint32_t submitSequence, uint64_t context, bool present, bool supportsDxgkPresentEvent);
-    void HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t submitSequence);
+    void HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint64_t hContext, uint32_t submitSequence);
     void HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flags);
     void HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid);
     void HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence);

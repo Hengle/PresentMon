@@ -43,7 +43,8 @@ bool StartTraceSession()
     // Create consumers
     gPMConsumer = new PMTraceConsumer();
     gPMConsumer->mFilteredEvents = expectFilteredEvents;
-    gPMConsumer->mTrackDisplay = args.mTrackDisplay;
+    gPMConsumer->mTrackDisplay   = args.mTrackDisplay;
+    gPMConsumer->mTrackGPU       = args.mTrackGPU;
 
     if (args.mTrackWMR) {
         gMRConsumer = new MRTraceConsumer(args.mTrackDisplay);

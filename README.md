@@ -106,6 +106,8 @@ Beta options:
   -terminate_existing      Terminate any existing PresentMon realtime trace
                            sessions, then exit. Use with -session_name to target
                            particular sessions.
+  -track_gpu_work          Detailed tracking of GPU work performed between presents.
+                           Not supported on Win7.
   -track_mixed_reality     Capture Windows Mixed Reality data to a CSV file with
                            "_WMR" suffix.
 ```
@@ -142,6 +144,7 @@ If `-hotkey` is used, then one CSV is created for each time recording is started
 | Dropped                | Whether the frame was dropped (1) or displayed (0).  Note, if dropped, MsUntilDisplayed will be 0. ||
 | MsBetweenPresents      | The time between this Present() call and the previous one, in milliseconds. ||
 | MsBetweenDisplayChange | How long the previous frame was displayed before this Present() was displayed, in milliseconds. | not `-no_track_display` |
+| GPUDuration            | The cumulative time the GPU spent rendering this frame, in milliseconds. | `-track_gpu` |
 | WasBatched             | Whether the frame was submitted by the driver on a different thread than the app (1) or not (0). | `-track_debug` |
 | DwmNotified            | Whether the desktop compositor was notified about the frame (1) or not (0). | `-track_debug` |
 
