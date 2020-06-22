@@ -30,6 +30,7 @@ SOFTWARE.
 
 #include <assert.h>
 #include <dxgi.h>
+#include <initializer_list>
 
 #if DEBUG_VERBOSE
 
@@ -94,19 +95,9 @@ char* AddCommas(uint64_t t)
     return buf;
 }
 
-void PrintEventHeader(EVENT_HEADER const& hdr)
-{
-    printf("%16s %5u %5u ", AddCommas(ConvertTimestampToNs(hdr.TimeStamp)), hdr.ProcessId, hdr.ThreadId);
-}
-
-void PrintUpdateHeader(uint64_t id, int indent=0)
-{
-    printf("%*sp%llu", 17 + 6 + 6 + indent*4, "", id);
-}
-
 void PrintU32(uint32_t value) { printf("%u", value); }
 void PrintU64(uint64_t value) { printf("%llu", value); }
-void PrintU64Ptr(uint64_t value) { printf("%llx", value); }
+void PrintU64x(uint64_t value) { printf("%llx", value); }
 void PrintTimeDelta(uint64_t value) { printf("%s", AddCommas(ConvertTimestampDeltaToNs(value))); }
 void PrintBool(bool value) { printf("%s", value ? "true" : "false"); }
 void PrintRuntime(Runtime value)
@@ -143,6 +134,89 @@ void PrintPresentResult(PresentResult value)
     default:                       printf("ERROR");     break;
     }
 }
+void PrintPresentHistoryModel(uint32_t model)
+{
+    switch (model) {
+    case D3DKMT_PM_UNINITIALIZED:          printf("UNINITIALIZED");          break;
+    case D3DKMT_PM_REDIRECTED_GDI:         printf("REDIRECTED_GDI");         break;
+    case D3DKMT_PM_REDIRECTED_FLIP:        printf("REDIRECTED_FLIP");        break;
+    case D3DKMT_PM_REDIRECTED_BLT:         printf("REDIRECTED_BLT");         break;
+    case D3DKMT_PM_REDIRECTED_VISTABLT:    printf("REDIRECTED_VISTABLT");    break;
+    case D3DKMT_PM_SCREENCAPTUREFENCE:     printf("SCREENCAPTUREFENCE");     break;
+    case D3DKMT_PM_REDIRECTED_GDI_SYSMEM:  printf("REDIRECTED_GDI_SYSMEM");  break;
+    case D3DKMT_PM_REDIRECTED_COMPOSITION: printf("REDIRECTED_COMPOSITION"); break;
+    default:                               printf("Unknown (%u)", model); assert(false); break;
+    }
+}
+void PrintTokenState(uint32_t state)
+{
+    switch (state) {
+    case Microsoft_Windows_Win32k::TokenState::Completed: printf("Completed"); break;
+    case Microsoft_Windows_Win32k::TokenState::InFrame:   printf("InFrame");   break;
+    case Microsoft_Windows_Win32k::TokenState::Confirmed: printf("Confirmed"); break;
+    case Microsoft_Windows_Win32k::TokenState::Retired:   printf("Retired");   break;
+    case Microsoft_Windows_Win32k::TokenState::Discarded: printf("Discarded"); break;
+    default:                                              printf("Unknown (%u)", state); assert(false); break;
+    }
+}
+void PrintQueuePacketType(uint32_t type)
+{
+    switch (type) {
+    case DXGKETW_RENDER_COMMAND_BUFFER:   printf("RENDER"); break;
+    case DXGKETW_DEFERRED_COMMAND_BUFFER: printf("DEFERRED"); break;
+    case DXGKETW_SYSTEM_COMMAND_BUFFER:   printf("SYSTEM"); break;
+    case DXGKETW_MMIOFLIP_COMMAND_BUFFER: printf("MMIOFLIP"); break;
+    case DXGKETW_WAIT_COMMAND_BUFFER:     printf("WAIT"); break;
+    case DXGKETW_SIGNAL_COMMAND_BUFFER:   printf("SIGNAL"); break;
+    case DXGKETW_DEVICE_COMMAND_BUFFER:   printf("DEVICE"); break;
+    case DXGKETW_SOFTWARE_COMMAND_BUFFER: printf("SOFTWARE"); break;
+    case DXGKETW_PAGING_COMMAND_BUFFER:   printf("PAGING"); break;
+    default:                              printf("Unknown (%u)", type); assert(false); break;
+    }
+}
+void PrintPresentFlags(uint32_t flags)
+{
+    if (flags & DXGI_PRESENT_FEST) printf("TEST");
+}
+
+void PrintEventHeader(EVENT_HEADER const& hdr)
+{
+    printf("%16s %5u %5u ", AddCommas(ConvertTimestampToNs(hdr.TimeStamp)), hdr.ProcessId, hdr.ThreadId);
+}
+
+void PrintEventHeader(EVENT_HEADER const& hdr, char const* name)
+{
+    PrintEventHeader(hdr);
+    printf("%s\n", name);
+}
+
+void PrintEventHeader(EVENT_RECORD* eventRecord, EventMetadata* metadata, char const* name, std::initializer_list<void*> props)
+{
+    assert((props.size() % 2) == 0);
+
+    PrintEventHeader(eventRecord->EventHeader);
+    printf("%s", name);
+    for (auto ii = props.begin(), ie = props.end(); ii != ie; ++ii) {
+        auto propName = (wchar_t const*) *ii; ++ii;
+        auto propFunc = *ii;
+
+        printf(" %ls=", propName);
+
+             if (propFunc == PrintU32)                  PrintU32(metadata->GetEventData<uint32_t>(eventRecord, propName));
+        else if (propFunc == PrintU64x)                 PrintU64x(metadata->GetEventData<uint64_t>(eventRecord, propName));
+        else if (propFunc == PrintTokenState)           PrintTokenState(metadata->GetEventData<uint32_t>(eventRecord, propName));
+        else if (propFunc == PrintQueuePacketType)      PrintQueuePacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
+        else if (propFunc == PrintPresentFlags)         PrintPresentFlags(metadata->GetEventData<uint32_t>(eventRecord, propName));
+        else if (propFunc == PrintPresentHistoryModel)  PrintPresentHistoryModel(metadata->GetEventData<uint32_t>(eventRecord, propName));
+        else assert(false);
+    }
+    printf("\n");
+}
+
+void PrintUpdateHeader(uint64_t id, int indent=0)
+{
+    printf("%*sp%llu", 17 + 6 + 6 + indent*4, "", id);
+}
 
 void FlushModifiedPresent()
 {
@@ -160,11 +234,11 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintTimeDelta,     TimeTaken)
     FLUSH_MEMBER(PrintTimeDelta,     ReadyTime)
     FLUSH_MEMBER(PrintTimeDelta,     ScreenTime)
-    FLUSH_MEMBER(PrintU64Ptr,        SwapChainAddress)
+    FLUSH_MEMBER(PrintU64x,          SwapChainAddress)
     FLUSH_MEMBER(PrintU32,           SyncInterval)
     FLUSH_MEMBER(PrintU32,           PresentFlags)
-    FLUSH_MEMBER(PrintU64Ptr,        Hwnd)
-    FLUSH_MEMBER(PrintU64Ptr,        TokenPtr)
+    FLUSH_MEMBER(PrintU64x,          Hwnd)
+    FLUSH_MEMBER(PrintU64x,          TokenPtr)
     FLUSH_MEMBER(PrintU32,           QueueSubmitSequence)
     FLUSH_MEMBER(PrintU32,           DriverBatchThreadId)
     FLUSH_MEMBER(PrintPresentMode,   PresentMode)
@@ -222,79 +296,65 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
 
     if (hdr.ProviderId == Microsoft_Windows_D3D9::GUID) {
         switch (id) {
-        case Microsoft_Windows_D3D9::Present_Start::Id: PrintEventHeader(hdr); printf("D3D9PresentStart\n"); break;
-        case Microsoft_Windows_D3D9::Present_Stop::Id:  PrintEventHeader(hdr); printf("D3D9PresentStop\n"); break;
+        case Microsoft_Windows_D3D9::Present_Start::Id: PrintEventHeader(hdr, "D3D9PresentStart"); break;
+        case Microsoft_Windows_D3D9::Present_Stop::Id:  PrintEventHeader(hdr, "D3D9PresentStop"); break;
         }
         return;
     }
 
     if (hdr.ProviderId == Microsoft_Windows_DXGI::GUID) {
         switch (id) {
-        case Microsoft_Windows_DXGI::Present_Start::Id:                  PrintEventHeader(hdr); printf("DXGIPresent_Start"); break;
-        case Microsoft_Windows_DXGI::Present_Stop::Id:                   PrintEventHeader(hdr); printf("DXGIPresent_Stop\n"); break;
-        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id: PrintEventHeader(hdr); printf("DXGIPresentMPO_Start"); break;
-        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Stop::Id:  PrintEventHeader(hdr); printf("DXGIPresentMPO_Stop\n"); break;
-        }
-        switch (id) {
-        case Microsoft_Windows_DXGI::Present_Start::Id:
-        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id:
-            printf("%s\n", metadata->GetEventData<uint32_t>(eventRecord, L"Flags") & DXGI_PRESENT_TEST ? " TEST" : "");
-            break;
+        case Microsoft_Windows_DXGI::Present_Start::Id:                     PrintEventHeader(hdr, metadata, "DXGIPresent_Start", {
+                                                                                L"Flags", PrintPresentFlags,
+                                                                            }); break;
+        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id:    PrintEventHeader(hdr, metadata, "DXGIPresentMPO_Start", {
+                                                                                L"Flags", PrintPresentFlags,
+                                                                            }); break;
+        case Microsoft_Windows_DXGI::Present_Stop::Id:                      PrintEventHeader(hdr, "DXGIPresent_Stop"); break;
+        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Stop::Id:     PrintEventHeader(hdr, "DXGIPresentMPO_Stop"); break;
         }
         return;
     }
 
-    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::BLT_GUID)            { PrintEventHeader(hdr); printf("Win7::BLT\n"); return; }
-    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::FLIP_GUID)           { PrintEventHeader(hdr); printf("Win7::FLIP\n"); return; }
-    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::PRESENTHISTORY_GUID) { PrintEventHeader(hdr); printf("Win7::PRESENTHISTORY\n"); return; }
-    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::QUEUEPACKET_GUID)    { PrintEventHeader(hdr); printf("Win7::QUEUEPACKET\n"); return; }
-    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::VSYNCDPC_GUID)       { PrintEventHeader(hdr); printf("Win7::VSYNCDPC\n"); return; }
-    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::MMIOFLIP_GUID)       { PrintEventHeader(hdr); printf("Win7::MMIOFLIP\n"); return; }
+    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::BLT_GUID)            { PrintEventHeader(hdr, "Win7::BLT"); return; }
+    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::FLIP_GUID)           { PrintEventHeader(hdr, "Win7::FLIP"); return; }
+    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::PRESENTHISTORY_GUID) { PrintEventHeader(hdr, "Win7::PRESENTHISTORY"); return; }
+    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::QUEUEPACKET_GUID)    { PrintEventHeader(hdr, "Win7::QUEUEPACKET"); return; }
+    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::VSYNCDPC_GUID)       { PrintEventHeader(hdr, "Win7::VSYNCDPC"); return; }
+    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::MMIOFLIP_GUID)       { PrintEventHeader(hdr, "Win7::MMIOFLIP"); return; }
 
     if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::GUID) {
         switch (id) {
-        case Microsoft_Windows_DxgKrnl::Flip_Info::Id:                      PrintEventHeader(hdr); printf("DxgKrnl_Flip\n"); break;
-        case Microsoft_Windows_DxgKrnl::FlipMultiPlaneOverlay_Info::Id:     PrintEventHeader(hdr); printf("DxgKrnl_FlipMPO\n"); break;
-        case Microsoft_Windows_DxgKrnl::QueuePacket_Start::Id:              PrintEventHeader(hdr); printf("DxgKrnl_QueuePacket_Start"); break;
-        case Microsoft_Windows_DxgKrnl::QueuePacket_Stop::Id:               PrintEventHeader(hdr); printf("DxgKrnl_QueuePacket_Stop"); break;
-        case Microsoft_Windows_DxgKrnl::MMIOFlip_Info::Id:                  PrintEventHeader(hdr); printf("DxgKrnl_MMIOFlip\n"); break;
-        case Microsoft_Windows_DxgKrnl::MMIOFlipMultiPlaneOverlay_Info::Id: PrintEventHeader(hdr); printf("DxgKrnl_MMIOFlipMPO\n"); break;
-        case Microsoft_Windows_DxgKrnl::HSyncDPCMultiPlane_Info::Id:        PrintEventHeader(hdr); printf("DxgKrnl_HSyncDPC\n"); break;
-        case Microsoft_Windows_DxgKrnl::VSyncDPC_Info::Id:                  PrintEventHeader(hdr); printf("DxgKrnl_VSyncDPC\n"); break;
-        case Microsoft_Windows_DxgKrnl::Present_Info::Id:                   PrintEventHeader(hdr); printf("DxgKrnl_Present\n"); break;
-        case Microsoft_Windows_DxgKrnl::Blit_Info::Id:                      PrintEventHeader(hdr); printf("DxgKrnl_Blit\n"); break;
-        case Microsoft_Windows_DxgKrnl::PresentHistory_Start::Id:           PrintEventHeader(hdr); printf("DxgKrnl_PresentHistory_Start"); break;
-        case Microsoft_Windows_DxgKrnl::PresentHistory_Info::Id:            PrintEventHeader(hdr); printf("DxgKrnl_PresentHistory_Info"); break;
-        case Microsoft_Windows_DxgKrnl::PresentHistoryDetailed_Start::Id:   PrintEventHeader(hdr); printf("DxgKrnl_PresentHistoryDetailed_Start"); break;
-        }
-
-        switch (id) {
-        case Microsoft_Windows_DxgKrnl::QueuePacket_Start::Id:
-            printf(" SubmitSequence=%u%s\n",
-                metadata->GetEventData<uint32_t>(eventRecord, L"SubmitSequence"),
-                metadata->GetEventData<BOOL>(eventRecord, L"bPresent") == 0 ? "" : " [present]");
-            break;
-        case Microsoft_Windows_DxgKrnl::QueuePacket_Stop::Id:
-            printf(" SubmitSequence=%u\n", metadata->GetEventData<uint32_t>(eventRecord, L"SubmitSequence"));
-            break;
-        // The first part of the event data is the same for all these (detailed
-        // has other members after).
-        case Microsoft_Windows_DxgKrnl::PresentHistory_Start::Id:
-        case Microsoft_Windows_DxgKrnl::PresentHistory_Info::Id:
-        case Microsoft_Windows_DxgKrnl::PresentHistoryDetailed_Start::Id:
-            printf(" Token=%llx, Model=", metadata->GetEventData<uint64_t>(eventRecord, L"Token"));
-            switch (metadata->GetEventData<uint32_t>(eventRecord, L"Model")) {
-            case D3DKMT_PM_UNINITIALIZED:          printf("UNINITIALIZED");          break;
-            case D3DKMT_PM_REDIRECTED_GDI:         printf("REDIRECTED_GDI");         break;
-            case D3DKMT_PM_REDIRECTED_FLIP:        printf("REDIRECTED_FLIP");        break;
-            case D3DKMT_PM_REDIRECTED_BLT:         printf("REDIRECTED_BLT");         break;
-            case D3DKMT_PM_REDIRECTED_VISTABLT:    printf("REDIRECTED_VISTABLT");    break;
-            case D3DKMT_PM_SCREENCAPTUREFENCE:     printf("SCREENCAPTUREFENCE");     break;
-            case D3DKMT_PM_REDIRECTED_GDI_SYSMEM:  printf("REDIRECTED_GDI_SYSMEM");  break;
-            case D3DKMT_PM_REDIRECTED_COMPOSITION: printf("REDIRECTED_COMPOSITION"); break;
-            default:                               assert(false);                    break;
-            }
-            printf("\n");
+        case Microsoft_Windows_DxgKrnl::Blit_Info::Id:                      PrintEventHeader(hdr, "DxgKrnl_Blit_Info"); break;
+        case Microsoft_Windows_DxgKrnl::Flip_Info::Id:                      PrintEventHeader(hdr, "DxgKrnl_Flip_Info"); break;
+        case Microsoft_Windows_DxgKrnl::FlipMultiPlaneOverlay_Info::Id:     PrintEventHeader(hdr, "DxgKrnl_FlipMultiPlaneOverlay_Info"); break;
+        case Microsoft_Windows_DxgKrnl::HSyncDPCMultiPlane_Info::Id:        PrintEventHeader(hdr, "DxgKrnl_HSyncDPCMultiPlane_Info"); break;
+        case Microsoft_Windows_DxgKrnl::MMIOFlip_Info::Id:                  PrintEventHeader(hdr, "DxgKrnl_MMIOFlip_Info"); break;
+        case Microsoft_Windows_DxgKrnl::MMIOFlipMultiPlaneOverlay_Info::Id: PrintEventHeader(hdr, "DxgKrnl_MMIOFlipMultiPlaneOverlay_Info"); break;
+        case Microsoft_Windows_DxgKrnl::Present_Info::Id:                   PrintEventHeader(hdr, "DxgKrnl_Present_Info"); break;
+        case Microsoft_Windows_DxgKrnl::PresentHistory_Start::Id:           PrintEventHeader(eventRecord, metadata, "PresentHistory_Start", {
+                                                                                L"Token", PrintU64x,
+                                                                                L"Model", PrintPresentHistoryModel,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::PresentHistory_Info::Id:            PrintEventHeader(eventRecord, metadata, "PresentHistory_Info", {
+                                                                                L"Token", PrintU64x,
+                                                                                L"Model", PrintPresentHistoryModel,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::PresentHistoryDetailed_Start::Id:   PrintEventHeader(eventRecord, metadata, "PresentHistoryDetailed_Start", {
+                                                                                L"Token", PrintU64x,
+                                                                                L"Model", PrintPresentHistoryModel,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::QueuePacket_Start::Id:              PrintEventHeader(eventRecord, metadata, "DxgKrnl_QueuePacket_Start", {
+                                                                                L"hContext", PrintU64x,
+                                                                                L"SubmitSequence", PrintU32,
+                                                                                L"PacketType", PrintQueuePacketType,
+                                                                                L"bPresent", PrintU32,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::QueuePacket_Stop::Id:               PrintEventHeader(eventRecord, metadata, "DxgKrnl_QueuePacket_Stop", {
+                                                                                L"hContext", PrintU64x,
+                                                                                L"SubmitSequence", PrintU32,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::VSyncDPC_Info::Id:                  PrintEventHeader(hdr, "DxgKrnl_VSyncDPC_Info"); break;
         }
         return;
     }
@@ -303,35 +363,22 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
         hdr.ProviderId == Microsoft_Windows_Dwm_Core::Win7::GUID) {
         switch (id) {
         case Microsoft_Windows_Dwm_Core::MILEVENT_MEDIA_UCE_PROCESSPRESENTHISTORY_GetPresentHistory_Info::Id:
-                                                                          PrintEventHeader(hdr); printf("DWM_GetPresentHistory\n"); break;
-        case Microsoft_Windows_Dwm_Core::SCHEDULE_PRESENT_Start::Id:      PrintEventHeader(hdr); printf("DWM_SCHEDULE_PRESENT_Start\n"); break;
-        case Microsoft_Windows_Dwm_Core::FlipChain_Pending::Id:           PrintEventHeader(hdr); printf("DWM_FlipChain_Pending\n"); break;
-        case Microsoft_Windows_Dwm_Core::FlipChain_Complete::Id:          PrintEventHeader(hdr); printf("DWM_FlipChain_Complete\n"); break;
-        case Microsoft_Windows_Dwm_Core::FlipChain_Dirty::Id:             PrintEventHeader(hdr); printf("DWM_FlipChain_Dirty\n"); break;
-        case Microsoft_Windows_Dwm_Core::SCHEDULE_SURFACEUPDATE_Info::Id: PrintEventHeader(hdr); printf("DWM_Schedule_SurfaceUpdate\n"); break;
+                                                                          PrintEventHeader(hdr, "DWM_GetPresentHistory"); break;
+        case Microsoft_Windows_Dwm_Core::SCHEDULE_PRESENT_Start::Id:      PrintEventHeader(hdr, "DWM_SCHEDULE_PRESENT_Start"); break;
+        case Microsoft_Windows_Dwm_Core::FlipChain_Pending::Id:           PrintEventHeader(hdr, "DWM_FlipChain_Pending"); break;
+        case Microsoft_Windows_Dwm_Core::FlipChain_Complete::Id:          PrintEventHeader(hdr, "DWM_FlipChain_Complete"); break;
+        case Microsoft_Windows_Dwm_Core::FlipChain_Dirty::Id:             PrintEventHeader(hdr, "DWM_FlipChain_Dirty"); break;
+        case Microsoft_Windows_Dwm_Core::SCHEDULE_SURFACEUPDATE_Info::Id: PrintEventHeader(hdr, "DWM_Schedule_SurfaceUpdate"); break;
         }
         return;
     }
 
     if (hdr.ProviderId == Microsoft_Windows_Win32k::GUID) {
         switch (id) {
-        case Microsoft_Windows_Win32k::TokenCompositionSurfaceObject_Info::Id:
-            PrintEventHeader(hdr);
-            printf("Win32K_TokenCompositionSurfaceObject\n");
-            break;
-        case Microsoft_Windows_Win32k::TokenStateChanged_Info::Id:
-            PrintEventHeader(hdr);
-            printf("Win32K_TokenStateChanged ");
-
-            switch (metadata->GetEventData<uint32_t>(eventRecord, L"NewState")) {
-            case Microsoft_Windows_Win32k::TokenState::Completed: printf("Completed\n"); break;
-            case Microsoft_Windows_Win32k::TokenState::InFrame:   printf("InFrame\n");   break;
-            case Microsoft_Windows_Win32k::TokenState::Confirmed: printf("Confirmed\n"); break;
-            case Microsoft_Windows_Win32k::TokenState::Retired:   printf("Retired\n");   break;
-            case Microsoft_Windows_Win32k::TokenState::Discarded: printf("Discarded\n"); break;
-            default:                                              printf("Unknown (%u)\n", metadata->GetEventData<uint32_t>(eventRecord, L"NewState")); break;
-            }
-            break;
+        case Microsoft_Windows_Win32k::TokenCompositionSurfaceObject_Info::Id:  PrintEventHeader(hdr, "Win32K_TokenCompositionSurfaceObject"); break;
+        case Microsoft_Windows_Win32k::TokenStateChanged_Info::Id:              PrintEventHeader(eventRecord, metadata, "Win32K_TokenStateChanged", {
+                                                                                    L"NewState", PrintTokenState,
+                                                                                }); break;
         }
         return;
     }
