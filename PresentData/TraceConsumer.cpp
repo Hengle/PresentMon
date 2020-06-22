@@ -229,6 +229,14 @@ void EventMetadata::GetEventData(EVENT_RECORD* eventRecord, EventDataDesc* desc,
 
     // Lookup properties in metadata
     uint32_t foundCount = 0;
+
+#if 0 /* Helper to see all property names while debugging */
+    std::vector<wchar_t const*> props(tei->TopLevelPropertyCount, nullptr);
+    for (uint32_t i = 0; i < tei->TopLevelPropertyCount; ++i) {
+        props[i] = TEI_PROPERTY_NAME(tei, &tei->EventPropertyInfoArray[i]);
+    }
+#endif
+
     for (uint32_t i = 0, offset = 0; i < tei->TopLevelPropertyCount; ++i) {
         uint32_t size   = 0;
         uint32_t count  = 0;
