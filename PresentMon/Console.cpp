@@ -161,14 +161,42 @@ void UpdateConsole(uint32_t processId, ProcessInfo const& processInfo)
             continue;
         }
 
+        auto const& present0 = *chain.mPresentHistory[(chain.mNextPresentIndex - chain.mPresentHistoryCount) % SwapChainData::PRESENT_HISTORY_MAX_COUNT];
+        auto const& presentN = *chain.mPresentHistory[(chain.mNextPresentIndex - 1) % SwapChainData::PRESENT_HISTORY_MAX_COUNT];
+        auto cpuAvg = QpcDeltaToSeconds(presentN.QpcTime - present0.QpcTime) / (chain.mPresentHistoryCount - 1);
+        auto dspAvg = 0.0;
+        auto latAvg = 0.0;
+
+        PresentEvent* displayN = nullptr;
+        if (args.mTrackDisplay) {
+            uint64_t display0ScreenTime = 0;
+            uint64_t latSum = 0;
+            uint32_t displayCount = 0;
+            for (uint32_t i = 0; i < chain.mPresentHistoryCount; ++i) {
+                auto const& p = chain.mPresentHistory[(chain.mNextPresentIndex - chain.mPresentHistoryCount + i) % SwapChainData::PRESENT_HISTORY_MAX_COUNT];
+                if (p->FinalState == PresentResult::Presented) {
+                    if (displayCount == 0) {
+                        display0ScreenTime = p->ScreenTime;
+                    }
+                    displayN = p.get();
+                    latSum += p->ScreenTime - p->QpcTime;
+                    displayCount += 1;
+                }
+            }
+
+            if (displayCount >= 2) {
+                dspAvg = QpcDeltaToSeconds(displayN->ScreenTime - display0ScreenTime) / (displayCount - 1);
+            }
+
+            if (displayCount >= 1) {
+                latAvg = QpcDeltaToSeconds(latSum) / displayCount;
+            }
+        }
+
         if (empty) {
             empty = false;
             ConsolePrintLn("%s[%d]:", processInfo.mModuleName.c_str(), processId);
         }
-
-        auto const& present0 = *chain.mPresentHistory[(chain.mNextPresentIndex - chain.mPresentHistoryCount) % SwapChainData::PRESENT_HISTORY_MAX_COUNT];
-        auto const& presentN = *chain.mPresentHistory[(chain.mNextPresentIndex - 1) % SwapChainData::PRESENT_HISTORY_MAX_COUNT];
-        auto cpuAvg = QpcDeltaToSeconds(presentN.QpcTime - present0.QpcTime) / (chain.mPresentHistoryCount - 1);
 
         ConsolePrint("    %016llX (%s): SyncInterval=%d Flags=%d %.2lf ms/frame (%.1lf fps",
             address,
@@ -178,35 +206,17 @@ void UpdateConsole(uint32_t processId, ProcessInfo const& processInfo)
             1000.0 * cpuAvg,
             1.0 / cpuAvg);
 
-        size_t displayCount = 0;
-        uint64_t latencySum = 0;
-        uint64_t display0ScreenTime = 0;
-        PresentEvent* displayN = nullptr;
-        if (args.mTrackDisplay) {
-            for (uint32_t i = 0; i < chain.mPresentHistoryCount; ++i) {
-                auto const& p = chain.mPresentHistory[(chain.mNextPresentIndex - chain.mPresentHistoryCount + i) % SwapChainData::PRESENT_HISTORY_MAX_COUNT];
-                if (p->FinalState == PresentResult::Presented) {
-                    if (displayCount == 0) {
-                        display0ScreenTime = p->ScreenTime;
-                    }
-                    displayN = p.get();
-                    latencySum += p->ScreenTime - p->QpcTime;
-                    displayCount += 1;
-                }
-            }
+        if (dspAvg > 0.0) {
+            ConsolePrint(", %.1lf fps displayed", 1.0 / dspAvg);
         }
 
-        if (displayCount >= 2) {
-            ConsolePrint(", %.1lf fps displayed", (double) (displayCount - 1) / QpcDeltaToSeconds(displayN->ScreenTime - display0ScreenTime));
-        }
-
-        if (displayCount >= 1) {
-            ConsolePrint(", %.2lf ms latency", 1000.0 * QpcDeltaToSeconds(latencySum) / displayCount);
+        if (latAvg > 0.0) {
+            ConsolePrint(", %.2lf ms latency", 1000.0 * latAvg);
         }
 
         ConsolePrint(")");
 
-        if (displayCount > 0) {
+        if (displayN != nullptr) {
             ConsolePrint(" %s", PresentModeToString(displayN->PresentMode));
         }
 
