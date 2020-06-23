@@ -40,7 +40,7 @@ struct PresentMonCsv
         "MsInPresentAPI",
     };
 
-    static constexpr char const* const NOT_SIMPLE_HEADER[] = {
+    static constexpr char const* const TRACK_DISPLAY_HEADER[] = {
         "AllowsTearing",
         "PresentMode",
         "MsBetweenDisplayChange",
@@ -48,9 +48,13 @@ struct PresentMonCsv
         "MsUntilDisplayed",
     };
 
-    static constexpr char const* const VERBOSE_HEADER[] = {
+    static constexpr char const* const TRACK_DEBUG_HEADER[] = {
         "WasBatched",
         "DwmNotified",
+    };
+
+    static constexpr char const* const TRACK_GPU_HEADER[] = {
+        "GPUDuration",
     };
 
     static constexpr char const* const OPT_HEADER[] = {
@@ -60,29 +64,33 @@ struct PresentMonCsv
     static constexpr char const* GetHeader(size_t h)
     {
         constexpr auto n0 = _countof(PresentMonCsv::REQUIRED_HEADER);
-        constexpr auto n1 = _countof(PresentMonCsv::NOT_SIMPLE_HEADER);
-        constexpr auto n2 = _countof(PresentMonCsv::VERBOSE_HEADER);
-        constexpr auto n3 = _countof(PresentMonCsv::OPT_HEADER);
+        constexpr auto n1 = _countof(PresentMonCsv::TRACK_DISPLAY_HEADER);
+        constexpr auto n2 = _countof(PresentMonCsv::TRACK_DEBUG_HEADER);
+        constexpr auto n3 = _countof(PresentMonCsv::TRACK_GPU_HEADER);
+        constexpr auto n4 = _countof(PresentMonCsv::OPT_HEADER);
 
         return
-            h < n0                ? PresentMonCsv::REQUIRED_HEADER  [h] :
-            h - n0 < n1           ? PresentMonCsv::NOT_SIMPLE_HEADER[h - n0] :
-            h - n0 - n1 < n2      ? PresentMonCsv::VERBOSE_HEADER   [h - n0 - n1] :
-            h - n0 - n1 - n2 < n3 ? PresentMonCsv::OPT_HEADER       [h - n0 - n1 - n2] :
-                                    "Unknown";
+            h < n0                     ? PresentMonCsv::REQUIRED_HEADER     [h] :
+            h - n0 < n1                ? PresentMonCsv::TRACK_DISPLAY_HEADER[h - n0] :
+            h - n0 - n1 < n2           ? PresentMonCsv::TRACK_DEBUG_HEADER  [h - n0 - n1] :
+            h - n0 - n1 - n2 < n3      ? PresentMonCsv::TRACK_GPU_HEADER    [h - n0 - n1 - n2] :
+            h - n0 - n1 - n2 - n3 < n4 ? PresentMonCsv::OPT_HEADER          [h - n0 - n1 - n2 - n3] :
+                                         "Unknown";
     }
 
     std::wstring path_;
     size_t line_;
     FILE* fp_;
     size_t headerColumnIndex_[_countof(REQUIRED_HEADER) +
-                              _countof(NOT_SIMPLE_HEADER) +
-                              _countof(VERBOSE_HEADER) +
+                              _countof(TRACK_DISPLAY_HEADER) +
+                              _countof(TRACK_DEBUG_HEADER) +
+                              _countof(TRACK_GPU_HEADER) +
                               _countof(OPT_HEADER)];
     char row_[1024];
     std::vector<char const*> cols_;
-    bool simple_;
-    bool verbose_;
+    bool trackDisplay_;
+    bool trackDebug_;
+    bool trackGPU_;
 
     PresentMonCsv();
     bool Open(char const* file, int line, std::wstring const& path);

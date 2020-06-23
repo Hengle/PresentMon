@@ -106,7 +106,7 @@ Beta options:
   -terminate_existing      Terminate any existing PresentMon realtime trace
                            sessions, then exit. Use with -session_name to target
                            particular sessions.
-  -track_gpu_work          Detailed tracking of GPU work performed between presents.
+  -track_gpu               Detailed tracking of GPU work performed between presents.
                            Not supported on Win7.
   -track_mixed_reality     Capture Windows Mixed Reality data to a CSV file with
                            "_WMR" suffix.
