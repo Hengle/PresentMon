@@ -307,21 +307,29 @@ struct PMTraceConsumer
 
     // Tracking for GPU work contributing to each frame.  We need to track execution
     // on the adapter node to recover the time actually running (as opposed to enqueued).
+    struct Process {
+        uint64_t mAccumulatedDmaTime; // Accumulated QPC time of all DMA packets that have completed
+        uint64_t mDmaExecStartTime;   // QPC when the oldest executing DMA packet started
+        uint32_t mDmaExecCount;       // Number of executing DMA packets
+    };
+
     struct Node {
         uint64_t mStartTime;        // QPC when the current packet started running
+        Process* mProcess[12];      // Processes associated with enqueued packets
         uint32_t mSequenceId[12];   // Sequence IDs for enqueued packets
-        uint32_t mQueueIndex;       // mSequenceId index for current packet
+        uint32_t mQueueIndex;       // Index into mContext and mSequenceId for current packet
         uint32_t mQueueCount;       // Number of enqueued packets
     };
 
     struct Context {
+        Process* mProcess;
         Node* mNode;
-        uint64_t mAccumulatedGpuWork;
     };
 
     std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes; // pDxgAdapter -> NodeOrdinal -> Node
     std::unordered_map<uint64_t, uint64_t> mDevices;                          // hDevice -> pDxgAdapter
-    std::unordered_map<uint64_t, Context> mContexts;                          // hContext -> Context
+    std::unordered_map<uint64_t, Context>  mContexts;                         // hContext -> Context
+    std::unordered_map<uint32_t, Process>  mProcesses;                        // ProcessID -> Process
 
 
     void DequeueProcessEvents(std::vector<ProcessEvent>& outProcessEvents)
@@ -339,7 +347,7 @@ struct PMTraceConsumer
     void HandleDxgkBlt(EVENT_HEADER const& hdr, uint64_t hwnd, bool redirectedPresent);
     void HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterval, bool mmio);
     void HandleDxgkQueueSubmit(EVENT_HEADER const& hdr, uint32_t packetType, uint32_t submitSequence, uint64_t context, bool present, bool supportsDxgkPresentEvent);
-    void HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint64_t hContext, uint32_t submitSequence);
+    void HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t submitSequence);
     void HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flags);
     void HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid);
     void HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence);

@@ -330,7 +330,7 @@ static void PrintHelp()
         "-qpc_time_s",              "Output present time as a performance counter value converted to seconds.",
         "-terminate_existing",      "Terminate any existing PresentMon realtime trace sessions, then exit."
                                     " Use with -session_name to target particular sessions.",
-        "-track_gpu",               "Detailed tracking of GPU work performed between presents."
+        "-track_gpu",               "Tracks the duration of each process' GPU work performed between presents."
                                     "  Not supported on Win7.",
         "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
     };
