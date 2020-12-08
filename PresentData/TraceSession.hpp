@@ -28,7 +28,7 @@ struct TraceSession {
     LARGE_INTEGER mQpcFrequency = {};
     PMTraceConsumer* mPMConsumer = nullptr;
     MRTraceConsumer* mMRConsumer = nullptr;
-    TRACEHANDLE mHandle = 0;                                // invalid session handles are 0
+    TRACEHANDLE mSessionHandle = 0;                         // invalid session handles are 0
     TRACEHANDLE mTraceHandle = INVALID_PROCESSTRACE_HANDLE; // invalid trace handles are INVALID_PROCESSTRACE_HANDLE
     ULONG mContinueProcessingBuffers = TRUE;
 
