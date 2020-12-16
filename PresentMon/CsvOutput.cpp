@@ -82,6 +82,9 @@ static void WriteCsvHeader(FILE* fp)
     if (args.mTrackDisplay) {
         fprintf(fp, ",MsUntilRenderComplete,MsUntilDisplayed");
     }
+    if (args.mTrackGPU) {
+        fprintf(fp, ",GPUDuration");
+    }
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
     }
@@ -119,6 +122,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double msUntilRenderComplete  = 0.0;
     double msUntilDisplayed       = 0.0;
     double msBetweenDisplayChange = 0.0;
+    double msGPUDuration          = 0.0;
 
     if (args.mTrackDisplay) {
         if (p.ReadyTime > 0) {
@@ -132,6 +136,10 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
                 msBetweenDisplayChange = 1000.0 * QpcDeltaToSeconds(p.ScreenTime - lastDisplayed->ScreenTime);
             }
         }
+    }
+
+    if (args.mTrackGPU) {
+        msGPUDuration = 1000.0 * QpcDeltaToSeconds(p.GPUDuration);
     }
 
     // Output in CSV format
@@ -150,6 +158,10 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     fprintf(fp, ",%.3lf", msInPresentApi);
     if (args.mTrackDisplay) {
         fprintf(fp, ",%.3lf,%.3lf", msUntilRenderComplete, msUntilDisplayed);
+    }
+    if (args.mTrackGPU) {
+        fprintf(fp, ",%lf",
+            msGPUDuration);
     }
     if (args.mOutputQpcTime) {
         if (args.mOutputQpcTimeInSeconds) {
