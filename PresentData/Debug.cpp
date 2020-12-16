@@ -29,6 +29,7 @@ SOFTWARE.
 #include "ETW/Microsoft_Windows_Win32k.h"
 
 #include <assert.h>
+#include <dxgi.h>
 
 #if DEBUG_VERBOSE
 
@@ -229,10 +230,16 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
 
     if (hdr.ProviderId == Microsoft_Windows_DXGI::GUID) {
         switch (id) {
-        case Microsoft_Windows_DXGI::Present_Start::Id:                  PrintEventHeader(hdr); printf("DXGIPresent_Start\n"); break;
+        case Microsoft_Windows_DXGI::Present_Start::Id:                  PrintEventHeader(hdr); printf("DXGIPresent_Start"); break;
         case Microsoft_Windows_DXGI::Present_Stop::Id:                   PrintEventHeader(hdr); printf("DXGIPresent_Stop\n"); break;
-        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id: PrintEventHeader(hdr); printf("DXGIPresentMPO_Start\n"); break;
+        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id: PrintEventHeader(hdr); printf("DXGIPresentMPO_Start"); break;
         case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Stop::Id:  PrintEventHeader(hdr); printf("DXGIPresentMPO_Stop\n"); break;
+        }
+        switch (id) {
+        case Microsoft_Windows_DXGI::Present_Start::Id:
+        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id:
+            printf("%s\n", metadata->GetEventData<uint32_t>(eventRecord, L"Flags") & DXGI_PRESENT_TEST ? " TEST" : "");
+            break;
         }
         return;
     }
@@ -263,6 +270,10 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
 
         switch (id) {
         case Microsoft_Windows_DxgKrnl::QueuePacket_Start::Id:
+            printf(" SubmitSequence=%u%s\n",
+                metadata->GetEventData<uint32_t>(eventRecord, L"SubmitSequence"),
+                metadata->GetEventData<BOOL>(eventRecord, L"bPresent") == 0 ? "" : " [present]");
+            break;
         case Microsoft_Windows_DxgKrnl::QueuePacket_Stop::Id:
             printf(" SubmitSequence=%u\n", metadata->GetEventData<uint32_t>(eventRecord, L"SubmitSequence"));
             break;
