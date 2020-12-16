@@ -98,10 +98,8 @@ ULONG EnableProviders(
     std::vector<USHORT> eventIds;
     ULONG status = 0;
 
-    // Try to start providers in reverse order of the present pipeline.  This
-    // helps during start up where, otherwise, we can loose track of
-    // PresentEvents that get created because their completion events aren't
-    // yet being routed to the consumer.
+    // Start backend providers first to reduce Presents being queued up before
+    // we can track them.
     if (pmConsumer->mTrackDisplay) {
         // Microsoft_Windows_DxgKrnl
         anyKeywordMask =

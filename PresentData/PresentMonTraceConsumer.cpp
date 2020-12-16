@@ -121,18 +121,12 @@ void PMTraceConsumer::HandleD3D9Event(EVENT_RECORD* pEventRecord)
 {
     DebugEvent(pEventRecord, &mMetadata);
 
-    // Don't start any presents until we've seen backend events
-    if (mTrackDisplay && !mDxgkProviderInitialized) {
-        return;
-    }
-
-    // Filter out ignored presents
     auto const& hdr = pEventRecord->EventHeader;
+
     if (!IsProcessTrackedForFiltering(hdr.ProcessId)) {
         return;
     }
 
-    // Handle D3D9 Present start/stop
     switch (hdr.EventDescriptor.Id) {
     case Microsoft_Windows_D3D9::Present_Start::Id:
     {
@@ -179,18 +173,12 @@ void PMTraceConsumer::HandleDXGIEvent(EVENT_RECORD* pEventRecord)
 {
     DebugEvent(pEventRecord, &mMetadata);
 
-    // Don't start any presents until we've seen backend events
-    if (mTrackDisplay && !mDxgkProviderInitialized) {
-        return;
-    }
-
-    // Filter out ignored presents
     auto const& hdr = pEventRecord->EventHeader;
+
     if (!IsProcessTrackedForFiltering(hdr.ProcessId)) {
         return;
     }
 
-    // Handle DXGI Present start/stop
     switch (hdr.EventDescriptor.Id) {
     case Microsoft_Windows_DXGI::Present_Start::Id:
     case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id:
@@ -250,8 +238,6 @@ void PMTraceConsumer::HandleDXGIEvent(EVENT_RECORD* pEventRecord)
 
 void PMTraceConsumer::HandleDxgkBlt(EVENT_HEADER const& hdr, uint64_t hwnd, bool redirectedPresent)
 {
-    mDxgkProviderInitialized = true;
-
     // Lookup the in-progress present.  It should not have a known present mode
     // yet, so PresentMode!=Unknown implies we looked up a 'stuck' present
     // whose tracking was lost for some reason.
@@ -300,8 +286,6 @@ void PMTraceConsumer::HandleDxgkBltCancel(EVENT_HEADER const& hdr)
 
 void PMTraceConsumer::HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterval, bool mmio)
 {
-    mDxgkProviderInitialized = true;
-
     // A flip event is emitted during fullscreen present submission.
     // Afterwards, expect an MMIOFlip packet on the same thread, used
     // to trace the flip to screen.
@@ -844,8 +828,6 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         auto Model     = desc[1].GetData<uint32_t>();
         auto TokenData = desc[2].GetData<uint64_t>();
 
-        mDxgkProviderInitialized = true;
-
         if (Model == D3DKMT_PM_REDIRECTED_GDI) {
             return;
         }
@@ -863,8 +845,6 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         return;
     }
     case Microsoft_Windows_DxgKrnl::PresentHistory_Info::Id:
-        mDxgkProviderInitialized = true;
-
         TRACK_PRESENT_PATH_GENERATE_ID();
         HandleDxgkPresentHistoryInfo(hdr, mMetadata.GetEventData<uint64_t>(pEventRecord, L"Token"));
         return;
@@ -1334,8 +1314,6 @@ void PMTraceConsumer::HandleWin7DxgkPresentHistory(EVENT_RECORD* pEventRecord)
 
     auto pPresentHistoryEvent = reinterpret_cast<Win7::DXGKETW_PRESENTHISTORYEVENT*>(pEventRecord->UserData);
     if (pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_START) {
-        mDxgkProviderInitialized = true;
-
         TRACK_PRESENT_PATH_GENERATE_ID();
         HandleDxgkPresentHistory(
             pEventRecord->EventHeader,
@@ -1754,7 +1732,7 @@ void PMTraceConsumer::RemoveLostPresent(std::shared_ptr<PresentEvent> p)
         // A lost present has already been added to mLostPresentEvents, we should never modify it.
     }
 
-    // Completed Presented presents should make it here.
+    // Completed Presented presents should not make it here.
     assert(!(p->Completed && p->FinalState == PresentResult::Presented));
 
     // Remove the present from any struct that would only host the event temporarily.
@@ -1861,8 +1839,38 @@ std::shared_ptr<PresentEvent> PMTraceConsumer::FindBySubmitSequence(uint32_t sub
 
 std::shared_ptr<PresentEvent> PMTraceConsumer::FindOrCreatePresent(EVENT_HEADER const& hdr)
 {
-    // Check to see if the backend is up and running yet
-    if (!mDxgkProviderInitialized) {
+    // We're using FindOrCreatePresent() as an indication that the backend
+    // providers (e.g. DXGK) are running and providing the events needed to
+    // track/complete presents.
+    //
+    // On the first call, there may be numerous presents that were previously
+    // started and queued.  However, it's possible that they actually completed
+    // but we never got the backend events for them due to issues with the
+    // providers starting up.  When that happens, QpcTime/TimeTaken and
+    // ReadyTime/ScreenTime times become mis-matched, actually coming from
+    // different Present() calls.
+    //
+    // This is especially prevalent in ETLs that start runtime providers before
+    // backend providers and/or start capturing while an intensive graphics
+    // application is already running.
+    //
+    // We handle this by throwing away all queued presents up to this point,
+    // and then returning null to also disable tracking of this Present.
+    //
+    // TODO: It's fairly likely that the last queued present should actually be
+    // matched with this backend event.  Currently, we throw it away too since
+    // we can't be sure, but we could possibly use a heuristic based on how
+    // much time has passed between the two events.
+    if (mFindOrCreatePresentCalled == false) {
+        mFindOrCreatePresentCalled = true;
+        for (uint32_t i = 0; i < mAllPresentsNextIndex; ++i) {
+            auto& p = mAllPresents[i];
+            if (p != nullptr && !p->Completed && !p->IsLost) {
+                assert(p->PresentMode == PresentMode::Unknown);
+                assert(p->FinalState == PresentResult::Unknown);
+                RemoveLostPresent(p);
+            }
+        }
         return nullptr;
     }
 

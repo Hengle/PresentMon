@@ -194,21 +194,9 @@ struct PMTraceConsumer
     bool mTrackDisplay = true;          // Whether the analysis should track presents to display
     bool mTrackGPU = false;             // Whether the analysis should track GPU work
 
-    // Not all ETW providers start/stop at the same time, so there can be
-    // situations where we're only seeing some of the events.  E.g., we may see
-    // DXGI::Present_Start events before the DxgKrnl provider has fully
-    // started.  This can result in presents being created and queued into
-    // mPresentsByProcess and mPresentsByProcessAndSwapChain and ultimately
-    // being matched with the wrong Blt, Flip, PresentHistory, and/or
-    // TokenCompositionSurfaceObject events.
-    //
-    // The consumer deals with this by ignoring D3D9/DXGI present events until
-    // after we've seen examples of the relevant backend DxgKrnl events.  This
-    // has the downside that the first event always has Runtime==Other.
-    //
-    // We don't wait for existance of Win32K TokenCompositionSurfaceObject
-    // events as we just might not be using that path.
-    bool mDxgkProviderInitialized = false;
+    // Tracks whether a backend event (e.g., from DXGK) has tried to lookup a
+    // present yes, as an indication that the backend providers are running.
+    bool mFindOrCreatePresentCalled = false;
 
     // Store completed presents until the consumer thread removes them using
     // DequeuePresents().  Completed presents are those that have progressed as
@@ -339,7 +327,6 @@ struct PMTraceConsumer
     std::map<uint64_t, std::shared_ptr<PresentEvent>> mPresentsByLegacyBlitToken;
 
     // Limit tracking to specified processes
-    bool mEnableTrackedProcessFiltering = false;
     std::set<uint32_t> mTrackedProcessFilter;
     std::shared_mutex mTrackedProcessFilterMutex;
 
