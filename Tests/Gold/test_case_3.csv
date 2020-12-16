@@ -1,6 +1,4 @@
 Application,ProcessID,SwapChainAddress,Runtime,SyncInterval,PresentFlags,AllowsTearing,PresentMode,Dropped,TimeInSeconds,MsBetweenPresents,MsBetweenDisplayChange,MsInPresentAPI,MsUntilRenderComplete,MsUntilDisplayed
-dwm.exe,1252,0x0000022E6AFA2560,DXGI,1,0,0,Hardware: Legacy Flip,1,0.109901,18.670,0.000,0.195,0.832,0.000
-dwm.exe,1252,0x0000022E6AFA2560,DXGI,1,0,0,Other,1,0.241229,131.329,0.000,0.059,0.000,0.000
 dwm.exe,1252,0x0000022E6AFA2560,DXGI,1,0,0,Other,1,0.257970,16.741,0.000,0.086,0.000,0.000
 dwm.exe,1252,0x0000022E6AFA2560,DXGI,1,0,0,Other,1,0.274589,16.618,0.000,0.055,0.000,0.000
 dwm.exe,1252,0x0000022E6AFA2560,DXGI,1,0,0,Other,1,0.307977,33.389,0.000,0.054,0.000,0.000

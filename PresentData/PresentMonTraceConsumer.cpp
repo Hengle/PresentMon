@@ -117,6 +117,7 @@ PMTraceConsumer::PMTraceConsumer(bool filteredEvents, bool simple, bool trackedF
     , mAllPresentsNextIndex(0)
     , mAllPresents(PRESENTEVENT_CIRCULAR_BUFFER_SIZE)
     , mEnableTrackedProcessFiltering(trackedFiltering)
+    , mDxgkProviderInitialized(false)
 {
 }
 
@@ -124,12 +125,18 @@ void PMTraceConsumer::HandleD3D9Event(EVENT_RECORD* pEventRecord)
 {
     DebugEvent(pEventRecord, &mMetadata);
 
-    auto const& hdr = pEventRecord->EventHeader;
+    // Don't start any presents until we've seen backend events
+    if (!mSimpleMode && !mDxgkProviderInitialized) {
+        return;
+    }
 
+    // Filter out ignored presents
+    auto const& hdr = pEventRecord->EventHeader;
     if (!IsProcessTrackedForFiltering(hdr.ProcessId)) {
         return;
     }
 
+    // Handle D3D9 Present start/stop
     switch (hdr.EventDescriptor.Id) {
     case Microsoft_Windows_D3D9::Present_Start::Id:
     {
@@ -176,12 +183,18 @@ void PMTraceConsumer::HandleDXGIEvent(EVENT_RECORD* pEventRecord)
 {
     DebugEvent(pEventRecord, &mMetadata);
 
-    auto const& hdr = pEventRecord->EventHeader;
+    // Don't start any presents until we've seen backend events
+    if (!mSimpleMode && !mDxgkProviderInitialized) {
+        return;
+    }
 
+    // Filter out ignored presents
+    auto const& hdr = pEventRecord->EventHeader;
     if (!IsProcessTrackedForFiltering(hdr.ProcessId)) {
         return;
     }
 
+    // Handle DXGI Present start/stop
     switch (hdr.EventDescriptor.Id) {
     case Microsoft_Windows_DXGI::Present_Start::Id:
     case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id:
@@ -241,6 +254,8 @@ void PMTraceConsumer::HandleDXGIEvent(EVENT_RECORD* pEventRecord)
 
 void PMTraceConsumer::HandleDxgkBlt(EVENT_HEADER const& hdr, uint64_t hwnd, bool redirectedPresent)
 {
+    mDxgkProviderInitialized = true;
+
     // Lookup the in-progress present.  It should not have a known present mode
     // yet, so PresentMode!=Unknown implies we looked up a 'stuck' present
     // whose tracking was lost for some reason.
@@ -289,6 +304,8 @@ void PMTraceConsumer::HandleDxgkBltCancel(EVENT_HEADER const& hdr)
 
 void PMTraceConsumer::HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterval, bool mmio)
 {
+    mDxgkProviderInitialized = true;
+
     // A flip event is emitted during fullscreen present submission.
     // Afterwards, expect an MMIOFlip packet on the same thread, used
     // to trace the flip to screen.
@@ -517,7 +534,7 @@ void PMTraceConsumer::HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSu
     }
 }
 
-void PMTraceConsumer::HandleDxgkSubmitPresentHistoryEventArgs(
+void PMTraceConsumer::HandleDxgkPresentHistory(
     EVENT_HEADER const& hdr,
     uint64_t token,
     uint64_t tokenData,
@@ -583,7 +600,7 @@ void PMTraceConsumer::HandleDxgkSubmitPresentHistoryEventArgs(
     }
 }
 
-void PMTraceConsumer::HandleDxgkPropagatePresentHistoryEventArgs(EVENT_HEADER const& hdr, uint64_t token)
+void PMTraceConsumer::HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint64_t token)
 {
     // This event is emitted when a token is being handed off to DWM, and is a good way to indicate a ready state
     auto eventIter = mDxgKrnlPresentHistoryTokens.find(token);
@@ -772,6 +789,8 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         auto TokenData = desc[1].GetData<uint64_t>();
         auto Model     = desc[2].GetData<uint32_t>();
 
+        mDxgkProviderInitialized = true;
+
         if (Model == D3DKMT_PM_REDIRECTED_GDI) {
             break;
         }
@@ -785,12 +804,14 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         }
 
         TRACK_PRESENT_PATH_GENERATE_ID();
-        HandleDxgkSubmitPresentHistoryEventArgs(hdr, Token, TokenData, presentMode);
+        HandleDxgkPresentHistory(hdr, Token, TokenData, presentMode);
         break;
     }
     case Microsoft_Windows_DxgKrnl::PresentHistory_Info::Id:
+        mDxgkProviderInitialized = true;
+
         TRACK_PRESENT_PATH_GENERATE_ID();
-        HandleDxgkPropagatePresentHistoryEventArgs(hdr, mMetadata.GetEventData<uint64_t>(pEventRecord, L"Token"));
+        HandleDxgkPresentHistoryInfo(hdr, mMetadata.GetEventData<uint64_t>(pEventRecord, L"Token"));
         break;
     case Microsoft_Windows_DxgKrnl::Blit_Info::Id:
     {
@@ -949,15 +970,17 @@ void PMTraceConsumer::HandleWin7DxgkPresentHistory(EVENT_RECORD* pEventRecord)
 
     auto pPresentHistoryEvent = reinterpret_cast<Win7::DXGKETW_PRESENTHISTORYEVENT*>(pEventRecord->UserData);
     if (pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_START) {
+        mDxgkProviderInitialized = true;
+
         TRACK_PRESENT_PATH_GENERATE_ID();
-        HandleDxgkSubmitPresentHistoryEventArgs(
+        HandleDxgkPresentHistory(
             pEventRecord->EventHeader,
             pPresentHistoryEvent->Token,
             0,
             PresentMode::Unknown);
     } else if (pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_INFO) {
         TRACK_PRESENT_PATH_GENERATE_ID();
-        HandleDxgkPropagatePresentHistoryEventArgs(pEventRecord->EventHeader, pPresentHistoryEvent->Token);
+        HandleDxgkPresentHistoryInfo(pEventRecord->EventHeader, pPresentHistoryEvent->Token);
     }
 }
 
@@ -1474,6 +1497,11 @@ std::shared_ptr<PresentEvent> PMTraceConsumer::FindBySubmitSequence(uint32_t sub
 
 std::shared_ptr<PresentEvent> PMTraceConsumer::FindOrCreatePresent(EVENT_HEADER const& hdr)
 {
+    // Check to see if the backend is up and running yet
+    if (!mDxgkProviderInitialized) {
+        return nullptr;
+    }
+
     // Check if there is an in-progress present that this thread is already
     // working on and, if so, continue working on that.
     auto threadEventIter = mPresentByThreadId.find(hdr.ThreadId);
@@ -1526,7 +1554,7 @@ std::shared_ptr<PresentEvent> PMTraceConsumer::FindOrCreatePresent(EVENT_HEADER 
 
 void PMTraceConsumer::TrackPresent(
     std::shared_ptr<PresentEvent> present,
-    decltype(PMTraceConsumer::mPresentsByProcess.begin()->second)& presentsByThisProcess)
+    decltype(PMTraceConsumer::mPresentsByProcess)::mapped_type& presentsByThisProcess)
 {
     DebugCreatePresent(*present);
 

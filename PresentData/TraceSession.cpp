@@ -93,28 +93,13 @@ ULONG EnableProviders(
     bool simple,
     bool includeWinMR)
 {
-    // Microsoft_Windows_DXGI
-    auto keywordMask =
-        (uint64_t) Microsoft_Windows_DXGI::Keyword::Microsoft_Windows_DXGI_Analytic |
-        (uint64_t) Microsoft_Windows_DXGI::Keyword::Events;
-    auto status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_DXGI::GUID, TRACE_LEVEL_INFORMATION, keywordMask, keywordMask, {
-        Microsoft_Windows_DXGI::Present_Start::Id,
-        Microsoft_Windows_DXGI::Present_Stop::Id,
-        Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id,
-        Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Stop::Id,
-    });
-    if (status != ERROR_SUCCESS) return status;
+    uint64_t keywordMask = 0;
+    ULONG status = 0;
 
-    // Microsoft_Windows_D3D9
-    keywordMask =
-        (uint64_t) Microsoft_Windows_D3D9::Keyword::Microsoft_Windows_Direct3D9_Analytic |
-        (uint64_t) Microsoft_Windows_D3D9::Keyword::Events;
-    status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_D3D9::GUID, TRACE_LEVEL_INFORMATION, keywordMask, keywordMask, {
-        Microsoft_Windows_D3D9::Present_Start::Id,
-        Microsoft_Windows_D3D9::Present_Stop::Id,
-    });
-    if (status != ERROR_SUCCESS) return status;
-
+    // Try to start providers in reverse order of the present pipeline.  This
+    // helps during start up where, otherwise, we can loose track of
+    // PresentEvents that get created because their completion events aren't
+    // yet being routed to the consumer.
     if (!simple) {
         // Microsoft_Windows_DxgKrnl
         keywordMask =
@@ -169,6 +154,28 @@ ULONG EnableProviders(
                                 TRACE_LEVEL_VERBOSE, 0, 0, 0, nullptr);
         if (status != ERROR_SUCCESS) return status;
     }
+
+    // Microsoft_Windows_DXGI
+    keywordMask =
+        (uint64_t) Microsoft_Windows_DXGI::Keyword::Microsoft_Windows_DXGI_Analytic |
+        (uint64_t) Microsoft_Windows_DXGI::Keyword::Events;
+    status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_DXGI::GUID, TRACE_LEVEL_INFORMATION, keywordMask, keywordMask, {
+        Microsoft_Windows_DXGI::Present_Start::Id,
+        Microsoft_Windows_DXGI::Present_Stop::Id,
+        Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id,
+        Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Stop::Id,
+    });
+    if (status != ERROR_SUCCESS) return status;
+
+    // Microsoft_Windows_D3D9
+    keywordMask =
+        (uint64_t) Microsoft_Windows_D3D9::Keyword::Microsoft_Windows_Direct3D9_Analytic |
+        (uint64_t) Microsoft_Windows_D3D9::Keyword::Events;
+    status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_D3D9::GUID, TRACE_LEVEL_INFORMATION, keywordMask, keywordMask, {
+        Microsoft_Windows_D3D9::Present_Start::Id,
+        Microsoft_Windows_D3D9::Present_Stop::Id,
+    });
+    if (status != ERROR_SUCCESS) return status;
 
     if (includeWinMR) {
         // DHD
