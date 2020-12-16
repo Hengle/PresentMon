@@ -91,6 +91,9 @@ static void WriteCsvHeader(FILE* fp)
             ",WasBatched"
             ",DwmNotified");
     }
+    if (args.mTrackGPU) {
+        fprintf(fp, ",GPUDuration");
+    }
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
     }
@@ -128,6 +131,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double msUntilRenderComplete  = 0.0;
     double msUntilDisplayed       = 0.0;
     double msBetweenDisplayChange = 0.0;
+    double msGPUDuration          = 0.0;
 
     if (args.mTrackDisplay) {
         if (p.ReadyTime > 0) {
@@ -141,6 +145,10 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
                 msBetweenDisplayChange = 1000.0 * QpcDeltaToSeconds(p.ScreenTime - lastDisplayed->ScreenTime);
             }
         }
+    }
+
+    if (args.mTrackGPU) {
+        msGPUDuration = 1000.0 * QpcDeltaToSeconds(p.GPUDuration);
     }
 
     // Output in CSV format
@@ -167,6 +175,10 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
         fprintf(fp, ",%d,%d",
             p.DriverBatchThreadId != 0,
             p.DwmNotified);
+    }
+    if (args.mTrackGPU) {
+        fprintf(fp, ",%lf",
+            msGPUDuration);
     }
     if (args.mOutputQpcTime) {
         if (args.mOutputQpcTimeInSeconds) {

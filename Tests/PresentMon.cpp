@@ -39,7 +39,8 @@ size_t FindHeader(
     char const* header,
     uint32_t* requiredCount,
     uint32_t* trackDisplayCount,
-    uint32_t* trackDebugCount)
+    uint32_t* trackDebugCount,
+    uint32_t* trackGPUCount)
 {
     size_t idx = 0;
     for (size_t i = 0; i < _countof(PresentMonCsv::REQUIRED_HEADER); ++i, ++idx) {
@@ -60,6 +61,12 @@ size_t FindHeader(
             return idx;
         }
     }
+    for (size_t i = 0; i < _countof(PresentMonCsv::TRACK_GPU_HEADER); ++i, ++idx) {
+        if (strcmp(header, PresentMonCsv::TRACK_GPU_HEADER[i]) == 0) {
+            *trackGPUCount += 1;
+            return idx;
+        }
+    }
     for (size_t i = 0; i < _countof(PresentMonCsv::OPT_HEADER); ++i, ++idx) {
         if (strcmp(header, PresentMonCsv::OPT_HEADER[i]) == 0) {
             return idx;
@@ -75,6 +82,7 @@ PresentMonCsv::PresentMonCsv()
     , fp_(nullptr)
     , trackDisplay_(false)
     , trackDebug_(false)
+    , trackGPU_(false)
 {
 }
 
@@ -106,8 +114,9 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
     uint32_t requiredCount = 0;
     uint32_t trackDisplayCount = 0;
     uint32_t trackDebugCount = 0;
+    uint32_t trackGPUCount = 0;
     for (uint32_t i = 0, n = (uint32_t) cols_.size(); i < n; ++i) {
-        auto idx = FindHeader(cols_[i], &requiredCount, &trackDisplayCount, &trackDebugCount);
+        auto idx = FindHeader(cols_[i], &requiredCount, &trackDisplayCount, &trackDebugCount, &trackGPUCount);
         if (idx == SIZE_MAX) {
             AddTestFailure(Convert(path_).c_str(), (int) line_, "Unrecognised column: %s", cols_[i]);
         } else if (headerColumnIndex_[idx] != SIZE_MAX) {
@@ -118,11 +127,13 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
     }
 
     trackDisplay_ = trackDisplayCount > 0;
-    trackDebug_ = trackDebugCount > 0;
+    trackDebug_   = trackDebugCount > 0;
+    trackGPU_     = trackGPUCount > 0;
 
     if (requiredCount != _countof(REQUIRED_HEADER) ||
         (trackDisplay_ && trackDisplayCount != _countof(TRACK_DISPLAY_HEADER)) ||
-        (trackDebug_   && trackDebugCount   != _countof(TRACK_DEBUG_HEADER))) {
+        (trackDebug_   && trackDebugCount   != _countof(TRACK_DEBUG_HEADER)) ||
+        (trackGPU_     && trackGPUCount     != _countof(TRACK_GPU_HEADER))) {
         AddTestFailure(Convert(path_).c_str(), (int) line_, "Missing required columns.");
     }
 
@@ -170,7 +181,7 @@ bool PresentMonCsv::ReadRow()
 size_t PresentMonCsv::GetColumnIndex(char const* header) const
 {
     uint32_t na = 0;
-    auto headerIdx = FindHeader(header, &na, &na, &na);
+    auto headerIdx = FindHeader(header, &na, &na, &na, &na);
     return headerIdx == SIZE_MAX
         ? SIZE_MAX
         : headerColumnIndex_[headerIdx];

@@ -95,7 +95,8 @@ struct PresentEvent {
     uint64_t Hwnd;
     uint64_t TokenPtr;
     uint64_t CompositionSurfaceLuid;
-    uint32_t QueueSubmitSequence;
+    uint64_t GPUDuration;            // Time during which DMA packet was running (0 if !mTrackGPU)
+    uint32_t QueueSubmitSequence;    // Submit sequence for the Present packet
     uint32_t DestWidth;
     uint32_t DestHeight;
     uint32_t DriverBatchThreadId;
@@ -188,9 +189,10 @@ struct PMTraceConsumer
 
     EventMetadata mMetadata;
 
-    bool mFilteredEvents = false;
-    bool mFilteredProcessIds = false;
-    bool mTrackDisplay = true;
+    bool mFilteredEvents = false;       // Whether the trace session was configured to filter non-PresentMon events
+    bool mFilteredProcessIds = false;   // Whether to filter presents to specific processes
+    bool mTrackDisplay = true;          // Whether the analysis should track presents to display
+    bool mTrackGPU = false;             // Whether the analysis should track GPU work
 
     // Whether we've seen Dxgk complete a present.  This is used to indicate
     // that the Dxgk provider has started and it's safe to start tracking
@@ -218,7 +220,8 @@ struct PMTraceConsumer
     // mPresentByThreadId stores the in-progress present that was last operated
     // on by each thread for event sequences that are known to execute on the
     // same thread. Its members' lifetime should track the lifetime of the 
-    // runtime present API as much as possible.
+    // runtime present API as much as possible. Only one present will be going
+    // through this sequence on any particular thread at a time.
     //
     // mPresentsByProcess stores each process' in-progress presents in the
     // order that they were presented.  This is used to look up presents across
@@ -235,6 +238,9 @@ struct PMTraceConsumer
     // well?  Is the create order used by mPresentsByProcessAndSwapChain really
     // different than QpcTime order?  If no on these, should we combine
     // mPresentsByProcess and mPresentsByProcessAndSwapChain?
+    //
+    // mPresentsBySubmitSequence is used to lookup the active present associated
+    // with a present queue packet.
     //
     // All flip model presents (windowed flip, dFlip, iFlip) are uniquely
     // identifyed by a Win32K present history token (composition surface,
@@ -260,6 +266,8 @@ struct PMTraceConsumer
     // Maps from queue packet submit sequence
     // Used for Flip -> MMIOFlip -> VSyncDPC for FS, for PresentHistoryToken -> MMIOFlip -> VSyncDPC for iFlip,
     // and for Blit Submission -> Blit completion for FS Blit
+
+    // [submit sequence]
     std::map<uint32_t, std::shared_ptr<PresentEvent>> mPresentsBySubmitSequence;
 
     // [(composition surface pointer, present count, bind id)]
@@ -309,7 +317,10 @@ struct PMTraceConsumer
 
     // Presents that will be completed by DWM's next present
     std::deque<std::shared_ptr<PresentEvent>> mPresentsWaitingForDWM;
-    // Used to understand that a flip event is coming from the DWM
+
+    // Store the DWM process id, and the last DWM thread id to have started
+    // a present.  This is needed to determine if a flip event is coming from
+    // DWM, but can also be useful for targetting non-DWM processes.
     uint32_t DwmProcessId = 0;
     uint32_t DwmPresentThreadId = 0;
 
@@ -324,6 +335,35 @@ struct PMTraceConsumer
 #ifdef TRACK_PRESENT_PATHS
     uint32_t mAnalysisPathID;
 #endif
+
+    // Tracking for GPU work contributing to each frame.  We need to track DMA
+    // packet queuing to know how when each DMA packet actually ran.
+    struct DmaDuration {
+        uint64_t mAccumulatedDmaTime;   // QPC duration that at least one DMA packet was running
+        uint64_t mDmaExecStartTime;     // QPC when the oldest running DMA packet started
+        uint32_t mDmaExecCount;         // Number of running DMA packets
+    };
+
+    struct Node {
+        uint64_t mStartTime;            // QPC when the current packet started running
+        uint32_t mQueueIndex;           // Index into mDmaDurations and mSequenceId for current running packet
+        uint32_t mQueueCount;           // Number of enqueued packets
+
+        // 9 is to fit into two cache lines (one is not enough)
+        DmaDuration* mDmaDuration[9];   // Accumulation duration of enqueued packets
+        uint32_t mSequenceId[9];        // Sequence IDs for enqueued packets
+    };
+
+    struct Context {
+        DmaDuration* mDmaDuration;
+        Node* mNode;
+    };
+
+    std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes; // pDxgAdapter -> NodeOrdinal -> Node
+    std::unordered_map<uint64_t, uint64_t> mDevices;                          // hDevice -> pDxgAdapter
+    std::unordered_map<uint64_t, Context> mContexts;                          // hContext -> Context
+    std::unordered_map<uint32_t, DmaDuration> mDmaDurations;                  // ProcessID -> DmaDuration
+
 
     void DequeueProcessEvents(std::vector<ProcessEvent>& outProcessEvents)
     {
