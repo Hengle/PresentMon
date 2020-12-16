@@ -61,21 +61,24 @@ struct PresentMonCsv
         "QPCTime",
     };
 
-    static constexpr char const* GetHeader(size_t h)
+    static constexpr char const* GetHeader(size_t idx)
     {
-        constexpr auto n0 = _countof(PresentMonCsv::REQUIRED_HEADER);
-        constexpr auto n1 = _countof(PresentMonCsv::TRACK_DISPLAY_HEADER);
-        constexpr auto n2 = _countof(PresentMonCsv::TRACK_DEBUG_HEADER);
-        constexpr auto n3 = _countof(PresentMonCsv::TRACK_GPU_HEADER);
-        constexpr auto n4 = _countof(PresentMonCsv::OPT_HEADER);
+        if (idx < _countof(PresentMonCsv::REQUIRED_HEADER)) return PresentMonCsv::REQUIRED_HEADER[idx];
+        idx -= _countof(PresentMonCsv::REQUIRED_HEADER);
 
-        return
-            h < n0                     ? PresentMonCsv::REQUIRED_HEADER     [h] :
-            h - n0 < n1                ? PresentMonCsv::TRACK_DISPLAY_HEADER[h - n0] :
-            h - n0 - n1 < n2           ? PresentMonCsv::TRACK_DEBUG_HEADER  [h - n0 - n1] :
-            h - n0 - n1 - n2 < n3      ? PresentMonCsv::TRACK_GPU_HEADER    [h - n0 - n1 - n2] :
-            h - n0 - n1 - n2 - n3 < n4 ? PresentMonCsv::OPT_HEADER          [h - n0 - n1 - n2 - n3] :
-                                         "Unknown";
+        if (idx < _countof(PresentMonCsv::TRACK_DISPLAY_HEADER)) return PresentMonCsv::TRACK_DISPLAY_HEADER[idx];
+        idx -= _countof(PresentMonCsv::TRACK_DISPLAY_HEADER);
+
+        if (idx < _countof(PresentMonCsv::TRACK_DEBUG_HEADER)) return PresentMonCsv::TRACK_DEBUG_HEADER[idx];
+        idx -= _countof(PresentMonCsv::TRACK_DEBUG_HEADER);
+
+        if (idx < _countof(PresentMonCsv::TRACK_GPU_HEADER)) return PresentMonCsv::TRACK_GPU_HEADER[idx];
+        idx -= _countof(PresentMonCsv::TRACK_GPU_HEADER);
+
+        if (idx < _countof(PresentMonCsv::OPT_HEADER)) return PresentMonCsv::OPT_HEADER[idx];
+        idx -= _countof(PresentMonCsv::OPT_HEADER);
+
+        return "Unknown";
     }
 
     std::wstring path_;

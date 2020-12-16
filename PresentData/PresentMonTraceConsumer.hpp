@@ -28,10 +28,12 @@ SOFTWARE.
 #include <map>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <stdint.h>
 #include <string>
 #include <tuple>
 #include <vector>
+#include <set>
 #include <windows.h>
 #include <evntcons.h> // must include after windows.h
 
@@ -92,24 +94,33 @@ struct PresentEvent {
     // Properties deduced by watching events through present pipeline
     uint64_t Hwnd;
     uint64_t TokenPtr;
+    uint64_t CompositionSurfaceLuid;
     uint64_t GPUDuration;            // Sum of DMA packet durations (0 if !mTrackGPU)
     uint32_t QueueSubmitSequence;    // Submit sequence for the Present packet
+    uint32_t DestWidth;
+    uint32_t DestHeight;
+    uint32_t DriverBatchThreadId;
     Runtime Runtime;
     PresentMode PresentMode;
     PresentResult FinalState;
-    uint32_t DestWidth;
-    uint32_t DestHeight;
-    uint64_t CompositionSurfaceLuid;
     bool SupportsTearing;
     bool MMIO;
     bool SeenDxgkPresent;
     bool SeenWin32KEvents;
-    bool WasBatched;
     bool DwmNotified;
     bool Completed;
 
-    // Additional transient state
+    // Additional transient tracking state
+    bool IsLost;                        // Whether this present has been timed-out, unlikely to ever complete.
+    uint32_t mAllPresentsTrackingIndex; // Index in PMTraceConsumer's mAllPresents.
+    uint64_t DxgKrnlHContext;           // Key for mBltsByDxgContext
+    uint64_t Win32KPresentCount;        // Combine with CompositionSurfaceLuid and Win32KBindId as key into mWin32KPresentHistoryTokens
+    uint64_t Win32KBindId;              // Combine with CompositionSurfaceLuid and Win32KPresentCount as key into mWin32KPresentHistoryTokens
+    uint64_t LegacyBlitTokenData;       // Key for mPresentsByLegacyBlitToken
     std::deque<std::shared_ptr<PresentEvent>> DependentPresents;
+    
+    // We need a signal to prevent us from looking fruitlessly through the WaitingForDwm list
+    bool PresentInDwmWaitingStruct;
 
     // Track the path the present took through the PresentMon analysis.
 #ifdef TRACK_PRESENT_PATHS
@@ -122,7 +133,6 @@ struct PresentEvent {
 #endif
 
     PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime);
-    ~PresentEvent();
 
 private:
     PresentEvent(PresentEvent const& copy); // dne
@@ -176,13 +186,29 @@ private:
 struct PMTraceConsumer
 {
     PMTraceConsumer();
-    ~PMTraceConsumer();
 
     EventMetadata mMetadata;
 
-    bool mFilteredEvents = false;   // Whether the trace session was configured to filter non-PresentMon events
-    bool mTrackDisplay = true;      // Whether the analysis should track presents to display
-    bool mTrackGPU = false;         // Whether the analysis should track GPU work
+    bool mFilteredEvents = false;       // Whether the trace session was configured to filter non-PresentMon events
+    bool mFilteredProcessIds = false;   // Whether to filter presents to specific processes
+    bool mTrackDisplay = true;          // Whether the analysis should track presents to display
+    bool mTrackGPU = false;             // Whether the analysis should track GPU work
+
+    // Not all ETW providers start/stop at the same time, so there can be
+    // situations where we're only seeing some of the events.  E.g., we may see
+    // DXGI::Present_Start events before the DxgKrnl provider has fully
+    // started.  This can result in presents being created and queued into
+    // mPresentsByProcess and mPresentsByProcessAndSwapChain and ultimately
+    // being matched with the wrong Blt, Flip, PresentHistory, and/or
+    // TokenCompositionSurfaceObject events.
+    //
+    // The consumer deals with this by ignoring D3D9/DXGI present events until
+    // after we've seen examples of the relevant backend DxgKrnl events.  This
+    // has the downside that the first event always has Runtime==Other.
+    //
+    // We don't wait for existance of Win32K TokenCompositionSurfaceObject
+    // events as we just might not be using that path.
+    bool mDxgkProviderInitialized = false;
 
     // Store completed presents until the consumer thread removes them using
     // DequeuePresents().  Completed presents are those that have progressed as
@@ -190,6 +216,9 @@ struct PMTraceConsumer
     // hitting the screen.
     std::mutex mPresentEventMutex;
     std::vector<std::shared_ptr<PresentEvent>> mPresentEvents;
+
+    std::mutex mLostPresentEventMutex;
+    std::vector<std::shared_ptr<PresentEvent>> mLostPresentEvents;
 
     // Process events
     std::mutex mProcessEventMutex;
@@ -201,8 +230,9 @@ struct PMTraceConsumer
     //
     // mPresentByThreadId stores the in-progress present that was last operated
     // on by each thread for event sequences that are known to execute on the
-    // same thread.  Only one present will be going through this sequence on any
-    // particular thread at a time.
+    // same thread. Its members' lifetime should track the lifetime of the 
+    // runtime present API as much as possible. Only one present will be going
+    // through this sequence on any particular thread at a time.
     //
     // mPresentsByProcess stores each process' in-progress presents in the
     // order that they were presented.  This is used to look up presents across
@@ -229,6 +259,10 @@ struct PMTraceConsumer
     // mapping from this token to in-progress present to optimize lookups
     // during Win32K events.
 
+    // Circular buffer of all Presents, older presents will be considered lost if not completed by the next visit.
+    unsigned int mAllPresentsNextIndex = 0;
+    std::vector<std::shared_ptr<PresentEvent>> mAllPresents;
+
     // [thread id]
     std::map<uint32_t, std::shared_ptr<PresentEvent>> mPresentByThreadId;
 
@@ -239,6 +273,10 @@ struct PMTraceConsumer
     // [(process id, swapchain address)]
     typedef std::tuple<uint32_t, uint64_t> ProcessAndSwapChainKey;
     std::map<ProcessAndSwapChainKey, std::deque<std::shared_ptr<PresentEvent>>> mPresentsByProcessAndSwapChain;
+
+    // Maps from queue packet submit sequence
+    // Used for Flip -> MMIOFlip -> VSyncDPC for FS, for PresentHistoryToken -> MMIOFlip -> VSyncDPC for iFlip,
+    // and for Blit Submission -> Blit completion for FS Blit
 
     // [submit sequence]
     std::map<uint32_t, std::shared_ptr<PresentEvent>> mPresentsBySubmitSequence;
@@ -300,6 +338,11 @@ struct PMTraceConsumer
     // Yet another unique way of tracking present history tokens, this time from DxgKrnl -> DWM, only for legacy blit
     std::map<uint64_t, std::shared_ptr<PresentEvent>> mPresentsByLegacyBlitToken;
 
+    // Limit tracking to specified processes
+    bool mEnableTrackedProcessFiltering = false;
+    std::set<uint32_t> mTrackedProcessFilter;
+    std::shared_mutex mTrackedProcessFilterMutex;
+
     // Storage for passing present path tracking id to Handle...() functions.
 #ifdef TRACK_PRESENT_PATHS
     uint32_t mAnalysisPathID;
@@ -344,22 +387,30 @@ struct PMTraceConsumer
         outPresentEvents.swap(mPresentEvents);
     }
 
+    void DequeueLostPresentEvents(std::vector<std::shared_ptr<PresentEvent>>& outPresentEvents)
+    {
+        std::lock_guard<std::mutex> lock(mLostPresentEventMutex);
+        outPresentEvents.swap(mLostPresentEvents);
+    }
+
     void HandleDxgkBlt(EVENT_HEADER const& hdr, uint64_t hwnd, bool redirectedPresent);
+    void HandleDxgkBltCancel(EVENT_HEADER const& hdr);
     void HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterval, bool mmio);
     void HandleDxgkQueueSubmit(EVENT_HEADER const& hdr, uint32_t packetType, uint32_t submitSequence, uint64_t context, bool present, bool supportsDxgkPresentEvent);
     void HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t submitSequence);
     void HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flags);
     void HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid);
     void HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence);
-    void HandleDxgkSubmitPresentHistoryEventArgs(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, PresentMode knownPresentMode);
-    void HandleDxgkPropagatePresentHistoryEventArgs(EVENT_HEADER const& hdr, uint64_t token);
+    void HandleDxgkPresentHistory(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, PresentMode knownPresentMode);
+    void HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint64_t token);
 
     void CompletePresent(std::shared_ptr<PresentEvent> p, uint32_t recurseDepth=0);
     std::shared_ptr<PresentEvent> FindBySubmitSequence(uint32_t submitSequence);
-    decltype(mPresentByThreadId.begin()) FindOrCreatePresent(EVENT_HEADER const& hdr);
-    decltype(mPresentByThreadId.begin()) CreatePresent(std::shared_ptr<PresentEvent> present, decltype(mPresentsByProcess.begin()->second)& presentsByThisProcess);
-    void CreatePresent(std::shared_ptr<PresentEvent> present);
-    void HandleStuckPresent(EVENT_HEADER const& hdr, decltype(mPresentByThreadId.begin())* eventIter);
+    std::shared_ptr<PresentEvent> FindOrCreatePresent(EVENT_HEADER const& hdr);
+    void TrackPresentOnThread(std::shared_ptr<PresentEvent> present);
+    void TrackPresent(std::shared_ptr<PresentEvent> present, OrderedPresents& presentsByThisProcess);
+    void RemoveLostPresent(std::shared_ptr<PresentEvent> present);
+    void RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> present);
     void RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPresentBatching, ::Runtime runtime);
 
     void HandleNTProcessEvent(EVENT_RECORD* pEventRecord);
@@ -376,5 +427,9 @@ struct PMTraceConsumer
     void HandleWin7DxgkQueuePacket(EVENT_RECORD* pEventRecord);
     void HandleWin7DxgkVSyncDPC(EVENT_RECORD* pEventRecord);
     void HandleWin7DxgkMMIOFlip(EVENT_RECORD* pEventRecord);
+
+    void AddTrackedProcessForFiltering(uint32_t processID);
+    void RemoveTrackedProcessForFiltering(uint32_t processID);
+    bool IsProcessTrackedForFiltering(uint32_t processID);
 };
 

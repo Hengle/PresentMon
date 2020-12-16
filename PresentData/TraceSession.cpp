@@ -96,33 +96,12 @@ ULONG EnableProviders(
     uint64_t anyKeywordMask;
     uint64_t allKeywordMask;
     std::vector<USHORT> eventIds;
+    ULONG status = 0;
 
-    // Microsoft_Windows_DXGI
-    anyKeywordMask =
-        (uint64_t) Microsoft_Windows_DXGI::Keyword::Microsoft_Windows_DXGI_Analytic |
-        (uint64_t) Microsoft_Windows_DXGI::Keyword::Events;
-    allKeywordMask = anyKeywordMask;
-    eventIds = {
-        Microsoft_Windows_DXGI::Present_Start::Id,
-        Microsoft_Windows_DXGI::Present_Stop::Id,
-        Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id,
-        Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Stop::Id,
-    };
-    auto status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_DXGI::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
-    if (status != ERROR_SUCCESS) return status;
-
-    // Microsoft_Windows_D3D9
-    anyKeywordMask =
-        (uint64_t) Microsoft_Windows_D3D9::Keyword::Microsoft_Windows_Direct3D9_Analytic |
-        (uint64_t) Microsoft_Windows_D3D9::Keyword::Events;
-    allKeywordMask = anyKeywordMask;
-    eventIds = {
-        Microsoft_Windows_D3D9::Present_Start::Id,
-        Microsoft_Windows_D3D9::Present_Stop::Id,
-    };
-    status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_D3D9::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
-    if (status != ERROR_SUCCESS) return status;
-
+    // Try to start providers in reverse order of the present pipeline.  This
+    // helps during start up where, otherwise, we can loose track of
+    // PresentEvents that get created because their completion events aren't
+    // yet being routed to the consumer.
     if (pmConsumer->mTrackDisplay) {
         // Microsoft_Windows_DxgKrnl
         anyKeywordMask =
@@ -209,6 +188,32 @@ ULONG EnableProviders(
         if (status != ERROR_SUCCESS) return status;
     }
 
+    // Microsoft_Windows_DXGI
+    anyKeywordMask =
+        (uint64_t) Microsoft_Windows_DXGI::Keyword::Microsoft_Windows_DXGI_Analytic |
+        (uint64_t) Microsoft_Windows_DXGI::Keyword::Events;
+    allKeywordMask = anyKeywordMask;
+    eventIds = {
+        Microsoft_Windows_DXGI::Present_Start::Id,
+        Microsoft_Windows_DXGI::Present_Stop::Id,
+        Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id,
+        Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Stop::Id,
+    };
+    status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_DXGI::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
+    if (status != ERROR_SUCCESS) return status;
+
+    // Microsoft_Windows_D3D9
+    anyKeywordMask =
+        (uint64_t) Microsoft_Windows_D3D9::Keyword::Microsoft_Windows_Direct3D9_Analytic |
+        (uint64_t) Microsoft_Windows_D3D9::Keyword::Events;
+    allKeywordMask = anyKeywordMask;
+    eventIds = {
+        Microsoft_Windows_D3D9::Present_Start::Id,
+        Microsoft_Windows_D3D9::Present_Stop::Id,
+    };
+    status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_D3D9::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
+    if (status != ERROR_SUCCESS) return status;
+
     if (mrConsumer != nullptr) {
         // DHD
         status = EnableTraceEx2(sessionHandle, &DHD_PROVIDER_GUID, EVENT_CONTROL_CODE_ENABLE_PROVIDER,
@@ -292,44 +297,12 @@ ULONG TraceSession::Start(
     char const* etlPath,
     char const* sessionName)
 {
-    assert(mHandle == 0);
+    assert(mSessionHandle == 0);
     assert(mTraceHandle == INVALID_PROCESSTRACE_HANDLE);
     mStartQpc.QuadPart = 0;
     mPMConsumer = pmConsumer;
     mMRConsumer = mrConsumer;
     mContinueProcessingBuffers = TRUE;
-
-    // -------------------------------------------------------------------------
-    // Configure session properties
-    TraceProperties sessionProps = {};
-    sessionProps.Wnode.BufferSize = (ULONG) sizeof(TraceProperties);
-    sessionProps.Wnode.ClientContext = 1;                     // Clock resolution to use when logging the timestamp for each event; 1 == query performance counter
-    sessionProps.LogFileMode = EVENT_TRACE_REAL_TIME_MODE;    // We have a realtime consumer, not writing to a log file
-    sessionProps.LogFileNameOffset = 0;                       // 0 means no output log file
-    sessionProps.LoggerNameOffset = offsetof(TraceProperties, mSessionName);  // Location of session name; will be written by StartTrace()
-    /* Not used:
-    sessionProps.Wnode.Guid               // Only needed for private or kernel sessions, otherwise it's an output
-    sessionProps.FlushTimer               // How often in seconds buffers are flushed; 0=min (1 second)
-    sessionProps.EnableFlags              // Which kernel providers to include in trace
-    sessionProps.AgeLimit                 // n/a
-    sessionProps.BufferSize = 0;          // Size of each tracing buffer in kB (max 1MB)
-    sessionProps.MinimumBuffers = 200;    // Min tracing buffer pool size; must be at least 2 per processor
-    sessionProps.MaximumBuffers = 0;      // Max tracing buffer pool size; min+20 by default
-    sessionProps.MaximumFileSize = 0;     // Max file size in MB
-    */
-    /* The following members are output variables, set by StartTrace() and/or ControlTrace()
-    sessionProps.Wnode.HistoricalContext  // handle to the event tracing session
-    sessionProps.Wnode.TimeStamp          // time this structure was updated
-    sessionProps.Wnode.Guid               // session Guid
-    sessionProps.Wnode.Flags              // e.g., WNODE_FLAG_TRACED_GUID
-    sessionProps.NumberOfBuffers          // trace buffer pool size
-    sessionProps.FreeBuffers              // trace buffer pool free count
-    sessionProps.EventsLost               // count of events not written
-    sessionProps.BuffersWritten           // buffers written in total
-    sessionProps.LogBuffersLost           // buffers that couldn't be written to the log
-    sessionProps.RealTimeBuffersLost      // buffers that couldn't be delivered to the realtime consumer
-    sessionProps.LoggerThreadId           // tracing session identifier
-    */
 
     // -------------------------------------------------------------------------
     // Configure trace properties
@@ -373,23 +346,49 @@ ULONG TraceSession::Start(
         traceProps.BufferCallback = &BufferCallback;
     }
 
-    // Set realtime parameters
+    // -------------------------------------------------------------------------
+    // For realtime collection, start the session with the required providers
     if (traceProps.LogFileName == nullptr) {
         traceProps.LoggerName = (char*) sessionName;
         traceProps.ProcessTraceMode |= PROCESS_TRACE_MODE_REAL_TIME;
-    }
 
-    // -------------------------------------------------------------------------
-    // Start the session
-    auto status = StartTraceA(&mHandle, sessionName, &sessionProps);
-    if (status != ERROR_SUCCESS) {
-        mHandle = 0;
-        return status;
-    }
+        TraceProperties sessionProps = {};
+        sessionProps.Wnode.BufferSize = (ULONG) sizeof(TraceProperties);
+        sessionProps.Wnode.ClientContext = 1;                     // Clock resolution to use when logging the timestamp for each event; 1 == query performance counter
+        sessionProps.LogFileMode = EVENT_TRACE_REAL_TIME_MODE;    // We have a realtime consumer, not writing to a log file
+        sessionProps.LogFileNameOffset = 0;                       // 0 means no output log file
+        sessionProps.LoggerNameOffset = offsetof(TraceProperties, mSessionName);  // Location of session name; will be written by StartTrace()
+        /* Not used:
+        sessionProps.Wnode.Guid               // Only needed for private or kernel sessions, otherwise it's an output
+        sessionProps.FlushTimer               // How often in seconds buffers are flushed; 0=min (1 second)
+        sessionProps.EnableFlags              // Which kernel providers to include in trace
+        sessionProps.AgeLimit                 // n/a
+        sessionProps.BufferSize = 0;          // Size of each tracing buffer in kB (max 1MB)
+        sessionProps.MinimumBuffers = 200;    // Min tracing buffer pool size; must be at least 2 per processor
+        sessionProps.MaximumBuffers = 0;      // Max tracing buffer pool size; min+20 by default
+        sessionProps.MaximumFileSize = 0;     // Max file size in MB
+        */
+        /* The following members are output variables, set by StartTrace() and/or ControlTrace()
+        sessionProps.Wnode.HistoricalContext  // handle to the event tracing session
+        sessionProps.Wnode.TimeStamp          // time this structure was updated
+        sessionProps.Wnode.Guid               // session Guid
+        sessionProps.Wnode.Flags              // e.g., WNODE_FLAG_TRACED_GUID
+        sessionProps.NumberOfBuffers          // trace buffer pool size
+        sessionProps.FreeBuffers              // trace buffer pool free count
+        sessionProps.EventsLost               // count of events not written
+        sessionProps.BuffersWritten           // buffers written in total
+        sessionProps.LogBuffersLost           // buffers that couldn't be written to the log
+        sessionProps.RealTimeBuffersLost      // buffers that couldn't be delivered to the realtime consumer
+        sessionProps.LoggerThreadId           // tracing session identifier
+        */
 
-    // Enable desired providers
-    if (etlPath == nullptr) {
-        status = EnableProviders(mHandle, sessionProps.Wnode.Guid, pmConsumer, mrConsumer);
+        auto status = StartTraceA(&mSessionHandle, sessionName, &sessionProps);
+        if (status != ERROR_SUCCESS) {
+            mSessionHandle = 0;
+            return status;
+        }
+
+        status = EnableProviders(mSessionHandle, sessionProps.Wnode.Guid, pmConsumer, mrConsumer);
         if (status != ERROR_SUCCESS) {
             Stop();
             return status;
@@ -436,13 +435,16 @@ void TraceSession::Stop()
     status = CloseTrace(mTraceHandle);
     mTraceHandle = INVALID_PROCESSTRACE_HANDLE;
 
-    DisableProviders(mHandle);
+    if (mSessionHandle != 0) {
+        DisableProviders(mSessionHandle);
 
-    TraceProperties sessionProps = {};
-    sessionProps.Wnode.BufferSize = (ULONG) sizeof(TraceProperties);
-    sessionProps.LoggerNameOffset = offsetof(TraceProperties, mSessionName);
-    status = ControlTraceW(mHandle, nullptr, &sessionProps, EVENT_TRACE_CONTROL_STOP);
-    mHandle = 0;
+        TraceProperties sessionProps = {};
+        sessionProps.Wnode.BufferSize = (ULONG) sizeof(TraceProperties);
+        sessionProps.LoggerNameOffset = offsetof(TraceProperties, mSessionName);
+        status = ControlTraceW(mSessionHandle, nullptr, &sessionProps, EVENT_TRACE_CONTROL_STOP);
+
+        mSessionHandle = 0;
+    }
 }
 
 ULONG TraceSession::StopNamedSession(char const* sessionName)
@@ -460,7 +462,7 @@ ULONG TraceSession::CheckLostReports(ULONG* eventsLost, ULONG* buffersLost) cons
     sessionProps.Wnode.BufferSize = (ULONG) sizeof(TraceProperties);
     sessionProps.LoggerNameOffset = offsetof(TraceProperties, mSessionName);
 
-    auto status = ControlTraceW(mHandle, nullptr, &sessionProps, EVENT_TRACE_CONTROL_QUERY);
+    auto status = ControlTraceW(mSessionHandle, nullptr, &sessionProps, EVENT_TRACE_CONTROL_QUERY);
     *eventsLost = sessionProps.EventsLost;
     *buffersLost = sessionProps.RealTimeBuffersLost;
     return status;

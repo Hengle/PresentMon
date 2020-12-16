@@ -29,6 +29,7 @@ SOFTWARE.
 #include "ETW/Microsoft_Windows_Win32k.h"
 
 #include <assert.h>
+#include <dxgi.h>
 #include <initializer_list>
 
 #if DEBUG_VERBOSE
@@ -40,22 +41,22 @@ struct {
     uint64_t TimeTaken;
     uint64_t ReadyTime;
     uint64_t ScreenTime;
-    
+
     uint64_t SwapChainAddress;
     int32_t SyncInterval;
     uint32_t PresentFlags;
-    
+
     uint64_t Hwnd;
     uint64_t TokenPtr;
     uint64_t GPUDuration;
     uint32_t QueueSubmitSequence;
+    uint32_t DriverBatchThreadId;
     PresentMode PresentMode;
     PresentResult FinalState;
     bool SupportsTearing;
     bool MMIO;
     bool SeenDxgkPresent;
     bool SeenWin32KEvents;
-    bool WasBatched;
     bool DwmNotified;
     bool Completed;
 } gOriginalPresentValues;
@@ -184,6 +185,10 @@ void PrintDmaPacketType(uint32_t type)
     default:                              printf("Unknown (%u)", type); assert(false); break;
     }
 }
+void PrintPresentFlags(uint32_t flags)
+{
+    if (flags & DXGI_PRESENT_FEST) printf("TEST");
+}
 
 void PrintEventHeader(EVENT_HEADER const& hdr)
 {
@@ -211,8 +216,9 @@ void PrintEventHeader(EVENT_RECORD* eventRecord, EventMetadata* metadata, char c
              if (propFunc == PrintU32)                  PrintU32(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintU64x)                 PrintU64x(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintTokenState)           PrintTokenState(metadata->GetEventData<uint32_t>(eventRecord, propName));
-        else if (propFunc == PrintDmaPacketType)        PrintDmaPacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintQueuePacketType)      PrintQueuePacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
+        else if (propFunc == PrintDmaPacketType)        PrintDmaPacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
+        else if (propFunc == PrintPresentFlags)         PrintPresentFlags(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintPresentHistoryModel)  PrintPresentHistoryModel(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else assert(false);
     }
@@ -247,13 +253,13 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintU64x,          TokenPtr)
     FLUSH_MEMBER(PrintTimeDelta,     GPUDuration)
     FLUSH_MEMBER(PrintU32,           QueueSubmitSequence)
+    FLUSH_MEMBER(PrintU32,           DriverBatchThreadId)
     FLUSH_MEMBER(PrintPresentMode,   PresentMode)
     FLUSH_MEMBER(PrintPresentResult, FinalState)
     FLUSH_MEMBER(PrintBool,          SupportsTearing)
     FLUSH_MEMBER(PrintBool,          MMIO)
     FLUSH_MEMBER(PrintBool,          SeenDxgkPresent)
     FLUSH_MEMBER(PrintBool,          SeenWin32KEvents)
-    FLUSH_MEMBER(PrintBool,          WasBatched)
     FLUSH_MEMBER(PrintBool,          DwmNotified)
     FLUSH_MEMBER(PrintBool,          Completed)
 #undef FLUSH_MEMBER
@@ -311,10 +317,14 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
 
     if (hdr.ProviderId == Microsoft_Windows_DXGI::GUID) {
         switch (id) {
-        case Microsoft_Windows_DXGI::Present_Start::Id:                  PrintEventHeader(hdr, "DXGIPresent_Start"); break;
-        case Microsoft_Windows_DXGI::Present_Stop::Id:                   PrintEventHeader(hdr, "DXGIPresent_Stop"); break;
-        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id: PrintEventHeader(hdr, "DXGIPresentMPO_Start"); break;
-        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Stop::Id:  PrintEventHeader(hdr, "DXGIPresentMPO_Stop"); break;
+        case Microsoft_Windows_DXGI::Present_Start::Id:                     PrintEventHeader(hdr, metadata, "DXGIPresent_Start", {
+                                                                                L"Flags", PrintPresentFlags,
+                                                                            }); break;
+        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id:    PrintEventHeader(hdr, metadata, "DXGIPresentMPO_Start", {
+                                                                                L"Flags", PrintPresentFlags,
+                                                                            }); break;
+        case Microsoft_Windows_DXGI::Present_Stop::Id:                      PrintEventHeader(hdr, "DXGIPresent_Stop"); break;
+        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Stop::Id:     PrintEventHeader(hdr, "DXGIPresentMPO_Stop"); break;
         }
         return;
     }
@@ -361,9 +371,15 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
         case Microsoft_Windows_DxgKrnl::MMIOFlip_Info::Id:                  PrintEventHeader(hdr, "DxgKrnl_MMIOFlip_Info"); break;
         case Microsoft_Windows_DxgKrnl::MMIOFlipMultiPlaneOverlay_Info::Id: PrintEventHeader(hdr, "DxgKrnl_MMIOFlipMultiPlaneOverlay_Info"); break;
         case Microsoft_Windows_DxgKrnl::Present_Info::Id:                   PrintEventHeader(hdr, "DxgKrnl_Present_Info"); break;
-        case Microsoft_Windows_DxgKrnl::PresentHistory_Start::Id:
-        case Microsoft_Windows_DxgKrnl::PresentHistory_Info::Id:
-        case Microsoft_Windows_DxgKrnl::PresentHistoryDetailed_Start::Id:   PrintEventHeader(eventRecord, metadata, "DxgKrnl_PresentHistoryDetailed_Start", {
+        case Microsoft_Windows_DxgKrnl::PresentHistory_Start::Id:           PrintEventHeader(eventRecord, metadata, "PresentHistory_Start", {
+                                                                                L"Token", PrintU64x,
+                                                                                L"Model", PrintPresentHistoryModel,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::PresentHistory_Info::Id:            PrintEventHeader(eventRecord, metadata, "PresentHistory_Info", {
+                                                                                L"Token", PrintU64x,
+                                                                                L"Model", PrintPresentHistoryModel,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::PresentHistoryDetailed_Start::Id:   PrintEventHeader(eventRecord, metadata, "PresentHistoryDetailed_Start", {
                                                                                 L"Token", PrintU64x,
                                                                                 L"Model", PrintPresentHistoryModel,
                                                                             }); break;
@@ -427,13 +443,13 @@ void DebugModifyPresent(PresentEvent const& p)
         gOriginalPresentValues.TokenPtr            = p.TokenPtr;
         gOriginalPresentValues.GPUDuration         = p.GPUDuration;
         gOriginalPresentValues.QueueSubmitSequence = p.QueueSubmitSequence;
+        gOriginalPresentValues.DriverBatchThreadId = p.DriverBatchThreadId;
         gOriginalPresentValues.PresentMode         = p.PresentMode;
         gOriginalPresentValues.FinalState          = p.FinalState;
         gOriginalPresentValues.SupportsTearing     = p.SupportsTearing;
         gOriginalPresentValues.MMIO                = p.MMIO;
         gOriginalPresentValues.SeenDxgkPresent     = p.SeenDxgkPresent;
         gOriginalPresentValues.SeenWin32KEvents    = p.SeenWin32KEvents;
-        gOriginalPresentValues.WasBatched          = p.WasBatched;
         gOriginalPresentValues.DwmNotified         = p.DwmNotified;
         gOriginalPresentValues.Completed           = p.Completed;
     }
@@ -462,6 +478,16 @@ void DebugCompletePresent(PresentEvent const& p, int indent)
     PrintBool(p.Completed);
     printf("->");
     PrintBool(true);
+    printf("\n");
+}
+
+
+void DebugLostPresent(PresentEvent const& p)
+{
+    if (!gDebugTrace) return;
+    FlushModifiedPresent();
+    PrintUpdateHeader(p.Id);
+    printf(" LostPresent");
     printf("\n");
 }
 

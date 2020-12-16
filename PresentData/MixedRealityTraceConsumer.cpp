@@ -31,10 +31,6 @@ SOFTWARE.
 #include "TraceConsumer.hpp"
 #include "ETW/Microsoft_Windows_DxgKrnl.h"
 
-#ifndef NDEBUG
-static bool gMixedRealityTraceConsumer_Exiting = false;
-#endif
-
 namespace {
 
 std::wstring GetEventTaskNameFromTdh(EVENT_RECORD* pEventRecord)
@@ -70,11 +66,6 @@ HolographicFrame::HolographicFrame(EVENT_HEADER const& hdr)
     , Completed(false)
     , FinalState(HolographicFrameResult::Unknown)
 {
-}
-
-HolographicFrame::~HolographicFrame()
-{
-    assert(Completed || gMixedRealityTraceConsumer_Exiting);
 }
 
 PresentationSource::PresentationSource()
@@ -120,18 +111,6 @@ LateStageReprojectionEvent::LateStageReprojectionEvent(EVENT_HEADER const& hdr)
     , MissedVsyncCount(0)
     , Completed(false)
 {
-}
-
-LateStageReprojectionEvent::~LateStageReprojectionEvent()
-{
-    assert(Completed || gMixedRealityTraceConsumer_Exiting);
-}
-
-MRTraceConsumer::~MRTraceConsumer()
-{
-#ifndef NDEBUG
-    gMixedRealityTraceConsumer_Exiting = true;
-#endif
 }
 
 void MRTraceConsumer::CompleteLSR(std::shared_ptr<LateStageReprojectionEvent> p)

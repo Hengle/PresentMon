@@ -19,7 +19,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-
 #include "PresentMon.hpp"
 
 #include "../PresentData/TraceSession.hpp"
@@ -39,12 +38,18 @@ bool StartTraceSession()
     auto expectFilteredEvents =
         args.mEtlFileName == nullptr && // Scope filtering based on event ID only works for realtime collection
         IsWindows8Point1OrGreater();    // and requires Win8.1+
+    auto filterProcessIds = args.mTargetPid != 0; // Does not support process names at this point
 
     // Create consumers
     gPMConsumer = new PMTraceConsumer();
     gPMConsumer->mFilteredEvents = expectFilteredEvents;
-    gPMConsumer->mTrackDisplay   = args.mTrackDisplay;
-    gPMConsumer->mTrackGPU       = args.mTrackGPU;
+    gPMConsumer->mFilteredProcessIds = filterProcessIds;
+    gPMConsumer->mTrackDisplay = args.mTrackDisplay;
+    gPMConsumer->mTrackGPU = args.mTrackGPU;
+
+    if (filterProcessIds) {
+        gPMConsumer->AddTrackedProcessForFiltering(args.mTargetPid);
+    }
 
     if (args.mTrackWMR) {
         gMRConsumer = new MRTraceConsumer(args.mTrackDisplay);
@@ -135,10 +140,12 @@ void CheckLostReports(ULONG* eventsLost, ULONG* buffersLost)
 void DequeueAnalyzedInfo(
     std::vector<ProcessEvent>* processEvents,
     std::vector<std::shared_ptr<PresentEvent>>* presentEvents,
+    std::vector<std::shared_ptr<PresentEvent>>* lostPresentEvents,
     std::vector<std::shared_ptr<LateStageReprojectionEvent>>* lsrs)
 {
     gPMConsumer->DequeueProcessEvents(*processEvents);
     gPMConsumer->DequeuePresentEvents(*presentEvents);
+    gPMConsumer->DequeueLostPresentEvents(*lostPresentEvents);
     if (gMRConsumer != nullptr) {
         gMRConsumer->DequeueLSRs(*lsrs);
     }

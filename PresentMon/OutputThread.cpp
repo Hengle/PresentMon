@@ -163,6 +163,11 @@ static ProcessInfo* GetProcessInfo(uint32_t processId)
         // In ETL capture, we should have gotten an NTProcessEvent for this
         // process updated via UpdateNTProcesses(), so this path should only
         // happen in realtime capture.
+        //
+        // Try to open a limited handle into the process in order to query its
+        // name and also periodically check if it has terminated.  This will
+        // fail (with GetLastError() == ERROR_ACCESS_DENIED) if the process was
+        // run on another account, unless we're running with SeDebugPrivilege.
         auto const& args = GetCommandLineArgs();
         HANDLE handle = NULL;
         char const* processName = "<error>";
@@ -254,6 +259,7 @@ static void AddPresents(std::vector<std::shared_ptr<PresentEvent>> const& presen
     auto i = *presentEventIndex;
     for (auto n = presentEvents.size(); i < n; ++i) {
         auto presentEvent = presentEvents[i];
+        assert(presentEvent->Completed);
 
         // Stop processing events if we hit the next stop time.
         if (checkStopQpc && presentEvent->QpcTime >= stopQpc) {
@@ -307,6 +313,9 @@ static void AddPresents(LateStageReprojectionData* lsrData,
     auto i = *presentEventIndex;
     for (auto n = presentEvents.size(); i < n; ++i) {
         auto presentEvent = presentEvents[i];
+        assert(presentEvent->Completed);
+        assert(presentEvent->Source.pHolographicFrame == nullptr ||
+               presentEvent->Source.pHolographicFrame->Completed);
 
         // Stop processing events if we hit the next stop time.
         if (checkStopQpc && presentEvent->QpcTime >= stopQpc) {
@@ -377,6 +386,7 @@ static void ProcessEvents(
     LateStageReprojectionData* lsrData,
     std::vector<ProcessEvent>* processEvents,
     std::vector<std::shared_ptr<PresentEvent>>* presentEvents,
+    std::vector<std::shared_ptr<PresentEvent>>* lostPresentEvents,
     std::vector<std::shared_ptr<LateStageReprojectionEvent>>* lsrEvents,
     std::vector<uint64_t>* recordingToggleHistory,
     std::vector<std::pair<uint32_t, uint64_t>>* terminatedProcesses)
@@ -385,7 +395,7 @@ static void ProcessEvents(
 
     // Copy any analyzed information from ConsumerThread and early-out if there
     // isn't any.
-    DequeueAnalyzedInfo(processEvents, presentEvents, lsrEvents);
+    DequeueAnalyzedInfo(processEvents, presentEvents, lostPresentEvents, lsrEvents);
     if (processEvents->empty() && presentEvents->empty() && lsrEvents->empty()) {
         return;
     }
@@ -475,6 +485,7 @@ done:
     // Clear events processed.
     processEvents->clear();
     presentEvents->clear();
+    lostPresentEvents->clear();
     lsrEvents->clear();
     recordingToggleHistory->clear();
 
@@ -500,6 +511,7 @@ void Output()
     LateStageReprojectionData lsrData;
     std::vector<ProcessEvent> processEvents;
     std::vector<std::shared_ptr<PresentEvent>> presentEvents;
+    std::vector<std::shared_ptr<PresentEvent>> lostPresentEvents;
     std::vector<std::shared_ptr<LateStageReprojectionEvent>> lsrEvents;
     std::vector<uint64_t> recordingToggleHistory;
     std::vector<std::pair<uint32_t, uint64_t>> terminatedProcesses;
@@ -517,7 +529,7 @@ void Output()
 
         // Copy and process all the collected events, and update the various
         // tracking and statistics data structures.
-        ProcessEvents(&lsrData, &processEvents, &presentEvents, &lsrEvents, &recordingToggleHistory, &terminatedProcesses);
+        ProcessEvents(&lsrData, &processEvents, &presentEvents, &lostPresentEvents, &lsrEvents, &recordingToggleHistory, &terminatedProcesses);
 
         // Display information to console if requested.  If debug build and
         // simple console, print a heartbeat if recording.

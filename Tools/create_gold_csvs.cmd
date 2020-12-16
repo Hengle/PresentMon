@@ -22,7 +22,8 @@ setlocal enabledelayedexpansion
 set presentmon=%1
 set rootdir=%~2
 set force=0
-if "%~2"=="" goto usage
+if "%~1" equ "" goto usage
+if "%~2" equ "" goto usage
 if not exist %presentmon% goto usage
 if not exist "%rootdir%\." goto usage
 if "%~3"=="force" (
@@ -36,7 +37,7 @@ goto args_ok
     exit /b 1
 :args_ok
 
-set pmargs=-no_top -stop_existing_session -dont_restart_as_admin -qpc_time -track_debug -track_gpu
+set pmargs=-no_top -stop_existing_session -qpc_time -track_debug -track_gpu
 for /f "tokens=*" %%a in ('dir /s /b /a-d "%rootdir%\*.etl"') do call :create_csv "%%a"
 exit /b 0
 
@@ -46,7 +47,8 @@ exit /b 0
         exit /b 0
     )
     echo %presentmon% %pmargs% -etl_file %1 -output_file "%~dpn1.csv"
-    %presentmon% %pmargs% -etl_file %1 -output_file "%~dpn1.csv"
+    %presentmon% %pmargs% -etl_file %1 -output_file "%~dpn1.csv" >NUL
     echo.
+    where /q unix2dos
+    if %errorlevel% equ 0 unix2dos -q "%~dpn1.csv"
     exit /b 0
-

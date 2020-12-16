@@ -67,32 +67,23 @@ static void WriteCsvHeader(FILE* fp)
 {
     auto const& args = GetCommandLineArgs();
 
-    fprintf(fp,
-        "Application"
-        ",ProcessID"
-        ",SwapChainAddress"
-        ",Runtime"
-        ",SyncInterval"
-        ",PresentFlags"
-        ",Dropped"
-        ",TimeInSeconds"
-        ",MsInPresentAPI"
-        ",MsBetweenPresents");
+    fprintf(fp, "Application,ProcessID,SwapChainAddress,Runtime,SyncInterval,PresentFlags");
     if (args.mTrackDisplay) {
-        fprintf(fp,
-            ",AllowsTearing"
-            ",PresentMode"
-            ",MsUntilRenderComplete"
-            ",MsUntilDisplayed"
-            ",MsBetweenDisplayChange");
+        fprintf(fp, ",AllowsTearing,PresentMode");
+    }
+    if (args.mTrackDebug) {
+        fprintf(fp, ",WasBatched,DwmNotified");
+    }
+    fprintf(fp, ",Dropped,TimeInSeconds,MsBetweenPresents");
+    if (args.mTrackDisplay) {
+        fprintf(fp, ",MsBetweenDisplayChange");
+    }
+    fprintf(fp, ",MsInPresentAPI");
+    if (args.mTrackDisplay) {
+        fprintf(fp, ",MsUntilRenderComplete,MsUntilDisplayed");
     }
     if (args.mTrackGPU) {
         fprintf(fp, ",GPUDuration");
-    }
-    if (args.mTrackDebug) {
-        fprintf(fp,
-            ",WasBatched"
-            ",DwmNotified");
     }
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
@@ -152,33 +143,25 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     }
 
     // Output in CSV format
-    fprintf(fp, "%s,%d,0x%016llX,%s,%d,%d,%s,%.6lf,%.3lf,%.3lf",
-        processInfo->mModuleName.c_str(),
-        p.ProcessId,
-        p.SwapChainAddress,
-        RuntimeToString(p.Runtime),
-        p.SyncInterval,
-        p.PresentFlags,
-        FinalStateToDroppedString(p.FinalState),
-        timeInSeconds,
-        msInPresentApi,
-        msBetweenPresents);
+    fprintf(fp, "%s,%d,0x%016llX,%s,%d,%d", processInfo->mModuleName.c_str(), p.ProcessId, p.SwapChainAddress,
+        RuntimeToString(p.Runtime), p.SyncInterval, p.PresentFlags);
     if (args.mTrackDisplay) {
-        fprintf(fp, ",%d,%s,%.3lf,%.3lf,%.3lf",
-            p.SupportsTearing,
-            PresentModeToString(p.PresentMode),
-            msUntilRenderComplete,
-            msUntilDisplayed,
-            msBetweenDisplayChange);
-    }
-    if (args.mTrackGPU) {
-        fprintf(fp, ",%.3lf",
-            msGPUDuration);
+        fprintf(fp, ",%d,%s", p.SupportsTearing, PresentModeToString(p.PresentMode));
     }
     if (args.mTrackDebug) {
-        fprintf(fp, ",%d,%d",
-            p.WasBatched,
-            p.DwmNotified);
+        fprintf(fp, ",%d,%d", (p.DriverBatchThreadId != 0), p.DwmNotified);
+    }
+    fprintf(fp, ",%s,%.6lf,%.3lf", FinalStateToDroppedString(p.FinalState), timeInSeconds, msBetweenPresents);
+    if (args.mTrackDisplay) {
+        fprintf(fp, ",%.3lf", msBetweenDisplayChange);
+    }
+    fprintf(fp, ",%.3lf", msInPresentApi);
+    if (args.mTrackDisplay) {
+        fprintf(fp, ",%.3lf,%.3lf", msUntilRenderComplete, msUntilDisplayed);
+    }
+    if (args.mTrackGPU) {
+        fprintf(fp, ",%lf",
+            msGPUDuration);
     }
     if (args.mOutputQpcTime) {
         if (args.mOutputQpcTimeInSeconds) {
