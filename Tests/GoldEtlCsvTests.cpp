@@ -62,6 +62,7 @@ public:
         pm.AddCsvPath(testCsv_);
         if (!goldCsv.trackDisplay_) pm.Add(L"-no_track_display");
         if (goldCsv.trackDebug_) pm.Add(L"-track_debug");
+        if (goldCsv.trackGPU_) pm.Add(L"-track_gpu");
         if (goldCsv.GetColumnIndex("QPCTime") != SIZE_MAX) pm.Add(L"-qpc_time"); // TODO: check if %ull or %.9lf to see if -qpc_time_s
         pm.PMSTART();
         pm.PMEXITED();

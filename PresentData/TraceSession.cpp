@@ -123,8 +123,32 @@ ULONG EnableProviders(
             Microsoft_Windows_DxgKrnl::QueuePacket_Stop::Id,
             Microsoft_Windows_DxgKrnl::VSyncDPC_Info::Id,
         };
+        if (pmConsumer->mTrackGPU) {
+            anyKeywordMask |=
+                (uint64_t) Microsoft_Windows_DxgKrnl::Keyword::LongHaul |
+                (uint64_t) Microsoft_Windows_DxgKrnl::Keyword::Resource;
+            allKeywordMask =
+                (uint64_t) Microsoft_Windows_DxgKrnl::Keyword::Microsoft_Windows_DxgKrnl_Performance;
+
+            eventIds.push_back(Microsoft_Windows_DxgKrnl::Context_DCStart::Id);
+            eventIds.push_back(Microsoft_Windows_DxgKrnl::Context_Start::Id);
+            eventIds.push_back(Microsoft_Windows_DxgKrnl::Context_Stop::Id);
+            eventIds.push_back(Microsoft_Windows_DxgKrnl::Device_DCStart::Id);
+            eventIds.push_back(Microsoft_Windows_DxgKrnl::Device_Start::Id);
+            eventIds.push_back(Microsoft_Windows_DxgKrnl::Device_Stop::Id);
+            eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Info_3::Id);
+            eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Start::Id);
+        }
         status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_DxgKrnl::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
         if (status != ERROR_SUCCESS) return status;
+
+        if (pmConsumer->mTrackGPU) {
+            // Request state capture on DxgKrnl so we see Context_DCStart/Device_DCStart
+            // events for existing contexts/devices.
+            status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_DxgKrnl::GUID, EVENT_CONTROL_CODE_CAPTURE_STATE,
+                                    TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, 0, nullptr);
+            if (status != ERROR_SUCCESS) return status;
+        }
 
         status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_DxgKrnl::Win7::GUID, EVENT_CONTROL_CODE_ENABLE_PROVIDER,
                                 TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, 0, nullptr);

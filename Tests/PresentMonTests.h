@@ -53,6 +53,10 @@ struct PresentMonCsv
         "DwmNotified",
     };
 
+    static constexpr char const* const TRACK_GPU_HEADER[] = {
+        "GPUDuration",
+    };
+
     static constexpr char const* const OPT_HEADER[] = {
         "QPCTime",
     };
@@ -68,6 +72,9 @@ struct PresentMonCsv
         if (idx < _countof(PresentMonCsv::TRACK_DEBUG_HEADER)) return PresentMonCsv::TRACK_DEBUG_HEADER[idx];
         idx -= _countof(PresentMonCsv::TRACK_DEBUG_HEADER);
 
+        if (idx < _countof(PresentMonCsv::TRACK_GPU_HEADER)) return PresentMonCsv::TRACK_GPU_HEADER[idx];
+        idx -= _countof(PresentMonCsv::TRACK_GPU_HEADER);
+
         if (idx < _countof(PresentMonCsv::OPT_HEADER)) return PresentMonCsv::OPT_HEADER[idx];
         idx -= _countof(PresentMonCsv::OPT_HEADER);
 
@@ -80,11 +87,13 @@ struct PresentMonCsv
     size_t headerColumnIndex_[_countof(REQUIRED_HEADER) +
                               _countof(TRACK_DISPLAY_HEADER) +
                               _countof(TRACK_DEBUG_HEADER) +
+                              _countof(TRACK_GPU_HEADER) +
                               _countof(OPT_HEADER)];
     char row_[1024];
     std::vector<char const*> cols_;
     bool trackDisplay_;
     bool trackDebug_;
+    bool trackGPU_;
 
     PresentMonCsv();
     bool Open(char const* file, int line, std::wstring const& path);

@@ -48,6 +48,7 @@ struct {
 
     uint64_t Hwnd;
     uint64_t TokenPtr;
+    uint64_t GPUDuration;
     uint32_t QueueSubmitSequence;
     uint32_t DriverBatchThreadId;
     PresentMode PresentMode;
@@ -174,6 +175,16 @@ void PrintQueuePacketType(uint32_t type)
     default:                              printf("Unknown (%u)", type); assert(false); break;
     }
 }
+void PrintDmaPacketType(uint32_t type)
+{
+    switch (type) {
+    case DXGKETW_CLIENT_RENDER_BUFFER:    printf("CLIENT_RENDER"); break;
+    case DXGKETW_CLIENT_PAGING_BUFFER:    printf("CLIENT_PAGING"); break;
+    case DXGKETW_SYSTEM_PAGING_BUFFER:    printf("SYSTEM_PAGING"); break;
+    case DXGKETW_SYSTEM_PREEMTION_BUFFER: printf("SYSTEM_PREEMTION"); break;
+    default:                              printf("Unknown (%u)", type); assert(false); break;
+    }
+}
 void PrintPresentFlags(uint32_t flags)
 {
     if (flags & DXGI_PRESENT_FEST) printf("TEST");
@@ -206,6 +217,7 @@ void PrintEventHeader(EVENT_RECORD* eventRecord, EventMetadata* metadata, char c
         else if (propFunc == PrintU64x)                 PrintU64x(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintTokenState)           PrintTokenState(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintQueuePacketType)      PrintQueuePacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
+        else if (propFunc == PrintDmaPacketType)        PrintDmaPacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintPresentFlags)         PrintPresentFlags(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintPresentHistoryModel)  PrintPresentHistoryModel(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else assert(false);
@@ -239,6 +251,7 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintU32,           PresentFlags)
     FLUSH_MEMBER(PrintU64x,          Hwnd)
     FLUSH_MEMBER(PrintU64x,          TokenPtr)
+    FLUSH_MEMBER(PrintTimeDelta,     GPUDuration)
     FLUSH_MEMBER(PrintU32,           QueueSubmitSequence)
     FLUSH_MEMBER(PrintU32,           DriverBatchThreadId)
     FLUSH_MEMBER(PrintPresentMode,   PresentMode)
@@ -326,6 +339,32 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
     if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::GUID) {
         switch (id) {
         case Microsoft_Windows_DxgKrnl::Blit_Info::Id:                      PrintEventHeader(hdr, "DxgKrnl_Blit_Info"); break;
+        case Microsoft_Windows_DxgKrnl::Context_DCStart::Id:
+        case Microsoft_Windows_DxgKrnl::Context_Start::Id:                  PrintEventHeader(eventRecord, metadata, "DxgKrnl_Context_Start", {
+                                                                                L"hContext", PrintU64x,
+                                                                                L"hDevice", PrintU64x,
+                                                                                L"NodeOrdinal", PrintU32,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::Context_Stop::Id:                   PrintEventHeader(eventRecord, metadata, "DxgKrnl_Context_Stop", {
+                                                                                L"hContext", PrintU64x,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::Device_DCStart::Id:
+        case Microsoft_Windows_DxgKrnl::Device_Start::Id:                   PrintEventHeader(eventRecord, metadata, "DxgKrnl_Device_Start", {
+                                                                                L"hDevice", PrintU64x,
+                                                                                L"pDxgAdapter", PrintU64x,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::Device_Stop::Id:                    PrintEventHeader(eventRecord, metadata, "DxgKrnl_Device_Stop", {
+                                                                                L"hDevice", PrintU64x,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::DmaPacket_Info_3::Id:               PrintEventHeader(eventRecord, metadata, "DxgKrnl_DmaPacket_Info", {
+                                                                                L"hContext", PrintU64x,
+                                                                                L"ulQueueSubmitSequence", PrintU32,
+                                                                                L"PacketType", PrintDmaPacketType,
+                                                                            }); break;
+        case Microsoft_Windows_DxgKrnl::DmaPacket_Start::Id:                PrintEventHeader(eventRecord, metadata, "DxgKrnl_DmaPacket_Start", {
+                                                                                L"hContext", PrintU64x,
+                                                                                L"ulQueueSubmitSequence", PrintU32,
+                                                                            }); break;
         case Microsoft_Windows_DxgKrnl::Flip_Info::Id:                      PrintEventHeader(hdr, "DxgKrnl_Flip_Info"); break;
         case Microsoft_Windows_DxgKrnl::FlipMultiPlaneOverlay_Info::Id:     PrintEventHeader(hdr, "DxgKrnl_FlipMultiPlaneOverlay_Info"); break;
         case Microsoft_Windows_DxgKrnl::HSyncDPCMultiPlane_Info::Id:        PrintEventHeader(hdr, "DxgKrnl_HSyncDPCMultiPlane_Info"); break;
@@ -402,6 +441,7 @@ void DebugModifyPresent(PresentEvent const& p)
         gOriginalPresentValues.PresentFlags        = p.PresentFlags;
         gOriginalPresentValues.Hwnd                = p.Hwnd;
         gOriginalPresentValues.TokenPtr            = p.TokenPtr;
+        gOriginalPresentValues.GPUDuration         = p.GPUDuration;
         gOriginalPresentValues.QueueSubmitSequence = p.QueueSubmitSequence;
         gOriginalPresentValues.DriverBatchThreadId = p.DriverBatchThreadId;
         gOriginalPresentValues.PresentMode         = p.PresentMode;
