@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 Intel Corporation
+Copyright 2017-2021 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -332,6 +332,8 @@ static void PrintHelp()
                                     " Use with -session_name to target particular sessions.",
         "-track_gpu",               "Tracks the duration of each process' GPU work performed between presents."
                                     " Not supported on Win7.",
+        "-track_gpu_video",         "Track the video encode/decode portion of GPU work separately."
+                                    " Not supported on Win7.",
         "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
     };
 
@@ -397,6 +399,7 @@ bool ParseCommandLine(int argc, char** argv)
     args->mHotkeyModifiers = MOD_NOREPEAT;
     args->mHotkeyVirtualKeyCode = 0;
     args->mTrackGPU = false;
+    args->mTrackGPUVideo = false;
     args->mTrackDisplay = true;
     args->mTrackDebug = false;
     args->mTrackWMR = false;
@@ -459,6 +462,7 @@ bool ParseCommandLine(int argc, char** argv)
         else if (ParseArg(argv[i], "qpc_time_s"))            { args->mOutputQpcTimeInSeconds     = true; continue; }
         else if (ParseArg(argv[i], "terminate_existing"))    { args->mTerminateExisting          = true; continue; }
         else if (ParseArg(argv[i], "track_gpu"))             { args->mTrackGPU                   = true; continue; }
+        else if (ParseArg(argv[i], "track_gpu_video"))       { args->mTrackGPUVideo              = true; continue; }
         else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR                   = true; continue; }
         else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr                    = true; continue; }
 
@@ -495,6 +499,10 @@ bool ParseCommandLine(int argc, char** argv)
     }
     if (args->mTrackGPU && !args->mTrackDisplay) {
         fprintf(stderr, "warning: -track_gpu requires display tracking; ignoring -no_track_display.\n");
+        args->mTrackDisplay = true;
+    }
+    if (args->mTrackGPUVideo && !args->mTrackDisplay) {
+        fprintf(stderr, "warning: -track_gpu_video requires display tracking; ignoring -no_track_display.\n");
         args->mTrackDisplay = true;
     }
 

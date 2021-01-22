@@ -140,6 +140,9 @@ ULONG EnableProviders(
         eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Info_3::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Start::Id);
     }
+    if (pmConsumer->mTrackGPUVideo) {
+        eventIds.push_back(Microsoft_Windows_DxgKrnl::NodeMetadata_Info::Id);
+    }
     status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_DxgKrnl::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
     if (status != ERROR_SUCCESS) return status;
 

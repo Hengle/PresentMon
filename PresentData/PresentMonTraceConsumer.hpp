@@ -95,7 +95,8 @@ struct PresentEvent {
     uint64_t Hwnd;
     uint64_t TokenPtr;
     uint64_t CompositionSurfaceLuid;
-    uint64_t GPUDuration;            // Time during which DMA packet was running (0 if !mTrackGPU)
+    uint64_t GPUDuration;            // Time during which DMA packet was running (0 if !mTrackGPU; not including video packets if mTrackGPUVideo)
+    uint64_t GPUVideoDuration;       // Sum of GPU Video DMA packet durations
     uint32_t QueueSubmitSequence;    // Submit sequence for the Present packet
     uint32_t DestWidth;
     uint32_t DestHeight;
@@ -193,6 +194,7 @@ struct PMTraceConsumer
     bool mFilteredProcessIds = false;   // Whether to filter presents to specific processes
     bool mTrackDisplay = true;          // Whether the analysis should track presents to display
     bool mTrackGPU = false;             // Whether the analysis should track GPU work
+    bool mTrackGPUVideo = false;        // Whether the analysis should track GPU video work separately
 
     // Whether we've seen Dxgk complete a present.  This is used to indicate
     // that the Dxgk provider has started and it's safe to start tracking
@@ -344,25 +346,32 @@ struct PMTraceConsumer
         uint32_t mDmaExecCount;         // Number of running DMA packets
     };
 
+    struct DmaDurations {
+        DmaDuration mVideoEngines;
+        DmaDuration mOtherEngines;
+    };
+
     struct Node {
         uint64_t mStartTime;            // QPC when the current packet started running
         uint32_t mQueueIndex;           // Index into mDmaDurations and mSequenceId for current running packet
         uint32_t mQueueCount;           // Number of enqueued packets
 
         // 9 is to fit into two cache lines (one is not enough)
-        DmaDuration* mDmaDuration[9];   // Accumulation duration of enqueued packets
+        DmaDurations* mDmaDurations[9]; // Accumulated duration of enqueued packets
         uint32_t mSequenceId[9];        // Sequence IDs for enqueued packets
+
+        bool mIsVideo;
     };
 
     struct Context {
-        DmaDuration* mDmaDuration;
+        DmaDurations* mDmaDurations;
         Node* mNode;
     };
 
     std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes; // pDxgAdapter -> NodeOrdinal -> Node
     std::unordered_map<uint64_t, uint64_t> mDevices;                          // hDevice -> pDxgAdapter
     std::unordered_map<uint64_t, Context> mContexts;                          // hContext -> Context
-    std::unordered_map<uint32_t, DmaDuration> mDmaDurations;                  // ProcessID -> DmaDuration
+    std::unordered_map<uint32_t, DmaDurations> mDmaDurations;                 // ProcessID -> DmaDurations
 
 
     void DequeueProcessEvents(std::vector<ProcessEvent>& outProcessEvents)

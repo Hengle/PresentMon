@@ -57,6 +57,10 @@ struct PresentMonCsv
         "GPUDuration",
     };
 
+    static constexpr char const* const TRACK_GPU_VIDEO_HEADER[] = {
+        "VideoDuration",
+    };
+
     static constexpr char const* const OPT_HEADER[] = {
         "QPCTime",
     };

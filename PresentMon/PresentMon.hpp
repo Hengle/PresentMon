@@ -69,6 +69,7 @@ struct CommandLineArgs {
     UINT mHotkeyVirtualKeyCode;
     ConsoleOutput mConsoleOutputType;
     bool mTrackGPU;
+    bool mTrackGPUVideo;
     bool mTrackDisplay;
     bool mTrackDebug;
     bool mTrackWMR;

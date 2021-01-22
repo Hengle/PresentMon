@@ -98,6 +98,7 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | `-qpc_time_s`          | Output present time as a performance counter value converted to seconds.                                                    |
 | `-terminate_existing`  | Terminate any existing PresentMon realtime trace sessions, then exit. Use with -session_name to target particular sessions. |
 | `-track_gpu`           | Tracks the duration of each process' GPU work performed between presents.  Not supported on Win7.                           |
+| `-track_gpu_video`     | Track the video encode/decode portion of GPU work separately from other engines. Not supported on Win7.                     |
 | `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                                        |
 
 ## Comma-separated value (CSV) file output
@@ -131,6 +132,7 @@ If `-hotkey` is used, then one CSV is created for each time recording is started
 | MsBetweenPresents      | The time between this Present() call and the previous one, in milliseconds.                                                                                                                                                                                               |                              |
 | MsBetweenDisplayChange | How long the previous frame was displayed before this Present() was displayed, in milliseconds.                                                                                                                                                                           | not `-no_track_display`      |
 | GPUDuration            | The time the GPU spent rendering this frame, in milliseconds.                                                                                                                                                                                                             | `-track_gpu`                 |
+| VideoDuration          | The time the GPU spent encoding/decoding video during this frame, in milliseconds.                                                                                                                                                                                        | `-track_gpu_video`           |
 | WasBatched             | Whether the frame was submitted by the driver on a different thread than the app (1) or not (0).                                                                                                                                                                          | `-track_debug`               |
 | DwmNotified            | Whether the desktop compositor was notified about the frame (1) or not (0).                                                                                                                                                                                               | `-track_debug`               |
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 Intel Corporation
+Copyright 2017-2021 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -94,6 +94,9 @@ static void WriteCsvHeader(FILE* fp)
     if (args.mTrackGPU) {
         fprintf(fp, ",GPUDuration");
     }
+    if (args.mTrackGPUVideo) {
+        fprintf(fp, ",VideoDuration");
+    }
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
     }
@@ -132,6 +135,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double msUntilDisplayed       = 0.0;
     double msBetweenDisplayChange = 0.0;
     double msGPUDuration          = 0.0;
+    double msGPUVideoDuration     = 0.0;
 
     if (args.mTrackDisplay) {
         if (p.ReadyTime > 0) {
@@ -149,6 +153,9 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
 
     if (args.mTrackGPU) {
         msGPUDuration = 1000.0 * QpcDeltaToSeconds(p.GPUDuration);
+    }
+    if (args.mTrackGPUVideo) {
+        msGPUVideoDuration = 1000.0 * QpcDeltaToSeconds(p.GPUVideoDuration);
     }
 
     // Output in CSV format
@@ -177,8 +184,10 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             p.DwmNotified);
     }
     if (args.mTrackGPU) {
-        fprintf(fp, ",%lf",
-            msGPUDuration);
+        fprintf(fp, ",%lf", msGPUDuration);
+    }
+    if (args.mTrackGPUVideo) {
+        fprintf(fp, ",%lf", msGPUVideoDuration);
     }
     if (args.mOutputQpcTime) {
         if (args.mOutputQpcTimeInSeconds) {
