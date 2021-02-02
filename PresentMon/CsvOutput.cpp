@@ -50,6 +50,7 @@ const char* RuntimeToString(Runtime rt)
     switch (rt) {
     case Runtime::DXGI: return "DXGI";
     case Runtime::D3D9: return "D3D9";
+    case Runtime::CloudStreaming: return "CloudStreaming";
     default: return "Other";
     }
 }

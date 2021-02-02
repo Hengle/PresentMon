@@ -63,7 +63,7 @@ enum class PresentResult
 
 enum class Runtime
 {
-    DXGI, D3D9, Other
+    DXGI, D3D9, Other, CloudStreaming
 };
 
 // A ProcessEvent occurs whenever a Process starts or stops.
@@ -202,9 +202,9 @@ struct PMTraceConsumer
     bool mSeenDxgkPresentInfo = false;
 
     // Store completed presents until the consumer thread removes them using
-    // DequeuePresents().  Completed presents are those that have progressed as
-    // far as they can through the pipeline before being either discarded or
-    // hitting the screen.
+    // DequeuePresentEvents().  Completed presents are those that have
+    // progressed as far as they can through the pipeline before being either
+    // discarded or hitting the screen.
     std::mutex mPresentEventMutex;
     std::vector<std::shared_ptr<PresentEvent>> mPresentEvents;
 
@@ -326,6 +326,9 @@ struct PMTraceConsumer
     uint32_t DwmProcessId = 0;
     uint32_t DwmPresentThreadId = 0;
 
+    // The process id of the first identified cloud streaming process.
+    uint32_t mCloudStreamingProcessId = 0;
+
     // Yet another unique way of tracking present history tokens, this time from DxgKrnl -> DWM, only for legacy blit
     std::map<uint64_t, std::shared_ptr<PresentEvent>> mPresentsByLegacyBlitToken;
 
@@ -361,18 +364,19 @@ struct PMTraceConsumer
         uint32_t mSequenceId[9];        // Sequence IDs for enqueued packets
 
         bool mIsVideo;
+        bool mIsVideoDecode;
     };
 
     struct Context {
         DmaDurations* mDmaDurations;
         Node* mNode;
+        bool mIsCloudStreamingVideoEncoder;
     };
 
     std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes; // pDxgAdapter -> NodeOrdinal -> Node
     std::unordered_map<uint64_t, uint64_t> mDevices;                          // hDevice -> pDxgAdapter
     std::unordered_map<uint64_t, Context> mContexts;                          // hContext -> Context
     std::unordered_map<uint32_t, DmaDurations> mDmaDurations;                 // ProcessID -> DmaDurations
-
 
     void DequeueProcessEvents(std::vector<ProcessEvent>& outProcessEvents)
     {
@@ -430,5 +434,7 @@ struct PMTraceConsumer
     void AddTrackedProcessForFiltering(uint32_t processID);
     void RemoveTrackedProcessForFiltering(uint32_t processID);
     bool IsProcessTrackedForFiltering(uint32_t processID);
+
+    void AssignAccumulatedGPUWork(EVENT_HEADER const& hdr, PresentEvent* present);
 };
 

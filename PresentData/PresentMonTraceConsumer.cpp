@@ -334,21 +334,59 @@ void PMTraceConsumer::HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterv
     }
 }
 
-static PMTraceConsumer::DmaDurations* CreateDmaDurations(
+static std::unordered_map<uint32_t, std::string> gNTProcessNames;
+
+static void CreateDmaDurations(
     uint32_t processId,
-    std::unordered_map<uint32_t, PMTraceConsumer::DmaDurations>* processes)
+    uint32_t* cloudStreamingProcessId,
+    std::unordered_map<uint32_t, PMTraceConsumer::DmaDurations>* dmaDurations,
+    PMTraceConsumer::Context* context)
 {
-    auto p = processes->emplace(processId, PMTraceConsumer::DmaDurations());
-    auto process = &p.first->second;
+    auto p = dmaDurations->emplace(processId, PMTraceConsumer::DmaDurations());
+    context->mDmaDurations = &p.first->second;
     if (p.second) {
-        process->mVideoEngines.mAccumulatedDmaTime = 0;
-        process->mVideoEngines.mDmaExecStartTime = 0;
-        process->mVideoEngines.mDmaExecCount = 0;
-        process->mOtherEngines.mAccumulatedDmaTime = 0;
-        process->mOtherEngines.mDmaExecStartTime = 0;
-        process->mOtherEngines.mDmaExecCount = 0;
+        context->mDmaDurations->mVideoEngines.mAccumulatedDmaTime = 0;
+        context->mDmaDurations->mVideoEngines.mDmaExecStartTime = 0;
+        context->mDmaDurations->mVideoEngines.mDmaExecCount = 0;
+        context->mDmaDurations->mOtherEngines.mAccumulatedDmaTime = 0;
+        context->mDmaDurations->mOtherEngines.mDmaExecStartTime = 0;
+        context->mDmaDurations->mOtherEngines.mDmaExecCount = 0;
+
+        if (*cloudStreamingProcessId == 0) {
+            std::string processName;
+
+            auto ii = gNTProcessNames.find(processId);
+            if (ii != gNTProcessNames.end()) {
+                processName = ii->second;
+            } else {
+                auto handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+                if (handle != nullptr) {
+                    char path[MAX_PATH] = {};
+                    DWORD numChars = sizeof(path);
+                    if (QueryFullProcessImageNameA(handle, 0, path, &numChars)) {
+                        for (; numChars > 0; --numChars) {
+                            if (path[numChars - 1] == '/' ||
+                                path[numChars - 1] == '\\') {
+                                break;
+                            }
+                        }
+                        processName = path + numChars;
+                    }
+                    CloseHandle(handle);
+                }
+            }
+
+            if (_stricmp(processName.c_str(), "parsecd.exe") == 0 ||
+                _stricmp(processName.c_str(), "intel-cloud-screen-capture.exe") == 0 ||
+                _stricmp(processName.c_str(), "nvEncDXGIOutputDuplicationSample.exe") == 0) {
+                *cloudStreamingProcessId = processId;
+            }
+        }
     }
-    return process;
+
+    if (context->mNode->mIsVideoDecode && processId == *cloudStreamingProcessId) {
+        context->mIsCloudStreamingVideoEncoder = true;
+    }
 }
 
 void PMTraceConsumer::HandleDxgkQueueSubmit(
@@ -365,7 +403,7 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
     // mContexts should be empty if mTrackGPU==false.
     auto contextIter = mContexts.find(context);
     if (contextIter != mContexts.end() && contextIter->second.mDmaDurations == nullptr) {
-        contextIter->second.mDmaDurations = CreateDmaDurations(hdr.ProcessId, &mDmaDurations);
+        CreateDmaDurations(hdr.ProcessId, &mCloudStreamingProcessId, &mDmaDurations, &contextIter->second);
     }
 
     // If we know we're never going to get a DxgkPresent event for a given blt, then let's try to determine if it's a redirected blt or not.
@@ -416,6 +454,38 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
     }
 }
 
+// Assign any tracked accumulated GPU work to the present.
+//
+// If there are any DMA's executing across the present completion, assign their
+// current duration to this present.
+//
+// mDmaDurations should be empty if mTrackGPU==false.
+//
+// TODO: there is an assumption here that no subsequent DMA packet can complete
+// before we see this QueuePacket_Stop event.  If that happens, that DMA packet
+// will mistakenly be assigned to this present.  I'm not sure if that is
+// possible... but regardless, it is necessarily a very short duration so
+// shouldn't be significant.
+void PMTraceConsumer::AssignAccumulatedGPUWork(EVENT_HEADER const& hdr, PresentEvent* present)
+{
+    auto dmaIter = mDmaDurations.find(present->ProcessId);
+    if (dmaIter != mDmaDurations.end()) {
+        auto dmaDurations = &dmaIter->second;
+        if (dmaDurations->mVideoEngines.mDmaExecCount > 0) {
+            dmaDurations->mVideoEngines.mAccumulatedDmaTime += hdr.TimeStamp.QuadPart - dmaDurations->mVideoEngines.mDmaExecStartTime;
+            dmaDurations->mVideoEngines.mDmaExecStartTime = hdr.TimeStamp.QuadPart;
+        }
+        if (dmaDurations->mOtherEngines.mDmaExecCount > 0) {
+            dmaDurations->mOtherEngines.mAccumulatedDmaTime += hdr.TimeStamp.QuadPart - dmaDurations->mOtherEngines.mDmaExecStartTime;
+            dmaDurations->mOtherEngines.mDmaExecStartTime = hdr.TimeStamp.QuadPart;
+        }
+        present->GPUDuration = dmaDurations->mOtherEngines.mAccumulatedDmaTime;
+        present->GPUVideoDuration = dmaDurations->mVideoEngines.mAccumulatedDmaTime;
+        dmaDurations->mOtherEngines.mAccumulatedDmaTime = 0;
+        dmaDurations->mVideoEngines.mAccumulatedDmaTime = 0;
+    }
+}
+
 void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t submitSequence)
 {
     // Check if this is a present Packet being tracked, and if so get the
@@ -429,33 +499,7 @@ void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t 
     DebugModifyPresent(*pEvent);
 
     // Assign any tracked accumulated GPU work to the present.
-    //
-    // If there are any DMA's executing across the present completion,
-    // assign their current duration to this present.
-    //
-    // mDmaDurations should be empty if mTrackGPU==false.
-    //
-    // TODO: there is an assumption here that no subsequent DMA packet can
-    // complete before we see this QueuePacket_Stop event.  If that happens,
-    // that DMA packet will mistakenly be assigned to this present.  I'm not
-    // sure if that is possible... but regardless, it is necessarily a very
-    // short duration so shouldn't be significant.
-    auto dmaIter = mDmaDurations.find(pEvent->ProcessId);
-    if (dmaIter != mDmaDurations.end()) {
-        auto dmaDurations = &dmaIter->second;
-        if (dmaDurations->mVideoEngines.mDmaExecCount > 0) {
-            dmaDurations->mVideoEngines.mAccumulatedDmaTime += hdr.TimeStamp.QuadPart - dmaDurations->mVideoEngines.mDmaExecStartTime;
-            dmaDurations->mVideoEngines.mDmaExecStartTime = hdr.TimeStamp.QuadPart;
-        }
-        if (dmaDurations->mOtherEngines.mDmaExecCount > 0) {
-            dmaDurations->mOtherEngines.mAccumulatedDmaTime += hdr.TimeStamp.QuadPart - dmaDurations->mOtherEngines.mDmaExecStartTime;
-            dmaDurations->mOtherEngines.mDmaExecStartTime = hdr.TimeStamp.QuadPart;
-        }
-        pEvent->GPUDuration = dmaDurations->mOtherEngines.mAccumulatedDmaTime;
-        pEvent->GPUVideoDuration = dmaDurations->mVideoEngines.mAccumulatedDmaTime;
-        dmaDurations->mOtherEngines.mAccumulatedDmaTime = 0;
-        dmaDurations->mVideoEngines.mAccumulatedDmaTime = 0;
-    }
+    AssignAccumulatedGPUWork(hdr, pEvent.get());
 
     // Complete the present for present modes for which packet completion
     // implies display.
@@ -983,20 +1027,22 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 node->mQueueIndex = 0;
                 node->mQueueCount = 0;
                 node->mIsVideo = false;
+                node->mIsVideoDecode = false;
             }
-
-            // Create a Process unless this was a DCStart (in which case it's
-            // generated by xperf)
-            DmaDurations* process = hdr.EventDescriptor.Id == Microsoft_Windows_DxgKrnl::Context_Start::Id
-                ? CreateDmaDurations(hdr.ProcessId, &mDmaDurations)
-                : nullptr;
 
             // Sometimes there are duplicate start events, make sure that they say the same thing
             assert(mContexts.find(hDevice) == mContexts.end() || mContexts.find(hDevice)->second.mNode == node);
 
             auto context = &mContexts.emplace(hContext, PMTraceConsumer::Context()).first->second;
-            context->mDmaDurations = process;
+            context->mDmaDurations = nullptr;
             context->mNode = node;
+            context->mIsCloudStreamingVideoEncoder = false;
+
+            // Create DmaDurations unless this was a DCStart (in which case
+            // it's generated by xperf)
+            if (hdr.EventDescriptor.Id == Microsoft_Windows_DxgKrnl::Context_Start::Id) {
+                CreateDmaDurations(hdr.ProcessId, &mCloudStreamingProcessId, &mDmaDurations, context);
+            }
             return;
         }
         case Microsoft_Windows_DxgKrnl::Context_Stop::Id:
@@ -1028,6 +1074,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 node->mQueueIndex = 0;
                 node->mQueueCount = 0;
                 node->mIsVideo = false;
+                node->mIsVideoDecode = false;
             }
 
             if (EngineType == DXGK_ENGINE_TYPE_VIDEO_DECODE ||
@@ -1035,44 +1082,12 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 EngineType == DXGK_ENGINE_TYPE_VIDEO_PROCESSING) {
                 node->mIsVideo = true;
             }
-            return;
-        }
 
-#if 0
-        case Microsoft_Windows_DxgKrnl::SelectContext2_Info::Id:
-        {
-            EventDataDesc desc[] = {
-                { L"pDxgAdapter" },
-                { L"hContext" },
-                { L"NodeOrdinal" },
-            };
-            mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-            auto pDxgAdapter = desc[0].GetData<uint64_t>();
-            auto hContext    = desc[1].GetData<uint64_t>();
-            auto NodeOrdinal = desc[2].GetData<uint32_t>();
-
-            if (hContext == 0) {
-                return;
-            }
-
-            auto p = mContexts.emplace(hContext, PMTraceConsumer::Context());
-            if (p.second) {
-                auto p2 = mNodes[pDxgAdapter].emplace(NodeOrdinal, Node());
-                auto node = &p2.first->second;
-                if (p2.second) {
-                    node->mQueueIndex = 0;
-                    node->mQueueCount = 0;
-                }
-
-                auto context = &p.first->second;
-                context->mNode = node;
-                context->mGPUTime = 0;
-            } else {
-                assert(p.first->second.mNode == &mNodes[pDxgAdapter][NodeOrdinal]);
+            if (EngineType == DXGK_ENGINE_TYPE_VIDEO_DECODE) {
+                node->mIsVideoDecode = true;
             }
             return;
         }
-#endif
 
         // DmaPacket_Start occurs when a packet is enqueued onto a node.
         case Microsoft_Windows_DxgKrnl::DmaPacket_Start::Id:
@@ -1176,7 +1191,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             if (ii != mContexts.end()) {
                 auto context = &ii->second;
                 auto dmaDurations = context->mDmaDurations;
-                auto node    = context->mNode;
+                auto node = context->mNode;
 
                 // It's possible to miss DmaPacket events during realtime
                 // analysis, so try to handle it gracefully here.
@@ -1271,6 +1286,16 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                     if (dmaDuration->mDmaExecCount == 1) {
                         dmaDuration->mDmaExecStartTime = hdr.TimeStamp.QuadPart;
                     }
+                }
+
+                // If this is the end of an identified video encode context
+                // used for cloud streaming, treat it like a present
+                if (context->mIsCloudStreamingVideoEncoder) {
+                    auto videoPresent = std::make_shared<PresentEvent>(hdr, Runtime::CloudStreaming);
+                    videoPresent->ProcessId = mCloudStreamingProcessId;
+                    AssignAccumulatedGPUWork(hdr, videoPresent.get());
+                    videoPresent->Completed = true;
+                    mPresentEvents.push_back(videoPresent);
                 }
             }
             return;
@@ -2078,6 +2103,12 @@ void PMTraceConsumer::HandleNTProcessEvent(EVENT_RECORD* pEventRecord)
         event.ImageFileName = desc[1].GetData<std::string>();
         event.IsStartEvent  = pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_START ||
                               pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_DC_START;
+
+        if (event.IsStartEvent) {
+            gNTProcessNames[event.ProcessId] = event.ImageFileName;
+        } else {
+            gNTProcessNames.erase(event.ProcessId);
+        }
 
         std::lock_guard<std::mutex> lock(mProcessEventMutex);
         mProcessEvents.emplace_back(event);
