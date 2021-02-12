@@ -313,9 +313,9 @@ static void PrintHelp()
         "Execution options", nullptr,
         "-session_name name",       "Use the provided name to start a new realtime ETW session, instead"
                                     " of the default \"PresentMon\". This can be used to start multiple"
-                                    " realtime capture process at the same time (using distinct names)."
+                                    " realtime captures at the same time (using distinct, case insensitive names)."
                                     " A realtime PresentMon capture cannot start if there are any"
-                                    " existing sessions with the same name.  name is not sensitive to case.",
+                                    " existing sessions with the same name.",
         "-stop_existing_session",   "If a trace session with the same name is already running, stop"
                                     " the existing session (to allow this one to proceed).",
         "-dont_restart_as_admin",   "Don't try to elevate privilege.  Elevated privilege isn't required"

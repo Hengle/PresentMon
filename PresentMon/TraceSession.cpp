@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 Intel Corporation
+Copyright 2017-2021 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -97,6 +97,12 @@ bool StartTraceSession()
         default:                      fprintf(stderr, " (error=%u)", status); break;
         }
         fprintf(stderr, ".\n");
+
+        if (status == ERROR_ACCESS_DENIED && !InPerfLogUsersGroup()) {
+            fprintf(stderr,
+                "       PresentMon requires either administrative privileges or to be run by a user in the\n"
+                "       \"Performance Log Users\" user group.  View the readme for more details.\n");
+        }
 
         delete gPMConsumer;
         delete gMRConsumer;

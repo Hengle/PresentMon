@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 Intel Corporation
+Copyright 2017-2021 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -147,6 +147,7 @@ void StopOutputThread();
 void SetOutputRecordingState(bool record);
 
 // Privilege.cpp:
+bool InPerfLogUsersGroup();
 bool EnableDebugPrivilege();
 int RestartAsAdministrator(int argc, char** argv);
 

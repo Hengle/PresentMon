@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 Intel Corporation
+Copyright 2017-2021 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -23,6 +23,25 @@ SOFTWARE.
 #include <windows.h>
 #include <shellapi.h>
 #include <stdio.h>
+
+bool InPerfLogUsersGroup()
+{
+    // PERFLOG_USERS = S-1-5-32-559
+    SID_IDENTIFIER_AUTHORITY authority = SECURITY_NT_AUTHORITY;
+    PSID sidPerfLogUsers = {};
+    if (AllocateAndInitializeSid(&authority, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_LOGGING_USERS,
+                                 0, 0, 0, 0, 0, 0, &sidPerfLogUsers) == 0) {
+        return false;
+    }
+
+    BOOL isMember = FALSE;
+    if (!CheckTokenMembership(nullptr, sidPerfLogUsers, &isMember)) {
+        isMember = FALSE;
+    }
+
+    FreeSid(sidPerfLogUsers);
+    return isMember != FALSE;
+}
 
 bool EnableDebugPrivilege()
 {
