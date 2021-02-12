@@ -46,7 +46,7 @@ To add a user to the "Performance Log Users" user group:
 4. In the "Enter the object names to select" text box, type the name of the user account or group account that you want to add, and then click "OK".
 5. Sign out and log back in for the changes to take effect.
 
-If PresentMon is not run with administrator privilege, it will not have complete process information for processes running on different user accounts.  Such processes will be listed in the console and CSV as "<error>", and they cannot be targeted by name.  By default, PresentMon tries to start itself with administrator privilege.  Use `-dont_restart_as_admin` to prevent this.
+If PresentMon is not run with administrator privilege, it will not have complete process information for processes running on different user accounts.  Such processes will be listed in the console and CSV as "<error>", and they cannot be targeted by name.
 
 ### Capture Target Options
 
@@ -87,7 +87,7 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-session_name name`     | Use the provided name to start a new realtime ETW session, instead of the default "PresentMon". This can be used to start multiple realtime captures at the same time (using distinct, case-insensitive names). A realtime PresentMon capture cannot start if there are any existing sessions with the same name. |
 | `-stop_existing_session` | If a trace session with the same name is already running, stop the existing session (to allow this one to proceed).                                                                                                                                                                                               |
-| `-dont_restart_as_admin` | Don't try to elevate privilege.  (See discussion above).                                                                                                                                                                                                                                                          |
+| `-restart_as_admin`      | If not running with elevated privilege, restart and request to be run as administrator. (See discussion above).                                                                                                                                                                                                   |
 | `-terminate_on_proc_exit | Terminate PresentMon when all the target processes have exited.                                                                                                                                                                                                                                                   |
 | `-terminate_after_timed` | When using -timed, terminate PresentMon after the timed capture completes.                                                                                                                                                                                                                                        |
 

@@ -23,6 +23,7 @@ SOFTWARE.
 #include <windows.h>
 #include <shellapi.h>
 #include <stdio.h>
+#include <string>
 
 bool InPerfLogUsersGroup()
 {
@@ -94,37 +95,24 @@ int RestartAsAdministrator(
     char exe_path[MAX_PATH] = {};
     GetModuleFileNameA(NULL, exe_path, sizeof(exe_path));
 
-    // Combine arguments into single char* and add -dont_restart_as_admin to
+    // Combine arguments into single string and remove -restart_as_admin to
     // prevent an endless loop if the escalation fails.
-    char* args = nullptr;
-    {
-        static char const* const extra_args = "-dont_restart_as_admin";
-        size_t idx = strlen(extra_args);
-        size_t len = idx + 1;
-        for (int i = 1; i < argc; ++i) {
-            len += strlen(argv[i]) + 2 + 1; // +2 for possible quotes, +1 for space or null
+    std::string args;
+    for (int i = 1; i < argc; ++i) {
+        if (_stricmp(argv[i], "-restart_as_admin") == 0) continue;
+
+        auto addQuotes = argv[i][0] != '\"' && strchr(argv[i], ' ') != nullptr;
+        if (addQuotes) {
+            args += '\"';
         }
 
-        args = new char [len];
-        memcpy(args, extra_args, idx + 1);
-        for (int i = 1; i < argc; ++i) {
-            auto addQuotes = argv[i][0] != '\"' && strchr(argv[i], ' ') != nullptr;
-            auto n = strlen(argv[i]);
+        args += argv[i];
 
-            args[idx] = ' ';
-
-            if (addQuotes) {
-                args[idx + 1] = '\"';
-                memcpy(args + idx + 2, argv[i], n);
-                args[idx + n + 2] = '\"';
-                args[idx + n + 3] = '\0';
-                idx += 2;
-            } else {
-                memcpy(args + idx + 1, argv[i], n + 1);
-            }
-
-            idx += n + 1;
+        if (addQuotes) {
+            args += '\"';
         }
+
+        args += ' ';
     }
 
     // Re-run the process with the runas verb
@@ -135,10 +123,9 @@ int RestartAsAdministrator(
     info.fMask        = SEE_MASK_NOCLOSEPROCESS; // return info.hProcess for explicit wait
     info.lpVerb       = "runas";
     info.lpFile       = exe_path;
-    info.lpParameters = args;
+    info.lpParameters = args.c_str();
     info.nShow        = SW_SHOWDEFAULT;
     auto ok = ShellExecuteExA(&info);
-    delete[] args;
     if (ok) {
         WaitForSingleObject(info.hProcess, INFINITE);
         GetExitCodeProcess(info.hProcess, &code);

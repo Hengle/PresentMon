@@ -182,7 +182,7 @@ PresentMon::PresentMon()
 {
     cmdline_ += L'\"';
     cmdline_ += exePath_;
-    cmdline_ += L"\" -no_top -dont_restart_as_admin";
+    cmdline_ += L"\" -no_top";
 }
 
 PresentMon::~PresentMon()

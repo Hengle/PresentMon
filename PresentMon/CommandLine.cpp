@@ -318,9 +318,9 @@ static void PrintHelp()
                                     " existing sessions with the same name.",
         "-stop_existing_session",   "If a trace session with the same name is already running, stop"
                                     " the existing session (to allow this one to proceed).",
-        "-dont_restart_as_admin",   "Don't try to elevate privilege.  Elevated privilege isn't required"
-                                    " to trace a process you started, but PresentMon requires elevated"
-                                    " privilege in order to query processes started on another account."
+        "-restart_as_admin",        "If not running with elevated privilege, restart as administrator."
+                                    " Elevated privilege isn't required to trace a process you started,"
+                                    " but it is in order to query processes started on another account."
                                     " Without it, these processes cannot be targeted by name and will be"
                                     " listed as '<error>'.",
         "-terminate_on_proc_exit",  "Terminate PresentMon when all the target processes have exited.",
@@ -409,10 +409,11 @@ bool ParseCommandLine(int argc, char** argv)
     args->mStartTimer = false;
     args->mTerminateAfterTimer = false;
     args->mHotkeySupport = false;
-    args->mTryToElevate = true;
+    args->mTryToElevate = false;
     args->mMultiCsv = false;
     args->mStopExistingSession = false;
 
+    bool DEPRECATED_dontRestart = false;
     bool DEPRECATED_simple = false;
     bool DEPRECATED_verbose = false;
     bool DEPRECATED_wmr = false;
@@ -445,10 +446,11 @@ bool ParseCommandLine(int argc, char** argv)
 
         // Execution options:
         else if (ParseArg(argv[i], "session_name"))           { if (ParseValue(argv, argc, &i, &args->mSessionName)) continue; }
-        else if (ParseArg(argv[i], "stop_existing_session"))  { args->mStopExistingSession = true;  continue; }
-        else if (ParseArg(argv[i], "dont_restart_as_admin"))  { args->mTryToElevate        = false; continue; }
-        else if (ParseArg(argv[i], "terminate_on_proc_exit")) { args->mTerminateOnProcExit = true;  continue; }
-        else if (ParseArg(argv[i], "terminate_after_timed"))  { args->mTerminateAfterTimer = true;  continue; }
+        else if (ParseArg(argv[i], "stop_existing_session"))  { args->mStopExistingSession = true; continue; }
+        else if (ParseArg(argv[i], "dont_restart_as_admin"))  { DEPRECATED_dontRestart     = true; continue; }
+        else if (ParseArg(argv[i], "restart_as_admin"))       { args->mTryToElevate        = true; continue; }
+        else if (ParseArg(argv[i], "terminate_on_proc_exit")) { args->mTerminateOnProcExit = true; continue; }
+        else if (ParseArg(argv[i], "terminate_after_timed"))  { args->mTerminateAfterTimer = true; continue; }
 
         // Beta options:
         else if (ParseArg(argv[i], "qpc_time_s"))            { args->mOutputQpcTimeInSeconds     = true; continue; }
@@ -465,7 +467,7 @@ bool ParseCommandLine(int argc, char** argv)
         return false;
     }
 
-    // Handle deprecated command line arguments: -simple -verbose --include_mixed_reality
+    // Handle deprecated command line arguments
     if (DEPRECATED_simple) {
         fprintf(stderr, "warning: -simple command line argument has been deprecated; using -no_track_display instead.\n");
         args->mTrackDisplay = false;
@@ -477,6 +479,9 @@ bool ParseCommandLine(int argc, char** argv)
     if (DEPRECATED_wmr) {
         fprintf(stderr, "warning: -include_mixed_reality command line argument has been deprecated; using -track_mixed_reality instead.\n");
         args->mTrackWMR = true;
+    }
+    if (DEPRECATED_dontRestart) {
+        fprintf(stderr, "warning: -dont_restart_as_admin command line argument has been deprecated; it is now the default behaviour.\n");
     }
 
     // Ignore -no_track_display if required for other requested tracking
