@@ -39,6 +39,8 @@ SOFTWARE.
 
 #include "Debug.hpp"
 #include "TraceConsumer.hpp"
+#include "ETW/Intel_Graphics_D3D10.h"
+
 
 enum class PresentMode
 {
@@ -97,6 +99,7 @@ struct PresentEvent {
     uint64_t TokenPtr;
     uint64_t CompositionSurfaceLuid;
     uint64_t GPUDuration;            // Time during which a frame's DMA packet was running on any node
+    uint64_t QueueTimers[Intel_Graphics_D3D10::WAIT_TIMERS_COUNT];   // QueueTimers array
     uint32_t QueueSubmitSequence;    // Submit sequence for the Present packet
     uint32_t DestWidth;
     uint32_t DestHeight;
@@ -194,6 +197,7 @@ struct PMTraceConsumer
     bool mFilteredProcessIds = false;   // Whether to filter presents to specific processes
     bool mTrackDisplay = true;          // Whether the analysis should track presents to display
     bool mTrackGPU = false;             // Whether the analysis should track GPU work
+    bool mTrackQueueTimers = false;     // Whether the analysis should track QueueTimers (DX11 MONZA)
 
     // Whether we've seen Dxgk complete a present.  This is used to indicate
     // that the Dxgk provider has started and it's safe to start tracking
@@ -344,6 +348,8 @@ struct PMTraceConsumer
         uint64_t mAccumulatedDmaTime;   // QPC duration that at least one DMA packet was running
         uint64_t mDmaExecStartTime;     // QPC when the oldest running DMA packet started
         uint32_t mDmaExecCount;         // Number of running DMA packets
+        uint64_t mQueueTimersStartTimes[Intel_Graphics_D3D10::WAIT_TIMERS_COUNT];    // QueueTimers array for start times
+        uint64_t mQueueTimersAccumTimes[Intel_Graphics_D3D10::WAIT_TIMERS_COUNT];    // QueueTimers array for accumulated time diffs
     };
 
     struct Node {
@@ -412,6 +418,10 @@ struct PMTraceConsumer
     void HandleWin32kEvent(EVENT_RECORD* pEventRecord);
     void HandleDWMEvent(EVENT_RECORD* pEventRecord);
     void HandleMetadataEvent(EVENT_RECORD* pEventRecord);
+    
+    void HandleIGfxD3D10Event( EVENT_RECORD* pEventRecord );
+    void HandleIGfxD3D10QueueTimersEvent(EVENT_RECORD* pEventRecord);
+
 
     void HandleWin7DxgkBlt(EVENT_RECORD* pEventRecord);
     void HandleWin7DxgkFlip(EVENT_RECORD* pEventRecord);

@@ -40,6 +40,8 @@ SOFTWARE.
 #include "ETW/Microsoft_Windows_EventMetadata.h"
 #include "ETW/Microsoft_Windows_Win32k.h"
 #include "ETW/NT_Process.h"
+#include "ETW/Intel_Graphics_D3D10.h"
+
 
 namespace {
 
@@ -270,6 +272,7 @@ void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
     else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_Dwm_Core::GUID)                     session->mPMConsumer->HandleDWMEvent               (pEventRecord);
     else if (                 hdr.ProviderId == Microsoft_Windows_DXGI::GUID)                         session->mPMConsumer->HandleDXGIEvent              (pEventRecord);
     else if (                 hdr.ProviderId == Microsoft_Windows_D3D9::GUID)                         session->mPMConsumer->HandleD3D9Event              (pEventRecord);
+    else if (                 hdr.ProviderId == Intel_Graphics_D3D10::GUID)                           session->mPMConsumer->HandleIGfxD3D10Event         (pEventRecord);
     else if (                 hdr.ProviderId == NT_Process::GUID)                                     session->mPMConsumer->HandleNTProcessEvent         (pEventRecord);
     else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_Dwm_Core::Win7::GUID)               session->mPMConsumer->HandleDWMEvent               (pEventRecord);
     else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::BLT_GUID)            session->mPMConsumer->HandleWin7DxgkBlt            (pEventRecord);

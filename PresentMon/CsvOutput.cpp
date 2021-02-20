@@ -21,6 +21,8 @@ SOFTWARE.
 */
 
 #include "PresentMon.hpp"
+#include "../PresentData/ETW/Intel_Graphics_D3D10.h"
+
 
 static OutputCsv gSingleOutputCsv = {};
 static uint32_t gRecordingCount = 1;
@@ -96,9 +98,13 @@ static void WriteCsvHeader(FILE* fp)
             ",msUntilRenderStarts"
             ",msGPUActive");
     }
+    if (args.mTrackQueueTimers) {
+        fprintf( fp, ",WaitIfFullTime,WaitUntilEmptySyncTime,WaitUntilEmptySyncAsincTime,WaitForFence,WaitUntilFenceSubmitted,WaitUntilEmptyDrainTime,WaitUntilEmptyDrainAsyncTime,WaitIfEmptyTime,FrameTimeApp,FrameTimeDrv" );
+    }
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
     }
+ 
     fprintf(fp, "\n");
 }
 
@@ -134,6 +140,8 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double msUntilRenderComplete  = 0.0;
     double msUntilDisplayed       = 0.0;
     double msBetweenDisplayChange = 0.0;
+    double msGPUDuration          = 0.0;
+    double msQueueTimers[Intel_Graphics_D3D10::WAIT_TIMERS_COUNT];
 
     if (args.mTrackDisplay) {
         if (p.ReadyTime > 0) {
@@ -156,6 +164,11 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             } else {
                 msUntilRenderStart = 1000.0 * QpcDeltaToSeconds(p.GPUStartTime - p.QpcTime);
             }
+        }
+    }
+    if (args.mTrackQueueTimers) {
+        for (uint32_t type = Intel_Graphics_D3D10::WAIT_IF_FULL_TIMER; type < Intel_Graphics_D3D10::WAIT_TIMERS_COUNT; type++) {
+            msQueueTimers[type] = 1000.0 * QpcDeltaToSeconds( p.QueueTimers[type] );
         }
     }
 
@@ -188,6 +201,11 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
         fprintf(fp, ",%lf,%lf",
             msUntilRenderStart,
             1000.0 * QpcDeltaToSeconds(p.GPUDuration));
+    }
+    if (args.mTrackQueueTimers) {
+        for (uint32_t type = Intel_Graphics_D3D10::WAIT_IF_FULL_TIMER; type < Intel_Graphics_D3D10::WAIT_TIMERS_COUNT; type++) {
+            fprintf( fp, ",%lf", msQueueTimers[type] );
+        }
     }
     if (args.mOutputQpcTime) {
         if (args.mOutputQpcTimeInSeconds) {

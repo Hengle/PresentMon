@@ -68,6 +68,12 @@ set events=%events% --event=TokenCompositionSurfaceObject::Info
 set events=%events% --event=TokenStateChanged::Info
 call :etw_list "Microsoft-Windows-Win32k" "%out_dir%\Microsoft_Windows_Win32k.h"
 
+set events=
+set events=%events% --event=QueueTimers::Info
+set events=%events% --event=QueueTimers::Start
+set events=%events% --event=QueueTimers::Stop
+call :etw_list "Intel-Graphics-D3D10" "%out_dir%\Intel_Graphics_D3D10.h"
+
 echo.
 echo note: error expected on this one, file should still be created:
 set events=

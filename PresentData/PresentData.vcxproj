@@ -38,7 +38,7 @@
     <ProjectGuid>{892028E5-32F6-45FC-8AB2-90FCBCAC4BF6}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>PresentData</RootNamespace>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformVersion Condition="'$(Platform)'=='ARM'">10.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformVersion Condition="'$(Platform)'=='ARM64'">10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
@@ -297,6 +297,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="ETW\Intel_Graphics_D3D10.h" />
     <ClInclude Include="ETW\Microsoft_Windows_D3D9.h" />
     <ClInclude Include="ETW\Microsoft_Windows_Dwm_Core.h" />
     <ClInclude Include="ETW\Microsoft_Windows_DXGI.h" />

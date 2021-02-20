@@ -72,6 +72,7 @@ struct CommandLineArgs {
     bool mTrackDisplay;
     bool mTrackDebug;
     bool mTrackWMR;
+    bool mTrackQueueTimers;
     bool mOutputCsvToFile;
     bool mOutputCsvToStdout;
     bool mOutputQpcTime;

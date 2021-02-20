@@ -28,6 +28,7 @@ SOFTWARE.
 #include "ETW/Microsoft_Windows_DxgKrnl.h"
 #include "ETW/Microsoft_Windows_EventMetadata.h"
 #include "ETW/Microsoft_Windows_Win32k.h"
+#include "ETW/Intel_Graphics_D3D10.h"
 
 #include <algorithm>
 #include <assert.h>
@@ -111,6 +112,10 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     presentCount += 1;
     Id = presentCount;
 #endif
+
+    for (uint32_t type = Intel_Graphics_D3D10::WAIT_IF_FULL_TIMER; type < Intel_Graphics_D3D10::WAIT_TIMERS_COUNT; type++) {
+        QueueTimers[type] = 0;
+    }
 }
 
 PMTraceConsumer::PMTraceConsumer()
@@ -345,6 +350,13 @@ static PMTraceConsumer::DmaDuration* CreateDmaDuration(
         dmaDuration->mAccumulatedDmaTime = 0;
         dmaDuration->mDmaExecStartTime = 0;
         dmaDuration->mDmaExecCount = 0;
+
+        //Init QueueTimers
+        for (uint32_t type = Intel_Graphics_D3D10::WAIT_IF_FULL_TIMER; type < Intel_Graphics_D3D10::WAIT_TIMERS_COUNT; type++)
+        {
+            dmaDuration->mQueueTimersAccumTimes[type] = 0;
+            dmaDuration->mQueueTimersStartTimes[type] = 0;
+        }
     }
     return dmaDuration;
 }
@@ -2038,6 +2050,100 @@ void PMTraceConsumer::HandleNTProcessEvent(EVENT_RECORD* pEventRecord)
         mProcessEvents.emplace_back(event);
         return;
     }
+}
+
+void PMTraceConsumer::HandleIGfxD3D10Event( EVENT_RECORD* pEventRecord )
+{
+    DebugEvent( pEventRecord, &mMetadata );
+
+    auto const& hdr = pEventRecord->EventHeader;
+
+ 
+
+    switch (hdr.EventDescriptor.Id) {
+    case Intel_Graphics_D3D10::QueueTimers_Info::Id:
+    case Intel_Graphics_D3D10::QueueTimers_Start::Id:
+    case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
+    {
+        HandleIGfxD3D10QueueTimersEvent( pEventRecord );
+        break;
+    }
+    default:
+        printf( "Unknown HandleIGfxD3D10Event %d\n", hdr.EventDescriptor.Id );
+        break;
+    }
+    return;
+}
+
+void PMTraceConsumer::HandleIGfxD3D10QueueTimersEvent( EVENT_RECORD* pEventRecord )
+{
+    EventDataDesc desc[] = {
+         { L"value" },
+    };
+    mMetadata.GetEventData( pEventRecord, desc, _countof( desc ) );
+    auto TimerType = desc[0].GetData<uint32_t>();
+
+    auto const& hdr = pEventRecord->EventHeader;
+
+    auto processIter = mProcesses.find( hdr.ProcessId );
+    if (processIter == mProcesses.end()) {
+        printf( "Could find processId %d\n", hdr.ProcessId );
+        return;
+    }
+    auto process = &processIter->second;
+
+    switch (hdr.EventDescriptor.Id) {
+    case Intel_Graphics_D3D10::QueueTimers_Info::Id:
+    {
+        auto presentEvent = FindOrCreatePresent( hdr );
+        if (presentEvent == nullptr) {
+            printf( "Could find Present for processId %d\n", hdr.ProcessId );
+            return;
+        }
+     
+        // FrameTimeApp & Drv will go here
+        process->mQueueTimersAccumTimes[TimerType] += hdr.TimeStamp.QuadPart - process->mQueueTimersStartTimes[TimerType];
+        process->mQueueTimersStartTimes[TimerType] = hdr.TimeStamp.QuadPart;
+        if (TimerType == Intel_Graphics_D3D10::FRAME_TIME_APP)
+        {
+            //Copy & Init all Producer timers
+            presentEvent->QueueTimers[TimerType] = process->mQueueTimersAccumTimes[TimerType];
+            process->mQueueTimersAccumTimes[TimerType] = 0;
+            for (uint32_t type = Intel_Graphics_D3D10::WAIT_IF_FULL_TIMER; type < Intel_Graphics_D3D10::WAIT_IF_EMPTY_TIMER; type++)
+            {
+                presentEvent->QueueTimers[type] = process->mQueueTimersAccumTimes[type];
+                process->mQueueTimersAccumTimes[type] = 0;
+            }
+        }
+        else if (TimerType == Intel_Graphics_D3D10::FRAME_TIME_DRIVER)
+        {
+            //Copy & Init all Consumer timers
+            presentEvent->QueueTimers[TimerType] = process->mQueueTimersAccumTimes[TimerType];
+            process->mQueueTimersAccumTimes[TimerType] = 0;
+            for (uint32_t type = Intel_Graphics_D3D10::WAIT_IF_EMPTY_TIMER; type < Intel_Graphics_D3D10::FRAME_TIME_APP; type++)
+            {
+                presentEvent->QueueTimers[type] = process->mQueueTimersAccumTimes[type];
+                process->mQueueTimersAccumTimes[type] = 0;
+            }
+        }
+        break;
+    }
+    case Intel_Graphics_D3D10::QueueTimers_Start::Id:
+    {
+        process->mQueueTimersStartTimes[TimerType] = hdr.TimeStamp.QuadPart;
+        break;
+    }
+    case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
+    {
+        process->mQueueTimersAccumTimes[TimerType] += hdr.TimeStamp.QuadPart - process->mQueueTimersStartTimes[TimerType];
+        process->mQueueTimersStartTimes[TimerType] = 0;
+        break;
+    }
+    default:
+        break;
+
+    }
+    return;
 }
 
 void PMTraceConsumer::HandleMetadataEvent(EVENT_RECORD* pEventRecord)

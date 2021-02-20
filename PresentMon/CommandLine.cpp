@@ -333,6 +333,7 @@ static void PrintHelp()
         "-track_gpu",               "Tracks the duration of each process' GPU work performed between presents."
                                     " Not supported on Win7.",
         "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
+        "-track_queue_timers",      "Capture DX11 QueueTimers - Intel Internal, D3D11 only",
     };
 
     fprintf(stderr, "PresentMon %s\n", PRESENT_MON_VERSION);
@@ -400,6 +401,7 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTrackDisplay = true;
     args->mTrackDebug = false;
     args->mTrackWMR = false;
+    args->mTrackQueueTimers = false;
     args->mOutputCsvToFile = true;
     args->mOutputCsvToStdout = false;
     args->mOutputQpcTime = false;
@@ -461,6 +463,7 @@ bool ParseCommandLine(int argc, char** argv)
         else if (ParseArg(argv[i], "track_gpu"))             { args->mTrackGPU                   = true; continue; }
         else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR                   = true; continue; }
         else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr                    = true; continue; }
+        else if (ParseArg(argv[i], "track_queue_timers" ))   { args->mTrackQueueTimers           = true; continue; }
 
         // Provided argument wasn't recognized
         else if (!(ParseArg(argv[i], "?") || ParseArg(argv[i], "h") || ParseArg(argv[i], "help"))) {
