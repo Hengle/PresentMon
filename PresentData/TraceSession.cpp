@@ -232,6 +232,19 @@ ULONG EnableProviders(
         }
     }
 
+    if ( pmConsumer->mTrackQueueTimers )
+    {
+        anyKeywordMask = static_cast<std::underlying_type<Intel_Graphics_D3D10::Keyword>::type>(Intel_Graphics_D3D10::Keyword::cIntelGraphicsD3D10_Analytic) |
+                         static_cast< std::underlying_type<Intel_Graphics_D3D10::Keyword>::type >( Intel_Graphics_D3D10::Keyword::kQueueTimer_Event);
+        allKeywordMask = anyKeywordMask;
+        eventIds = {
+            Intel_Graphics_D3D10::QueueTimers_Start::Id,
+            Intel_Graphics_D3D10::QueueTimers_Stop::Id,
+            Intel_Graphics_D3D10::QueueTimers_Info::Id
+        };
+        status = EnableFilteredProvider( sessionHandle, sessionGuid, Intel_Graphics_D3D10::GUID, TRACE_LEVEL_VERBOSE, anyKeywordMask, allKeywordMask, eventIds );
+        if ( status != ERROR_SUCCESS ) return status;
+    }
     return ERROR_SUCCESS;
 }
 
@@ -247,6 +260,7 @@ void DisableProviders(TRACEHANDLE sessionHandle)
     status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_DxgKrnl::Win7::GUID,  EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
     status = EnableTraceEx2(sessionHandle, &DHD_PROVIDER_GUID,                      EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
     status = EnableTraceEx2(sessionHandle, &SPECTRUMCONTINUOUS_PROVIDER_GUID,       EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
+    status = EnableTraceEx2(sessionHandle, &Intel_Graphics_D3D10::GUID,             EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
 }
 
 template<

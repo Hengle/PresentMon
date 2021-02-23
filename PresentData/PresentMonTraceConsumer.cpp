@@ -2073,8 +2073,6 @@ void PMTraceConsumer::HandleIGfxD3D10Event( EVENT_RECORD* pEventRecord )
 
     auto const& hdr = pEventRecord->EventHeader;
 
- 
-
     switch (hdr.EventDescriptor.Id) {
     case Intel_Graphics_D3D10::QueueTimers_Info::Id:
     case Intel_Graphics_D3D10::QueueTimers_Start::Id:
