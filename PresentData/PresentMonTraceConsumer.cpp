@@ -939,7 +939,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         return;
     }
 
-    if (mTrackGPU) {
+    if (mTrackGPU || mTrackQueueTimers) {
         switch (hdr.EventDescriptor.Id) {
 
         // We need a mapping from hContext to GPU node.
