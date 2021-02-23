@@ -33,6 +33,7 @@ SOFTWARE.
 #include "PresentMonTraceConsumer.hpp"
 #include "MixedRealityTraceConsumer.hpp"
 
+#include "ETW/Intel_Graphics_D3D10.h"
 #include "ETW/Microsoft_Windows_D3D9.h"
 #include "ETW/Microsoft_Windows_Dwm_Core.h"
 #include "ETW/Microsoft_Windows_DXGI.h"
@@ -213,6 +214,18 @@ ULONG EnableProviders(
     status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_D3D9::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
     if (status != ERROR_SUCCESS) return status;
 
+    // Intel_Graphics_D3D10
+    anyKeywordMask =
+        (uint64_t) Intel_Graphics_D3D10::Keyword::cIntelGraphicsD3D10_Analytic |
+        (uint64_t) Intel_Graphics_D3D10::Keyword::kGenericDebug_Event;
+    allKeywordMask = anyKeywordMask;
+    eventIds = {
+        Intel_Graphics_D3D10::task_FramePacer_Info::Id,
+        Intel_Graphics_D3D10::task_DdiPresentDXGI_Info::Id,
+    };
+    status = EnableFilteredProvider(sessionHandle, sessionGuid, Intel_Graphics_D3D10::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
+    if (status != ERROR_SUCCESS) return status;
+
     if (mrConsumer != nullptr) {
         // DHD
         status = EnableTraceEx2(sessionHandle, &DHD_PROVIDER_GUID, EVENT_CONTROL_CODE_ENABLE_PROVIDER,
@@ -233,6 +246,7 @@ ULONG EnableProviders(
 void DisableProviders(TRACEHANDLE sessionHandle)
 {
     ULONG status = 0;
+    status = EnableTraceEx2(sessionHandle, &Intel_Graphics_D3D10::GUID,             EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
     status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_DXGI::GUID,           EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
     status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_D3D9::GUID,           EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
     status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_DxgKrnl::GUID,        EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
@@ -267,6 +281,7 @@ void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
     else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_Dwm_Core::GUID)                     session->mPMConsumer->HandleDWMEvent               (pEventRecord);
     else if (                 hdr.ProviderId == Microsoft_Windows_DXGI::GUID)                         session->mPMConsumer->HandleDXGIEvent              (pEventRecord);
     else if (                 hdr.ProviderId == Microsoft_Windows_D3D9::GUID)                         session->mPMConsumer->HandleD3D9Event              (pEventRecord);
+    else if (                 hdr.ProviderId == Intel_Graphics_D3D10::GUID)                           session->mPMConsumer->HandleIntelGraphicsEvent     (pEventRecord);
     else if (                 hdr.ProviderId == NT_Process::GUID)                                     session->mPMConsumer->HandleNTProcessEvent         (pEventRecord);
     else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_Dwm_Core::Win7::GUID)               session->mPMConsumer->HandleDWMEvent               (pEventRecord);
     else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::BLT_GUID)            session->mPMConsumer->HandleWin7DxgkBlt            (pEventRecord);

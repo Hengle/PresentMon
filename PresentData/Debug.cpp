@@ -22,6 +22,7 @@ SOFTWARE.
 
 #include "PresentMonTraceConsumer.hpp"
 
+#include "ETW/Intel_Graphics_D3D10.h"
 #include "ETW/Microsoft_Windows_D3D9.h"
 #include "ETW/Microsoft_Windows_Dwm_Core.h"
 #include "ETW/Microsoft_Windows_DXGI.h"
@@ -37,29 +38,7 @@ SOFTWARE.
 namespace {
 
 PresentEvent const* gModifiedPresent = nullptr;
-struct {
-    uint64_t TimeTaken;
-    uint64_t ReadyTime;
-    uint64_t ScreenTime;
-
-    uint64_t SwapChainAddress;
-    int32_t SyncInterval;
-    uint32_t PresentFlags;
-
-    uint64_t Hwnd;
-    uint64_t TokenPtr;
-    uint64_t GPUDuration;
-    uint32_t QueueSubmitSequence;
-    uint32_t DriverBatchThreadId;
-    PresentMode PresentMode;
-    PresentResult FinalState;
-    bool SupportsTearing;
-    bool MMIO;
-    bool SeenDxgkPresent;
-    bool SeenWin32KEvents;
-    bool DwmNotified;
-    bool Completed;
-} gOriginalPresentValues;
+PresentEvent gOriginalPresentValues(EVENT_HEADER{}, Runtime::Other);
 
 bool gDebugDone = false;
 bool gDebugTrace = false;
@@ -253,6 +232,7 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintU64x,          SwapChainAddress)
     FLUSH_MEMBER(PrintU32,           SyncInterval)
     FLUSH_MEMBER(PrintU32,           PresentFlags)
+    FLUSH_MEMBER(PrintU64,           INTC_ID)
     FLUSH_MEMBER(PrintU64x,          Hwnd)
     FLUSH_MEMBER(PrintU64x,          TokenPtr)
     FLUSH_MEMBER(PrintTimeDelta,     GPUDuration)
@@ -308,6 +288,34 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
     }
 
     if (!gDebugTrace) {
+        return;
+    }
+
+    if (hdr.ProviderId == Intel_Graphics_D3D10::GUID) {
+        auto ts = ConvertTimestampToNs(hdr.TimeStamp.QuadPart);
+        (void) ts;
+        switch (id) {
+        case Intel_Graphics_D3D10::task_DdiPresentDXGI_Info::Id:
+            PrintEventHeader(eventRecord, metadata, "INTC_DdiPresentDXGI_Info", {
+                L"FrameID", PrintU64,
+            });
+            break;
+        case Intel_Graphics_D3D10::task_FramePacer_Info::Id:
+            PrintEventHeader(eventRecord, metadata, "INTC_FramePacer_Info", {
+                L"FrameID", PrintU64,
+            });
+            printf("                             AppWorkStart      = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));      printf("\n");
+            printf("                             AppSimulationTime = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime")); printf("\n");
+            printf("                             DriverWorkStart   = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));   printf("\n");
+            printf("                             DriverWorkEnd     = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));     printf("\n");
+            printf("                             GPUStart          = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));          printf("\n");
+            printf("                             GPUEnd            = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));            printf("\n");
+            printf("                             PresentAPICall    = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));    printf("\n");
+            printf("                             ScheduledFlipTime = "); printf("0x%llx\n", metadata->GetEventData<uint64_t>(eventRecord, L"ScheduledFlipTime"));
+            printf("                             ScheduledFlipTime = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ScheduledFlipTime")); printf("\n");
+            printf("                             ActualFlipTime    = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));    printf("\n");
+            break;
+        }
         return;
     }
 
@@ -446,6 +454,7 @@ void DebugModifyPresent(PresentEvent const& p)
         gOriginalPresentValues.SwapChainAddress    = p.SwapChainAddress;
         gOriginalPresentValues.SyncInterval        = p.SyncInterval;
         gOriginalPresentValues.PresentFlags        = p.PresentFlags;
+        gOriginalPresentValues.INTC_ID             = p.INTC_ID;
         gOriginalPresentValues.Hwnd                = p.Hwnd;
         gOriginalPresentValues.TokenPtr            = p.TokenPtr;
         gOriginalPresentValues.GPUDuration         = p.GPUDuration;

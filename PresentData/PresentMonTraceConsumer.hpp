@@ -91,6 +91,18 @@ struct PresentEvent {
     int32_t SyncInterval;
     uint32_t PresentFlags;
 
+    // Intel frame-pacing data
+    uint64_t INTC_ID;
+    uint64_t INTC_AppWorkStart;
+    uint64_t INTC_AppSimulationTime;
+    uint64_t INTC_DriverWorkStart;
+    uint64_t INTC_DriverWorkEnd;
+    uint64_t INTC_GPUStart;
+    uint64_t INTC_GPUEnd;
+    uint64_t INTC_PresentAPICall;
+    uint64_t INTC_ScheduledFlipTime;
+    uint64_t INTC_ActualFlipTime;
+
     // Properties deduced by watching events through present pipeline
     uint64_t Hwnd;
     uint64_t TokenPtr;
@@ -403,6 +415,7 @@ struct PMTraceConsumer
     void RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> present);
     void RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPresentBatching, ::Runtime runtime);
 
+    void HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord);
     void HandleNTProcessEvent(EVENT_RECORD* pEventRecord);
     void HandleDXGIEvent(EVENT_RECORD* pEventRecord);
     void HandleD3D9Event(EVENT_RECORD* pEventRecord);

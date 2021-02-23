@@ -97,6 +97,16 @@ static void WriteCsvHeader(FILE* fp)
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
     }
+    fprintf(fp, ",INTC_ID");
+    fprintf(fp, ",INTC_AppWorkStart");
+    fprintf(fp, ",INTC_AppSimulationTime");
+    fprintf(fp, ",INTC_DriverWorkStart");
+    fprintf(fp, ",INTC_DriverWorkEnd");
+    fprintf(fp, ",INTC_GPUStart");
+    fprintf(fp, ",INTC_GPUEnd");
+    fprintf(fp, ",INTC_PresentAPICall");
+    fprintf(fp, ",INTC_ScheduledFlipTime");
+    fprintf(fp, ",INTC_ActualFlipTime");
     fprintf(fp, "\n");
 }
 
@@ -151,6 +161,36 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
         msGPUDuration = 1000.0 * QpcDeltaToSeconds(p.GPUDuration);
     }
 
+    // Temporary calculation while debugging.  All timestamps should be after QpcTime.
+    auto INTC_AppWorkStart      = p.INTC_AppWorkStart      == 0 ? 0.0 :
+                                  p.INTC_AppWorkStart      >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_AppWorkStart      - p.QpcTime) :
+                                                                         -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_AppWorkStart);
+    auto INTC_AppSimulationTime = p.INTC_AppSimulationTime == 0 ? 0.0 :
+                                  p.INTC_AppSimulationTime >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_AppSimulationTime - p.QpcTime) :
+                                                                         -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_AppSimulationTime);
+    auto INTC_DriverWorkStart   = p.INTC_DriverWorkStart   == 0 ? 0.0 :
+                                  p.INTC_DriverWorkStart   >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_DriverWorkStart   - p.QpcTime) :
+                                                                         -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_DriverWorkStart);
+    auto INTC_DriverWorkEnd     = p.INTC_DriverWorkEnd     == 0 ? 0.0 :
+                                  p.INTC_DriverWorkEnd     >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_DriverWorkEnd     - p.QpcTime) :
+                                                                         -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_DriverWorkEnd);
+    auto INTC_GPUStart          = p.INTC_GPUStart          == 0 ? 0.0 :
+                                  p.INTC_GPUStart          >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_GPUStart          - p.QpcTime) :
+                                                                         -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_GPUStart);
+    auto INTC_GPUEnd            = p.INTC_GPUEnd            == 0 ? 0.0 :
+                                  p.INTC_GPUEnd            >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_GPUEnd            - p.QpcTime) :
+                                                                         -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_GPUEnd);
+    auto INTC_PresentAPICall    = p.INTC_PresentAPICall    == 0 ? 0.0 :
+                                  p.INTC_PresentAPICall    >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_PresentAPICall    - p.QpcTime) :
+                                                                         -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_PresentAPICall);
+    auto INTC_ScheduledFlipTime = p.INTC_ScheduledFlipTime == 0 ? 0.0 :
+                                  p.INTC_ScheduledFlipTime >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_ScheduledFlipTime - p.QpcTime) :
+                                                                         -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_ScheduledFlipTime);
+
+    auto INTC_ActualFlipTime    = p.INTC_ActualFlipTime    == 0 ? 0.0 :
+                                  p.INTC_ActualFlipTime    >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_ActualFlipTime    - p.QpcTime) :
+                                                                         -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_ActualFlipTime);
+
     // Output in CSV format
     fprintf(fp, "%s,%d,0x%016llX,%s,%d,%d,%s,%lf,%lf,%lf",
         processInfo->mModuleName.c_str(),
@@ -187,6 +227,16 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             fprintf(fp, ",%llu", p.QpcTime);
         }
     }
+    fprintf(fp, ",%llu", p.INTC_ID);
+    fprintf(fp, ",%lf", INTC_AppWorkStart);
+    fprintf(fp, ",%lf", INTC_AppSimulationTime);
+    fprintf(fp, ",%lf", INTC_DriverWorkStart);
+    fprintf(fp, ",%lf", INTC_DriverWorkEnd);
+    fprintf(fp, ",%lf", INTC_GPUStart);
+    fprintf(fp, ",%lf", INTC_GPUEnd);
+    fprintf(fp, ",%lf", INTC_PresentAPICall);
+    fprintf(fp, ",%lf", INTC_ScheduledFlipTime);
+    fprintf(fp, ",%lf", INTC_ActualFlipTime);
     fprintf(fp, "\n");
 }
 

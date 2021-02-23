@@ -22,6 +22,7 @@ SOFTWARE.
 
 #include "PresentMonTraceConsumer.hpp"
 
+#include "ETW/Intel_Graphics_D3D10.h"
 #include "ETW/Microsoft_Windows_D3D9.h"
 #include "ETW/Microsoft_Windows_Dwm_Core.h"
 #include "ETW/Microsoft_Windows_DXGI.h"
@@ -76,6 +77,16 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , SwapChainAddress(0)
     , SyncInterval(-1)
     , PresentFlags(0)
+    , INTC_ID(0)
+    , INTC_AppWorkStart(0)
+    , INTC_AppSimulationTime(0)
+    , INTC_DriverWorkStart(0)
+    , INTC_DriverWorkEnd(0)
+    , INTC_GPUStart(0)
+    , INTC_GPUEnd(0)
+    , INTC_PresentAPICall(0)
+    , INTC_ScheduledFlipTime(0)
+    , INTC_ActualFlipTime(0)
     , Hwnd(0)
     , TokenPtr(0)
     , CompositionSurfaceLuid(0)
@@ -115,6 +126,105 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
 PMTraceConsumer::PMTraceConsumer()
     : mAllPresents(PRESENTEVENT_CIRCULAR_BUFFER_SIZE)
 {
+}
+
+void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
+{
+    DebugEvent(pEventRecord, &mMetadata);
+
+    auto const& hdr = pEventRecord->EventHeader;
+    switch (hdr.EventDescriptor.Id) {
+    case Intel_Graphics_D3D10::task_DdiPresentDXGI_Info::Id:
+    {
+        EventDataDesc desc[] = {
+            { L"FrameID" },
+        };
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        auto FrameID = desc[0].GetData<uint64_t>();
+
+        auto const& processOrderedPresents = mPresentsByProcess[hdr.ProcessId];
+        auto ii = processOrderedPresents.rbegin();
+        if (ii != processOrderedPresents.rend()) {
+            auto present = ii->second.get();
+            DebugModifyPresent(*present);
+            present->INTC_ID = FrameID;
+        }
+        break;
+    }
+    case Intel_Graphics_D3D10::task_FramePacer_Info::Id:
+    {
+        EventDataDesc desc[] = {
+            { L"FrameID" },
+            { L"AppWorkStart" },
+            { L"AppSimulationTime" },
+            { L"DriverWorkStart" },
+            { L"DriverWorkEnd" },
+            { L"GPUStart" },
+            { L"GPUEnd" },
+            { L"PresentAPICall" },
+            { L"ScheduledFlipTime" },
+            { L"ActualFlipTime" },
+        };
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        auto FrameID           = desc[0].GetData<uint64_t>();
+        auto AppWorkStart      = desc[1].GetData<uint64_t>();
+        auto AppSimulationTime = desc[2].GetData<uint64_t>();
+        auto DriverWorkStart   = desc[3].GetData<uint64_t>();
+        auto DriverWorkEnd     = desc[4].GetData<uint64_t>();
+        auto GPUStart          = desc[5].GetData<uint64_t>();
+        auto GPUEnd            = desc[6].GetData<uint64_t>();
+        auto PresentAPICall    = desc[7].GetData<uint64_t>();
+        auto ScheduledFlipTime = desc[8].GetData<uint64_t>();
+        auto ActualFlipTime    = desc[9].GetData<uint64_t>();
+
+        auto const& processOrderedPresents = mPresentsByProcess[hdr.ProcessId];
+        auto ii = processOrderedPresents.rbegin();
+        if (ii != processOrderedPresents.rend()) {
+            auto present = ii->second.get();
+            if (present->INTC_ID == FrameID) {
+                DebugModifyPresent(*present);
+                present->INTC_AppWorkStart      = AppWorkStart;
+                present->INTC_AppSimulationTime = AppSimulationTime;
+                present->INTC_DriverWorkStart   = DriverWorkStart;
+                present->INTC_DriverWorkEnd     = DriverWorkEnd;
+                present->INTC_GPUStart          = GPUStart;
+                present->INTC_GPUEnd            = GPUEnd;
+                present->INTC_PresentAPICall    = PresentAPICall;
+                present->INTC_ScheduledFlipTime = ScheduledFlipTime;
+                present->INTC_ActualFlipTime    = ActualFlipTime;
+                break;
+            }
+        }
+
+        // WORKAROUND: Currently getting task_FramePacer_Info events too late
+        // and PresentMon has already completed the present.  Search completed
+        // presents for now until we can find a better solution.
+        {
+            std::lock_guard<std::mutex> lock(mPresentEventMutex);
+            for (auto const& present : mPresentEvents) {
+                if (present->INTC_ID == FrameID) {
+                    DebugModifyPresent(*present);
+                    present->INTC_AppWorkStart      = AppWorkStart;
+                    present->INTC_AppSimulationTime = AppSimulationTime;
+                    present->INTC_DriverWorkStart   = DriverWorkStart;
+                    present->INTC_DriverWorkEnd     = DriverWorkEnd;
+                    present->INTC_GPUStart          = GPUStart;
+                    present->INTC_GPUEnd            = GPUEnd;
+                    present->INTC_PresentAPICall    = PresentAPICall;
+                    present->INTC_ScheduledFlipTime = ScheduledFlipTime;
+                    present->INTC_ActualFlipTime    = ActualFlipTime;
+                    break;
+                }
+            }
+        }
+        // END WORKAROUND
+
+        break;
+    }
+    default:
+        assert(!mFilteredEvents); // Assert that filtering is working if expected
+        break;
+    }
 }
 
 void PMTraceConsumer::HandleD3D9Event(EVENT_RECORD* pEventRecord)
