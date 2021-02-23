@@ -2102,8 +2102,12 @@ void PMTraceConsumer::HandleIGfxD3D10QueueTimersEvent( EVENT_RECORD* pEventRecor
         }
      
         // FrameTimeApp & Drv will go here
-        process->mQueueTimersAccumTimes[TimerType] += hdr.TimeStamp.QuadPart - process->mQueueTimersStartTimes[TimerType];
+        if (process->mQueueTimersStartTimes[TimerType] > 0)
+        {
+            process->mQueueTimersAccumTimes[TimerType] += hdr.TimeStamp.QuadPart - process->mQueueTimersStartTimes[TimerType];
+        }
         process->mQueueTimersStartTimes[TimerType] = hdr.TimeStamp.QuadPart;
+
         if (TimerType == Intel_Graphics_D3D10::FRAME_TIME_APP)
         {
             //Copy & Init all Producer timers
@@ -2135,8 +2139,11 @@ void PMTraceConsumer::HandleIGfxD3D10QueueTimersEvent( EVENT_RECORD* pEventRecor
     }
     case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
     {
-        process->mQueueTimersAccumTimes[TimerType] += hdr.TimeStamp.QuadPart - process->mQueueTimersStartTimes[TimerType];
-        process->mQueueTimersStartTimes[TimerType] = 0;
+        if (process->mQueueTimersStartTimes[TimerType] > 0)
+        {
+            process->mQueueTimersAccumTimes[TimerType] += hdr.TimeStamp.QuadPart - process->mQueueTimersStartTimes[TimerType];
+            process->mQueueTimersStartTimes[TimerType] = 0;
+        }
         break;
     }
     default:

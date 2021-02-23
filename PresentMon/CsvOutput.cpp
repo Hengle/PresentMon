@@ -99,7 +99,7 @@ static void WriteCsvHeader(FILE* fp)
             ",msGPUActive");
     }
     if (args.mTrackQueueTimers) {
-        fprintf( fp, ",WaitIfFullTime,WaitUntilEmptySyncTime,WaitUntilEmptySyncAsincTime,WaitForFence,WaitUntilFenceSubmitted,WaitUntilEmptyDrainTime,WaitUntilEmptyDrainAsyncTime,WaitIfEmptyTime,FrameTimeApp,FrameTimeDrv" );
+        fprintf( fp, ",WaitIfFullTime,WaitUntilEmptySyncTime,WaitUntilEmptySyncAsincTime,WaitUntilEmptyDrainTime,WaitUntilEmptyDrainAsyncTime,WaitForFence,WaitUntilFenceSubmitted,WaitIfEmptyTime,FrameTimeApp,FrameTimeDrv" );
     }
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
