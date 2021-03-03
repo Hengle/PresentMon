@@ -101,6 +101,9 @@ static void WriteCsvHeader(FILE* fp)
     if (args.mTrackQueueTimers) {
         fprintf( fp, ",WaitIfFullTime,WaitUntilEmptySyncTime,WaitUntilEmptySyncAsincTime,WaitUntilEmptyDrainTime,WaitUntilEmptyDrainAsyncTime,WaitForFence,WaitUntilFenceSubmitted,WaitIfEmptyTime,FrameTimeApp,FrameTimeDrv" );
     }
+    if (args.mTrackCpuGpuSync) {
+        fprintf(fp, ",WaitSyncObjFromCpu,WaitSyncObjFromGpu,PollOnQueryGetData");
+    }
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
     }
@@ -142,6 +145,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double msBetweenDisplayChange = 0.0;
     double msGPUDuration          = 0.0;
     double msQueueTimers[Intel_Graphics_D3D10::WAIT_TIMERS_COUNT];
+    double msCpuGpuSync[Intel_Graphics_D3D10::SYNC_TYPE_LAST];
 
     if (args.mTrackDisplay) {
         if (p.ReadyTime > 0) {
@@ -169,6 +173,11 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     if (args.mTrackQueueTimers) {
         for (uint32_t type = Intel_Graphics_D3D10::WAIT_IF_FULL_TIMER; type < Intel_Graphics_D3D10::WAIT_TIMERS_COUNT; type++) {
             msQueueTimers[type] = 1000.0 * QpcDeltaToSeconds( p.QueueTimers[type] );
+        }
+    }
+    if (args.mTrackCpuGpuSync) {
+        for (uint32_t type = Intel_Graphics_D3D10::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; type < Intel_Graphics_D3D10::SYNC_TYPE_LAST; type++) {
+            msCpuGpuSync[type] = 1000.0 * QpcDeltaToSeconds( p.CpuGpuSync[type] );
         }
     }
 
@@ -205,6 +214,11 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     if (args.mTrackQueueTimers) {
         for (uint32_t type = Intel_Graphics_D3D10::WAIT_IF_FULL_TIMER; type < Intel_Graphics_D3D10::WAIT_TIMERS_COUNT; type++) {
             fprintf( fp, ",%lf", msQueueTimers[type] );
+        }
+    }
+    if (args.mTrackCpuGpuSync) {
+        for (uint32_t type = Intel_Graphics_D3D10::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; type < Intel_Graphics_D3D10::SYNC_TYPE_LAST; type++) {
+            fprintf( fp, ",%lf", msCpuGpuSync[type] );
         }
     }
     if (args.mOutputQpcTime) {

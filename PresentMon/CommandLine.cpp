@@ -402,6 +402,7 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTrackDebug = false;
     args->mTrackWMR = false;
     args->mTrackQueueTimers = false;
+    args->mTrackCpuGpuSync = false;
     args->mOutputCsvToFile = true;
     args->mOutputCsvToStdout = false;
     args->mOutputQpcTime = false;
@@ -464,6 +465,7 @@ bool ParseCommandLine(int argc, char** argv)
         else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR                   = true; continue; }
         else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr                    = true; continue; }
         else if (ParseArg(argv[i], "track_queue_timers" ))   { args->mTrackQueueTimers           = true; continue; }
+        else if (ParseArg(argv[i], "track_cpu_gpu_sync" ))   { args->mTrackCpuGpuSync            = true; continue; }
 
         // Provided argument wasn't recognized
         else if (!(ParseArg(argv[i], "?") || ParseArg(argv[i], "h") || ParseArg(argv[i], "help"))) {
@@ -491,6 +493,12 @@ bool ParseCommandLine(int argc, char** argv)
         fprintf(stderr, "warning: -dont_restart_as_admin command line argument has been deprecated; it is now the default behaviour.\n");
     }
 
+    // STAS_TODO: does it make sence to track cpu-gpu sync w/o track_gpu?
+    if (args->mTrackCpuGpuSync && !args->mTrackGPU) {
+        fprintf( stderr, "warning: -track_cpu_gpu_sync requires track_gpu.\n" );
+        args->mTrackGPU = true;
+    }
+
     // Ignore -no_track_display if required for other requested tracking
     if (args->mTrackDebug && !args->mTrackDisplay) {
         fprintf(stderr, "warning: -track_debug requires display tracking; ignoring -no_track_display.\n");
@@ -500,6 +508,7 @@ bool ParseCommandLine(int argc, char** argv)
         fprintf(stderr, "warning: -track_gpu requires display tracking; ignoring -no_track_display.\n");
         args->mTrackDisplay = true;
     }
+
 
     // Enable -qpc_time if only -qpc_time_s was provided, since we use that to
     // add the column.

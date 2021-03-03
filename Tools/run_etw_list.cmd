@@ -72,6 +72,8 @@ set events=
 set events=%events% --event=QueueTimers::Info
 set events=%events% --event=QueueTimers::Start
 set events=%events% --event=QueueTimers::Stop
+set events=%events% --event=CpuGpuSync::Start
+set events=%events% --event=CpuGpuSync::Stop
 call :etw_list "Intel-Graphics-D3D10" "%out_dir%\Intel_Graphics_D3D10.h"
 
 echo.

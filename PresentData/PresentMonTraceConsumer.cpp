@@ -357,6 +357,13 @@ static PMTraceConsumer::DmaDuration* CreateDmaDuration(
             dmaDuration->mQueueTimersAccumTimes[type] = 0;
             dmaDuration->mQueueTimersStartTimes[type] = 0;
         }
+
+        //Init CpuGpuSync
+        for (uint32_t type = Intel_Graphics_D3D10::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; type < Intel_Graphics_D3D10::SYNC_TYPE_LAST; type++)
+        {
+            process->mCpuGpuSyncStartTimes[type] = 0;
+            process->mCpuGpuSyncAccumTimes[type] = 0;
+        }
     }
     return dmaDuration;
 }
@@ -461,6 +468,14 @@ void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t 
             pEvent->GPUDuration += hdr.TimeStamp.QuadPart - dmaDuration->mDmaExecStartTime;
             dmaDuration->mFirstDmaTime = hdr.TimeStamp.QuadPart;
             dmaDuration->mDmaExecStartTime = hdr.TimeStamp.QuadPart;
+        }
+
+        //STAS_TODO: Update CpuGpuSync - do we want to check if enabled?
+        //Copy & Init all CpuGpuSync timers
+        for (uint32_t type = Intel_Graphics_D3D10::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; type < Intel_Graphics_D3D10::SYNC_TYPE_LAST; type++)
+        {
+            pEvent->CpuGpuSync[type] = dmaDuration->mCpuGpuSyncAccumTimes[type];
+            dmaDuration->mCpuGpuSyncAccumTimes[type] = 0;
         }
     }
 
@@ -2068,6 +2083,12 @@ void PMTraceConsumer::HandleIGfxD3D10Event( EVENT_RECORD* pEventRecord )
         HandleIGfxD3D10QueueTimersEvent( pEventRecord );
         break;
     }
+    case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
+    case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
+    {
+        HandleIGfxD3D10CpuGpuSyncEvent( pEventRecord );
+        break;
+    }
     default:
         printf( "Unknown HandleIGfxD3D10Event %d\n", hdr.EventDescriptor.Id );
         break;
@@ -2151,6 +2172,43 @@ void PMTraceConsumer::HandleIGfxD3D10QueueTimersEvent( EVENT_RECORD* pEventRecor
 
     }
     return;
+}
+
+void PMTraceConsumer::HandleIGfxD3D10CpuGpuSyncEvent( EVENT_RECORD* pEventRecord )
+{
+    EventDataDesc desc[] = {
+     { L"value" },
+    };
+    mMetadata.GetEventData( pEventRecord, desc, _countof( desc ) );
+    auto SyncType = desc[0].GetData<uint32_t>();
+
+    auto const& hdr = pEventRecord->EventHeader;
+
+    auto processIter = mProcesses.find( hdr.ProcessId );
+    if (processIter == mProcesses.end()) {
+        printf( "Could find processId %d\n", hdr.ProcessId );
+        return;
+    }
+    auto process = &processIter->second;
+
+    switch (hdr.EventDescriptor.Id) {
+    case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
+    {
+        process->mCpuGpuSyncStartTimes[SyncType] = hdr.TimeStamp.QuadPart;
+        break;
+    }
+    case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
+    {
+        if (process->mCpuGpuSyncStartTimes[SyncType] > 0)
+        {
+            process->mCpuGpuSyncAccumTimes[SyncType] += hdr.TimeStamp.QuadPart - process->mCpuGpuSyncStartTimes[SyncType];
+            process->mCpuGpuSyncStartTimes[SyncType] = 0;
+        }
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 void PMTraceConsumer::HandleMetadataEvent(EVENT_RECORD* pEventRecord)
