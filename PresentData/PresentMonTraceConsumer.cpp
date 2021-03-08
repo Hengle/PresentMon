@@ -994,6 +994,28 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             mDevices.emplace(hDevice, pDxgAdapter);
             return;
         }
+        // Sometimes a trace will miss a Device_Start, so we also check
+        // AdapterAllocation events (which also provide the pDxgAdapter-hDevice
+        // mapping).  These are not currently enabled for realtime collection.
+        case Microsoft_Windows_DxgKrnl::AdapterAllocation_Start::Id:
+        case Microsoft_Windows_DxgKrnl::AdapterAllocation_DCStart::Id:
+        case Microsoft_Windows_DxgKrnl::AdapterAllocation_Stop::Id:
+        {
+            EventDataDesc desc[] = {
+                { L"pDxgAdapter" },
+                { L"hDevice" },
+            };
+            mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+            auto pDxgAdapter = desc[0].GetData<uint64_t>();
+            auto hDevice     = desc[1].GetData<uint64_t>();
+
+            if (hDevice != 0) {
+                // Sometimes there are duplicate start events
+                assert(mDevices.find(hDevice) == mDevices.end() || mDevices.find(hDevice)->second == pDxgAdapter);
+                mDevices.emplace(hDevice, pDxgAdapter);
+            }
+            return;
+        }
         case Microsoft_Windows_DxgKrnl::Device_Stop::Id:
         {
             auto hDevice = mMetadata.GetEventData<uint64_t>(pEventRecord, L"hDevice");
