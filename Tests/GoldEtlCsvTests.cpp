@@ -1,5 +1,5 @@
 /*
-Copyright 2020 Intel Corporation
+Copyright 2020-2021 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -103,21 +103,44 @@ public:
                 if (testCsv.headerColumnIndex_[h] != SIZE_MAX && goldCsv.headerColumnIndex_[h] != SIZE_MAX) {
                     char const* a = testCsv.cols_[testCsv.headerColumnIndex_[h]];
                     char const* b = goldCsv.cols_[goldCsv.headerColumnIndex_[h]];
-                    if (_stricmp(a, b) != 0) {
-                        if (rowOk) {
-                            rowOk = false;
-                            printf("GOLD = %ls\n", goldCsv_.c_str());
-                            printf("TEST = %ls\n", testCsv_.c_str());
-                            AddTestFailure(__FILE__, __LINE__, "Difference on line: %zu", testCsv.line_);
-                            printf("    COLUMN                    TEST VALUE                            GOLD VALUE\n");
-                        }
-
-                        auto r = printf("    %s", testCsv.GetHeader(h));
-                        printf("%*s", r < 29 ? 29 - r : 0, "");
-                        r = printf(" %s", a);
-                        printf("%*s", r < 38 ? 38 - r : 0, "");
-                        printf(" %s\n", b);
+                    if (_stricmp(a, b) == 0) {
+                        continue;
                     }
+
+                    // Floating point may be inconsistently rounded by printf accross different platforms.
+                    // Do a rounding check by ensuring the difference between the two numebrs are less than 
+                    // the final digit +-1.001
+
+                    // Doubles should be good for 15 digits of precision.
+
+                    double testNumber, goldNumber;
+                    int testSucceededCount = sscanf_s(a, "%lf", &testNumber);
+                    int goldSucceededCount = sscanf_s(b, "%lf", &goldNumber);
+
+                    const char* testDecimalAddr = strchr(a, '.');
+                    const char* goldDecimalAddr = strchr(b, '.');
+                    if (testSucceededCount == 1 && goldSucceededCount == 1 && testDecimalAddr != NULL && goldDecimalAddr != NULL) {
+                        size_t testDecimalNumbersCount = (a + strlen(a)) - testDecimalAddr - 1;
+                        size_t goldDecimalNumbersCount = (b + strlen(b)) - goldDecimalAddr - 1;
+                        double difference = (testNumber * pow(10.0, testDecimalNumbersCount)) - (goldNumber * pow(10.0, goldDecimalNumbersCount));
+                        if (testDecimalNumbersCount == goldDecimalNumbersCount && difference > -1.001 && difference < 1.001) {
+                            continue;
+                        }
+                    }
+
+                    if (rowOk) {
+                        rowOk = false;
+                        printf("GOLD = %ls\n", goldCsv_.c_str());
+                        printf("TEST = %ls\n", testCsv_.c_str());
+                        AddTestFailure(__FILE__, __LINE__, "Difference on line: %zu", testCsv.line_);
+                        printf("    COLUMN                    TEST VALUE                            GOLD VALUE\n");
+                    }
+
+                    auto r = printf("    %s", testCsv.GetHeader(h));
+                    printf("%*s", r < 29 ? 29 - r : 0, "");
+                    r = printf(" %s", a);
+                    printf("%*s", r < 38 ? 38 - r : 0, "");
+                    printf(" %s\n", b);
                 }
             }
             if (!reportAllCsvDiffs_ && !rowOk) {

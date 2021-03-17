@@ -93,8 +93,8 @@ ULONG EnableProviders(
     PMTraceConsumer* pmConsumer,
     MRTraceConsumer* mrConsumer)
 {
-    uint64_t anyKeywordMask;
-    uint64_t allKeywordMask;
+    uint64_t anyKeywordMask = 0;
+    uint64_t allKeywordMask = 0;
     std::vector<USHORT> eventIds;
     ULONG status = 0;
 
@@ -111,6 +111,7 @@ ULONG EnableProviders(
             Microsoft_Windows_DxgKrnl::Flip_Info::Id,
             Microsoft_Windows_DxgKrnl::FlipMultiPlaneOverlay_Info::Id,
             Microsoft_Windows_DxgKrnl::HSyncDPCMultiPlane_Info::Id,
+            Microsoft_Windows_DxgKrnl::VSyncDPCMultiPlane_Info::Id,
             Microsoft_Windows_DxgKrnl::MMIOFlip_Info::Id,
             Microsoft_Windows_DxgKrnl::MMIOFlipMultiPlaneOverlay_Info::Id,
             Microsoft_Windows_DxgKrnl::Present_Info::Id,

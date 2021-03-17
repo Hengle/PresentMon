@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Intel Corporation
+Copyright 2019-2021 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -71,9 +71,9 @@ uint64_t ConvertTimestampDeltaToNs(uint64_t timestampDelta)
     return 1000000000ull * timestampDelta / gTimestampFrequency.QuadPart;
 }
 
-uint64_t ConvertTimestampToNs(LARGE_INTEGER timestamp)
+uint64_t ConvertTimestampToNs(uint64_t timestamp)
 {
-    return ConvertTimestampDeltaToNs(timestamp.QuadPart - gFirstTimestamp->QuadPart);
+    return ConvertTimestampDeltaToNs(timestamp - gFirstTimestamp->QuadPart);
 }
 
 char* AddCommas(uint64_t t)
@@ -99,6 +99,7 @@ char* AddCommas(uint64_t t)
 void PrintU32(uint32_t value) { printf("%u", value); }
 void PrintU64(uint64_t value) { printf("%llu", value); }
 void PrintU64x(uint64_t value) { printf("%llx", value); }
+void PrintTime(uint64_t value) { printf("%s", AddCommas(ConvertTimestampToNs(value))); }
 void PrintTimeDelta(uint64_t value) { printf("%s", AddCommas(ConvertTimestampDeltaToNs(value))); }
 void PrintBool(bool value) { printf("%s", value ? "true" : "false"); }
 void PrintRuntime(Runtime value)
@@ -187,12 +188,12 @@ void PrintDmaPacketType(uint32_t type)
 }
 void PrintPresentFlags(uint32_t flags)
 {
-    if (flags & DXGI_PRESENT_FEST) printf("TEST");
+    if (flags & DXGI_PRESENT_TEST) printf("TEST");
 }
 
 void PrintEventHeader(EVENT_HEADER const& hdr)
 {
-    printf("%16s %5u %5u ", AddCommas(ConvertTimestampToNs(hdr.TimeStamp)), hdr.ProcessId, hdr.ThreadId);
+    printf("%16s %5u %5u ", AddCommas(ConvertTimestampToNs(hdr.TimeStamp.QuadPart)), hdr.ProcessId, hdr.ThreadId);
 }
 
 void PrintEventHeader(EVENT_HEADER const& hdr, char const* name)
@@ -214,7 +215,10 @@ void PrintEventHeader(EVENT_RECORD* eventRecord, EventMetadata* metadata, char c
         printf(" %ls=", propName);
 
              if (propFunc == PrintU32)                  PrintU32(metadata->GetEventData<uint32_t>(eventRecord, propName));
+        else if (propFunc == PrintU64)                  PrintU64(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintU64x)                 PrintU64x(metadata->GetEventData<uint64_t>(eventRecord, propName));
+        else if (propFunc == PrintTime)                 PrintTime(metadata->GetEventData<uint64_t>(eventRecord, propName));
+        else if (propFunc == PrintTimeDelta)            PrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintTokenState)           PrintTokenState(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintQueuePacketType)      PrintQueuePacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintDmaPacketType)        PrintDmaPacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
@@ -244,8 +248,8 @@ void FlushModifiedPresent()
         _Fn(gModifiedPresent->_Name); \
     }
     FLUSH_MEMBER(PrintTimeDelta,     TimeTaken)
-    FLUSH_MEMBER(PrintTimeDelta,     ReadyTime)
-    FLUSH_MEMBER(PrintTimeDelta,     ScreenTime)
+    FLUSH_MEMBER(PrintTime,          ReadyTime)
+    FLUSH_MEMBER(PrintTime,          ScreenTime)
     FLUSH_MEMBER(PrintU64x,          SwapChainAddress)
     FLUSH_MEMBER(PrintU32,           SyncInterval)
     FLUSH_MEMBER(PrintU32,           PresentFlags)
@@ -293,7 +297,7 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
 
     FlushModifiedPresent();
 
-    auto t = ConvertTimestampToNs(hdr.TimeStamp);
+    auto t = ConvertTimestampToNs(hdr.TimeStamp.QuadPart);
     if (t >= DEBUG_START_TIME_NS) {
         gDebugTrace = true;
     }
@@ -317,10 +321,10 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
 
     if (hdr.ProviderId == Microsoft_Windows_DXGI::GUID) {
         switch (id) {
-        case Microsoft_Windows_DXGI::Present_Start::Id:                     PrintEventHeader(hdr, metadata, "DXGIPresent_Start", {
+        case Microsoft_Windows_DXGI::Present_Start::Id:                     PrintEventHeader(eventRecord, metadata, "DXGIPresent_Start", {
                                                                                 L"Flags", PrintPresentFlags,
                                                                             }); break;
-        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id:    PrintEventHeader(hdr, metadata, "DXGIPresentMPO_Start", {
+        case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Start::Id:    PrintEventHeader(eventRecord, metadata, "DXGIPresentMPO_Start", {
                                                                                 L"Flags", PrintPresentFlags,
                                                                             }); break;
         case Microsoft_Windows_DXGI::Present_Stop::Id:                      PrintEventHeader(hdr, "DXGIPresent_Stop"); break;
@@ -368,6 +372,7 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
         case Microsoft_Windows_DxgKrnl::Flip_Info::Id:                      PrintEventHeader(hdr, "DxgKrnl_Flip_Info"); break;
         case Microsoft_Windows_DxgKrnl::FlipMultiPlaneOverlay_Info::Id:     PrintEventHeader(hdr, "DxgKrnl_FlipMultiPlaneOverlay_Info"); break;
         case Microsoft_Windows_DxgKrnl::HSyncDPCMultiPlane_Info::Id:        PrintEventHeader(hdr, "DxgKrnl_HSyncDPCMultiPlane_Info"); break;
+        case Microsoft_Windows_DxgKrnl::VSyncDPCMultiPlane_Info::Id:        PrintEventHeader(hdr, "DxgKrnl_VSyncDPCMultiPlane_Info"); break;
         case Microsoft_Windows_DxgKrnl::MMIOFlip_Info::Id:                  PrintEventHeader(hdr, "DxgKrnl_MMIOFlip_Info"); break;
         case Microsoft_Windows_DxgKrnl::MMIOFlipMultiPlaneOverlay_Info::Id: PrintEventHeader(hdr, "DxgKrnl_MMIOFlipMultiPlaneOverlay_Info"); break;
         case Microsoft_Windows_DxgKrnl::Present_Info::Id:                   PrintEventHeader(hdr, "DxgKrnl_Present_Info"); break;
@@ -393,7 +398,9 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
                                                                                 L"hContext", PrintU64x,
                                                                                 L"SubmitSequence", PrintU32,
                                                                             }); break;
-        case Microsoft_Windows_DxgKrnl::VSyncDPC_Info::Id:                  PrintEventHeader(hdr, "DxgKrnl_VSyncDPC_Info"); break;
+        case Microsoft_Windows_DxgKrnl::VSyncDPC_Info::Id:                  PrintEventHeader(eventRecord, metadata, "DxgKrnl_VSyncDPC_Info", {
+                                                                                L"FlipFenceId", PrintU64x,
+                                                                            }); break;
         }
         return;
     }
