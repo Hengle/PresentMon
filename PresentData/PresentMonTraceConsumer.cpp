@@ -66,10 +66,10 @@ static constexpr int PRESENTEVENT_CIRCULAR_BUFFER_SIZE = 8192;
 #define TRACK_PRESENT_PATH_SAVE_GENERATED_ID(present) (void) present
 #endif
 
-PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
-    : QpcTime(*(uint64_t*) &hdr.TimeStamp)
-    , ProcessId(hdr.ProcessId)
-    , ThreadId(hdr.ThreadId)
+PresentEvent::PresentEvent()
+    : QpcTime(0)
+    , ProcessId(0)
+    , ThreadId(0)
     , TimeTaken(0)
     , ReadyTime(0)
     , ScreenTime(0)
@@ -85,7 +85,7 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , DestWidth(0)
     , DestHeight(0)
     , DriverBatchThreadId(0)
-    , Runtime(runtime)
+    , Runtime(Runtime::Other)
     , PresentMode(PresentMode::Unknown)
     , FinalState(PresentResult::Unknown)
     , SupportsTearing(false)
@@ -139,7 +139,11 @@ void PMTraceConsumer::HandleD3D9Event(EVENT_RECORD* pEventRecord)
         auto pSwapchain = desc[0].GetData<uint64_t>();
         auto Flags      = desc[1].GetData<uint32_t>();
 
-        auto present = std::make_shared<PresentEvent>(hdr, Runtime::D3D9);
+        auto present = std::make_shared<PresentEvent>();
+        present->QpcTime = hdr.TimeStamp.QuadPart;
+        present->ProcessId = hdr.ProcessId;
+        present->ThreadId = hdr.ThreadId;
+        present->Runtime = Runtime::D3D9;
         present->SwapChainAddress = pSwapchain;
         present->PresentFlags =
             ((Flags & D3DPRESENT_DONOTFLIP) ? DXGI_PRESENT_DO_NOT_SEQUENCE : 0) |
@@ -208,10 +212,14 @@ void PMTraceConsumer::HandleDXGIEvent(EVENT_RECORD* pEventRecord)
             break;
         }
 
-        auto present = std::make_shared<PresentEvent>(hdr, Runtime::DXGI);
+        auto present = std::make_shared<PresentEvent>();
+        present->QpcTime = hdr.TimeStamp.QuadPart;
+        present->ProcessId = hdr.ProcessId;
+        present->ThreadId = hdr.ThreadId;
+        present->Runtime = Runtime::DXGI;
         present->SwapChainAddress = pIDXGISwapChain;
-        present->PresentFlags     = Flags;
-        present->SyncInterval     = SyncInterval;
+        present->PresentFlags = Flags;
+        present->SyncInterval = SyncInterval;
 
         TrackPresentOnThread(present);
         TRACK_PRESENT_PATH(present);
@@ -1313,8 +1321,11 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 // If this is the end of an identified video encode context
                 // used for cloud streaming, treat it like a present
                 if (context->mIsCloudStreamingVideoEncoder) {
-                    auto videoPresent = std::make_shared<PresentEvent>(hdr, Runtime::CloudStreaming);
+                    auto videoPresent = std::make_shared<PresentEvent>();
+                    videoPresent->QpcTime = hdr.TimeStamp.QuadPart;
                     videoPresent->ProcessId = mCloudStreamingProcessId;
+                    videoPresent->ThreadId = hdr.ThreadId;
+                    videoPresent->Runtime = Runtime::CloudStreaming;
                     AssignAccumulatedGPUWork(hdr, videoPresent.get());
                     videoPresent->Completed = true;
                     mPresentEvents.push_back(videoPresent);
@@ -2035,7 +2046,10 @@ std::shared_ptr<PresentEvent> PMTraceConsumer::FindOrCreatePresent(EVENT_HEADER 
     // TODO: Why do we add it to presentsByThisProcess?  We're already past the
     // stage where we need to look it up by that mechanism...
     // mPresentByThreadId should be good enough at this point right?
-    auto presentEvent = std::make_shared<PresentEvent>(hdr, Runtime::Other);
+    auto presentEvent = std::make_shared<PresentEvent>();
+    presentEvent->QpcTime = hdr.TimeStamp.QuadPart;
+    presentEvent->ProcessId = hdr.ProcessId;
+    presentEvent->ThreadId = hdr.ThreadId;
     TrackPresent(presentEvent, presentsByThisProcess);
     return presentEvent;
 }

@@ -133,10 +133,12 @@ struct PresentEvent {
     uint64_t Id;
 #endif
 
-    PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime);
+    PresentEvent();
 
+#if !DEBUG_VERBOSE
 private:
     PresentEvent(PresentEvent const& copy); // dne
+#endif
 };
 
 // A high-level description of the sequence of events for each present type,

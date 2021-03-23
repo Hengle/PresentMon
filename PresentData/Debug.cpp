@@ -37,7 +37,7 @@ SOFTWARE.
 namespace {
 
 PresentEvent const* gModifiedPresent = nullptr;
-PresentEvent gOriginalPresentValues(EVENT_HEADER{}, Runtime::Other);
+PresentEvent gOriginalPresentValues;
 
 bool gDebugDone = false;
 bool gDebugTrace = false;
@@ -245,6 +245,7 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintBool,          SeenWin32KEvents)
     FLUSH_MEMBER(PrintBool,          DwmNotified)
     FLUSH_MEMBER(PrintBool,          Completed)
+    FLUSH_MEMBER(PrintBool,          PresentInDwmWaitingStruct)
 #undef FLUSH_MEMBER
     if (changedCount > 0) {
         printf("\n");
