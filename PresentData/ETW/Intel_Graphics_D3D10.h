@@ -1,5 +1,5 @@
 /*
-Copyright Fri 02 Intel Corporation
+Copyright Thu 03 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -44,12 +44,11 @@ enum class Keyword : uint64_t {
     kVa_Mapping                  = 0x400,
     kVa_Patching                 = 0x800,
     kVerbose                     = 0x1000,
-    kDdiL0                       = 0x2000,
-    kDdiL1                       = 0x4000,
-    kDdiL2                       = 0x8000,
+    kCpuGpuSync_Event            = 0x2000,
     kDynamicBuffers              = 0x10000,
     kQueueTimer_Event            = 0x20000,
-    kCpuGpuSync_Event            = 0x40000,
+    kMonzaDdi                    = 0x40000,
+    kMonzaDdiThreading           = 0x80000,
     cIntelGraphicsD3D10_Analytic = 0x8000000000000000,
 };
 
@@ -75,8 +74,8 @@ enum class Channel : uint8_t {
     static Keyword  const Keyword = (Keyword) keyword_; \
 };
 
-EVENT_DESCRIPTOR_DECL(CpuGpuSync_Start , 0x003e, 0x00, 0x10, 0x00, 0x01, 0x0011, 0x8000000000040000)
-EVENT_DESCRIPTOR_DECL(CpuGpuSync_Stop  , 0x003f, 0x00, 0x10, 0x00, 0x02, 0x0011, 0x8000000000040000)
+EVENT_DESCRIPTOR_DECL(CpuGpuSync_Start , 0x0013, 0x00, 0x10, 0x00, 0x01, 0x0006, 0x8000000000002000)
+EVENT_DESCRIPTOR_DECL(CpuGpuSync_Stop  , 0x0014, 0x00, 0x10, 0x00, 0x02, 0x0006, 0x8000000000002000)
 EVENT_DESCRIPTOR_DECL(QueueTimers_Start, 0x003b, 0x00, 0x10, 0x00, 0x01, 0x0010, 0x8000000000020000)
 EVENT_DESCRIPTOR_DECL(QueueTimers_Info , 0x003c, 0x00, 0x10, 0x00, 0x00, 0x0010, 0x8000000000020000)
 EVENT_DESCRIPTOR_DECL(QueueTimers_Stop , 0x003d, 0x00, 0x10, 0x00, 0x02, 0x0010, 0x8000000000020000)
