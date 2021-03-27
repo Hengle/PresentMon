@@ -232,31 +232,25 @@ ULONG EnableProviders(
         }
     }
 
-    if ( pmConsumer->mTrackQueueTimers )
+    if ( pmConsumer->mTrackQueueTimers || pmConsumer->mTrackCpuGpuSync )
     {
-        anyKeywordMask = static_cast<std::underlying_type<Intel_Graphics_D3D10::Keyword>::type>(Intel_Graphics_D3D10::Keyword::cIntelGraphicsD3D10_Analytic) |
-                         static_cast< std::underlying_type<Intel_Graphics_D3D10::Keyword>::type >( Intel_Graphics_D3D10::Keyword::kQueueTimer_Event);
-        allKeywordMask = anyKeywordMask;
-        eventIds =
+        anyKeywordMask = static_cast< std::underlying_type<Intel_Graphics_D3D10::Keyword>::type >( Intel_Graphics_D3D10::Keyword::cIntelGraphicsD3D10_Analytic );
+        eventIds.clear();
+        if ( pmConsumer->mTrackQueueTimers )
         {
-            Intel_Graphics_D3D10::QueueTimers_Start::Id,
-            Intel_Graphics_D3D10::QueueTimers_Stop::Id,
-            Intel_Graphics_D3D10::QueueTimers_Info::Id
-        };
-        status = EnableFilteredProvider( sessionHandle, sessionGuid, Intel_Graphics_D3D10::GUID, TRACE_LEVEL_VERBOSE, anyKeywordMask, allKeywordMask, eventIds );
-        if ( status != ERROR_SUCCESS ) return status;
-    }
+            anyKeywordMask |= static_cast< std::underlying_type<Intel_Graphics_D3D10::Keyword>::type >( Intel_Graphics_D3D10::Keyword::kQueueTimer_Event );
+            eventIds.push_back( Intel_Graphics_D3D10::QueueTimers_Start::Id );
+            eventIds.push_back( Intel_Graphics_D3D10::QueueTimers_Stop::Id );
+            eventIds.push_back( Intel_Graphics_D3D10::QueueTimers_Info::Id );
+        }
+        if ( pmConsumer->mTrackCpuGpuSync )
+        {
+            anyKeywordMask |= static_cast< std::underlying_type<Intel_Graphics_D3D10::Keyword>::type >( Intel_Graphics_D3D10::Keyword::kCpuGpuSync_Event );
+            eventIds.push_back( Intel_Graphics_D3D10::CpuGpuSync_Start::Id );
+            eventIds.push_back( Intel_Graphics_D3D10::CpuGpuSync_Stop::Id );
+        }
+        allKeywordMask = 0;
 
-    if ( pmConsumer->mTrackCpuGpuSync )
-    {
-        anyKeywordMask = static_cast< std::underlying_type<Intel_Graphics_D3D10::Keyword>::type >( Intel_Graphics_D3D10::Keyword::cIntelGraphicsD3D10_Analytic ) |
-            static_cast< std::underlying_type<Intel_Graphics_D3D10::Keyword>::type >( Intel_Graphics_D3D10::Keyword::kCpuGpuSync_Event );
-        allKeywordMask = anyKeywordMask;
-        eventIds =
-        {
-            Intel_Graphics_D3D10::CpuGpuSync_Start::Id,
-            Intel_Graphics_D3D10::CpuGpuSync_Stop::Id,
-        };
         status = EnableFilteredProvider( sessionHandle, sessionGuid, Intel_Graphics_D3D10::GUID, TRACE_LEVEL_VERBOSE, anyKeywordMask, allKeywordMask, eventIds );
         if ( status != ERROR_SUCCESS ) return status;
     }

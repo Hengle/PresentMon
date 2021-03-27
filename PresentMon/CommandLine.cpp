@@ -334,6 +334,7 @@ static void PrintHelp()
                                     " Not supported on Win7.",
         "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
         "-track_queue_timers",      "Capture DX11 QueueTimers - Intel Internal, D3D11 only",
+        "-track_cpu_gpu_sync",      "Capture DX11 Cpu/GPU syncs - Intel Internal, D3D11 only",
     };
 
     fprintf(stderr, "PresentMon %s\n", PRESENT_MON_VERSION);
