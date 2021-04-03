@@ -394,7 +394,7 @@ struct PMTraceConsumer
     void HandleDxgkPresentHistory(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, PresentMode knownPresentMode);
     void HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint64_t token);
 
-    void CompletePresent(std::shared_ptr<PresentEvent> p, uint32_t recurseDepth=0);
+    void CompletePresent(std::shared_ptr<PresentEvent> p);
     std::shared_ptr<PresentEvent> FindBySubmitSequence(uint32_t submitSequence);
     std::shared_ptr<PresentEvent> FindOrCreatePresent(EVENT_HEADER const& hdr);
     void TrackPresentOnThread(std::shared_ptr<PresentEvent> present);
