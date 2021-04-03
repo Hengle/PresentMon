@@ -83,7 +83,8 @@ struct PresentEvent {
 
     // Timestamps observed during present pipeline
     uint64_t TimeTaken;     // QPC duration between runtime present start and end
-    uint64_t ReadyTime;     // QPC value when the last GPU commands completed prior to presentation
+    uint64_t GPUStartTime;  // QPC value when the frame's first DMA packet started
+    uint64_t ReadyTime;     // QPC value when the frame's last DMA packet completed
     uint64_t ScreenTime;    // QPC value when the present was displayed on screen
 
     // Extra present parameters obtained through DXGI or D3D9 present
@@ -95,7 +96,7 @@ struct PresentEvent {
     uint64_t Hwnd;
     uint64_t TokenPtr;
     uint64_t CompositionSurfaceLuid;
-    uint64_t GPUDuration;            // Time during which DMA packet was running (0 if !mTrackGPU)
+    uint64_t GPUDuration;            // Time during which a frame's DMA packet was running on any node
     uint32_t QueueSubmitSequence;    // Submit sequence for the Present packet
     uint32_t DestWidth;
     uint32_t DestHeight;
@@ -339,6 +340,7 @@ struct PMTraceConsumer
     // Tracking for GPU work contributing to each frame.  We need to track DMA
     // packet queuing to know how when each DMA packet actually ran.
     struct DmaDuration {
+        uint64_t mFirstDmaTime;         // QPC when the first DMA packet started
         uint64_t mAccumulatedDmaTime;   // QPC duration that at least one DMA packet was running
         uint64_t mDmaExecStartTime;     // QPC when the oldest running DMA packet started
         uint32_t mDmaExecCount;         // Number of running DMA packets

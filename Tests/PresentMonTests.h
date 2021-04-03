@@ -36,16 +36,16 @@ struct PresentMonCsv
         "PresentFlags",
         "Dropped",
         "TimeInSeconds",
-        "MsBetweenPresents",
-        "MsInPresentAPI",
+        "msBetweenPresents",
+        "msInPresentAPI",
     };
 
     static constexpr char const* const TRACK_DISPLAY_HEADER[] = {
         "AllowsTearing",
         "PresentMode",
-        "MsBetweenDisplayChange",
-        "MsUntilRenderComplete",
-        "MsUntilDisplayed",
+        "msBetweenDisplayChange",
+        "msUntilRenderComplete",
+        "msUntilDisplayed",
     };
 
     static constexpr char const* const TRACK_DEBUG_HEADER[] = {
@@ -54,7 +54,8 @@ struct PresentMonCsv
     };
 
     static constexpr char const* const TRACK_GPU_HEADER[] = {
-        "GPUDuration",
+        "msUntilRenderStart",
+        "msGPUActive",
     };
 
     static constexpr char const* const OPT_HEADER[] = {

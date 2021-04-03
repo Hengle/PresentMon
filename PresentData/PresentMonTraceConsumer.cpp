@@ -71,6 +71,7 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , ProcessId(hdr.ProcessId)
     , ThreadId(hdr.ThreadId)
     , TimeTaken(0)
+    , GPUStartTime(0)
     , ReadyTime(0)
     , ScreenTime(0)
     , SwapChainAddress(0)
@@ -340,6 +341,7 @@ static PMTraceConsumer::DmaDuration* CreateDmaDuration(
     auto p = dmaDurations->emplace(processId, PMTraceConsumer::DmaDuration());
     auto dmaDuration = &p.first->second;
     if (p.second) {
+        dmaDuration->mFirstDmaTime = 0;
         dmaDuration->mAccumulatedDmaTime = 0;
         dmaDuration->mDmaExecStartTime = 0;
         dmaDuration->mDmaExecCount = 0;
@@ -421,12 +423,8 @@ void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t 
     }
 
     TRACK_PRESENT_PATH_SAVE_GENERATED_ID(pEvent);
-    DebugModifyPresent(*pEvent);
 
     // Assign any tracked accumulated GPU work to the present.
-    //
-    // If there are any DMA's executing across the present completion,
-    // assign their current duration to this present.
     //
     // mDmaDurations should be empty if mTrackGPU==false.
     //
@@ -438,18 +436,27 @@ void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t 
     auto dmaIter = mDmaDurations.find(pEvent->ProcessId);
     if (dmaIter != mDmaDurations.end()) {
         auto dmaDuration = &dmaIter->second;
+
+        DebugModifyPresent(*pEvent);
+        pEvent->GPUStartTime = dmaDuration->mFirstDmaTime;
+        pEvent->GPUDuration = dmaDuration->mAccumulatedDmaTime;
+        dmaDuration->mFirstDmaTime = 0;
+        dmaDuration->mAccumulatedDmaTime = 0;
+
+        // If there are any DMA's executing across the present completion,
+        // split their contribution across the two frames.
         if (dmaDuration->mDmaExecCount > 0) {
-            dmaDuration->mAccumulatedDmaTime += hdr.TimeStamp.QuadPart - dmaDuration->mDmaExecStartTime;
+            pEvent->GPUDuration += hdr.TimeStamp.QuadPart - dmaDuration->mDmaExecStartTime;
+            dmaDuration->mFirstDmaTime = hdr.TimeStamp.QuadPart;
             dmaDuration->mDmaExecStartTime = hdr.TimeStamp.QuadPart;
         }
-        pEvent->GPUDuration = dmaDuration->mAccumulatedDmaTime;
-        dmaDuration->mAccumulatedDmaTime = 0;
     }
 
     // If this is one of the present modes for which packet completion implies
     // display, then complete the present now.
     if (pEvent->PresentMode == PresentMode::Hardware_Legacy_Copy_To_Front_Buffer ||
         (pEvent->PresentMode == PresentMode::Hardware_Legacy_Flip && !pEvent->MMIO)) {
+        DebugModifyPresent(*pEvent);
         pEvent->ReadyTime = hdr.TimeStamp.QuadPart;
         pEvent->ScreenTime = hdr.TimeStamp.QuadPart;
         pEvent->FinalState = PresentResult::Presented;
@@ -1083,7 +1090,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 if (node->mQueueCount == _countof(Node::mSequenceId)) {
                     // mSequenceId array is too small (or, DmaPacket_Info
                     // events didn't fire for some reason).  This seems to always
-                    // hit when an application closes... no sure why yet.
+                    // hit when an application closes...
                     return;
                 }
 
@@ -1092,6 +1099,11 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 node->mDmaDuration[queueIndex] = dmaDuration;
                 node->mSequenceId[queueIndex] = SequenceId;
                 node->mQueueCount += 1;
+
+                // Note the starting time of the first DMA packet
+                if (dmaDuration->mFirstDmaTime == 0) {
+                    dmaDuration->mFirstDmaTime = hdr.TimeStamp.QuadPart;
+                }
 
                 // If the queue was empty, the packet starts running right
                 // away, otherwise it is just enqueued and will start running
