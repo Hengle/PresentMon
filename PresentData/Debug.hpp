@@ -49,9 +49,6 @@ void DebugCreatePresent(PresentEvent const& p);
 // Call before modifying any present
 void DebugModifyPresent(PresentEvent const& p);
 
-// Call when completing a present
-void DebugCompletePresent(PresentEvent const& p, int indent);
-
 // Call when a present is lost
 void DebugLostPresent(PresentEvent const& p);
 
@@ -62,7 +59,6 @@ void DebugLostPresent(PresentEvent const& p);
 #define DebugEvent(eventRecord, metadata)                   (void) eventRecord, metadata
 #define DebugCreatePresent(p)                               (void) p
 #define DebugModifyPresent(p)                               (void) p
-#define DebugCompletePresent(p, indent)                     (void) p, indent
 #define DebugLostPresent(p)                                 (void) p
 
 #endif

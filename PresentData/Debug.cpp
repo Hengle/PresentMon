@@ -78,8 +78,8 @@ char* AddCommas(uint64_t t)
 void PrintU32(uint32_t value) { printf("%u", value); }
 void PrintU64(uint64_t value) { printf("%llu", value); }
 void PrintU64x(uint64_t value) { printf("%llx", value); }
-void PrintTime(uint64_t value) { printf("%s", AddCommas(ConvertTimestampToNs(value))); }
-void PrintTimeDelta(uint64_t value) { printf("%s", AddCommas(ConvertTimestampDeltaToNs(value))); }
+void PrintTime(uint64_t value) { printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampToNs(value))); }
+void PrintTimeDelta(uint64_t value) { printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampDeltaToNs(value))); }
 void PrintBool(bool value) { printf("%s", value ? "true" : "false"); }
 void PrintRuntime(Runtime value)
 {
@@ -233,6 +233,17 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintU32,           SyncInterval)
     FLUSH_MEMBER(PrintU32,           PresentFlags)
     FLUSH_MEMBER(PrintU64,           INTC_ID)
+    /*
+    FLUSH_MEMBER(PrintTime,          INTC_AppWorkStart)
+    FLUSH_MEMBER(PrintTime,          INTC_AppSimulationTime)
+    FLUSH_MEMBER(PrintTime,          INTC_DriverWorkStart)
+    FLUSH_MEMBER(PrintTime,          INTC_DriverWorkEnd)
+    FLUSH_MEMBER(PrintTime,          INTC_GPUStart)
+    FLUSH_MEMBER(PrintTime,          INTC_GPUEnd)
+    FLUSH_MEMBER(PrintTime,          INTC_PresentAPICall)
+    FLUSH_MEMBER(PrintU64,           INTC_ScheduledFlipTime)
+    */
+    FLUSH_MEMBER(PrintTime,          INTC_ActualFlipTime)
     FLUSH_MEMBER(PrintU64x,          Hwnd)
     FLUSH_MEMBER(PrintU64x,          TokenPtr)
     FLUSH_MEMBER(PrintTimeDelta,     GPUDuration)
@@ -246,6 +257,7 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintBool,          SeenWin32KEvents)
     FLUSH_MEMBER(PrintBool,          DwmNotified)
     FLUSH_MEMBER(PrintBool,          Completed)
+    FLUSH_MEMBER(PrintBool,          CompletePending)
 #undef FLUSH_MEMBER
     if (changedCount > 0) {
         printf("\n");
@@ -304,16 +316,35 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
             PrintEventHeader(eventRecord, metadata, "INTC_FramePacer_Info", {
                 L"FrameID", PrintU64,
             });
-            printf("                             AppWorkStart      = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));      printf("\n");
-            printf("                             AppSimulationTime = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime")); printf("\n");
-            printf("                             DriverWorkStart   = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));   printf("\n");
-            printf("                             DriverWorkEnd     = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));     printf("\n");
-            printf("                             GPUStart          = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));          printf("\n");
-            printf("                             GPUEnd            = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));            printf("\n");
-            printf("                             PresentAPICall    = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));    printf("\n");
-            printf("                             ScheduledFlipTime = "); printf("0x%llx\n", metadata->GetEventData<uint64_t>(eventRecord, L"ScheduledFlipTime"));
-            printf("                             ScheduledFlipTime = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ScheduledFlipTime")); printf("\n");
-            printf("                             ActualFlipTime    = "); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));    printf("\n");
+#if 0
+            printf("                             AppWorkStart      = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));
+                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));
+                                                                          printf("\n");
+            printf("                             AppSimulationTime = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime"));
+                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime"));
+                                                                          printf("\n");
+            printf("                             DriverWorkStart   = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));
+                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));
+                                                                          printf("\n");
+            printf("                             DriverWorkEnd     = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));
+                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));
+                                                                          printf("\n");
+            printf("                             GPUStart          = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));
+                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));
+                                                                          printf("\n");
+            printf("                             GPUEnd            = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));
+                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));
+                                                                          printf("\n");
+            printf("                             PresentAPICall    = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
+                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
+                                                                          printf("\n");
+            printf("                             ScheduledFlipTime = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"ScheduledFlipTime"));
+                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ScheduledFlipTime"));
+                                                                          printf("\n");
+            printf("                             ActualFlipTime    = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
+                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
+                                                                          printf("\n");
+#endif
             break;
         }
         return;
@@ -445,29 +476,8 @@ void DebugModifyPresent(PresentEvent const& p)
     if (!gDebugTrace) return;
     if (gModifiedPresent != &p) {
         FlushModifiedPresent();
-
         gModifiedPresent = &p;
-
-        gOriginalPresentValues.TimeTaken           = p.TimeTaken;
-        gOriginalPresentValues.ReadyTime           = p.ReadyTime;
-        gOriginalPresentValues.ScreenTime          = p.ScreenTime;
-        gOriginalPresentValues.SwapChainAddress    = p.SwapChainAddress;
-        gOriginalPresentValues.SyncInterval        = p.SyncInterval;
-        gOriginalPresentValues.PresentFlags        = p.PresentFlags;
-        gOriginalPresentValues.INTC_ID             = p.INTC_ID;
-        gOriginalPresentValues.Hwnd                = p.Hwnd;
-        gOriginalPresentValues.TokenPtr            = p.TokenPtr;
-        gOriginalPresentValues.GPUDuration         = p.GPUDuration;
-        gOriginalPresentValues.QueueSubmitSequence = p.QueueSubmitSequence;
-        gOriginalPresentValues.DriverBatchThreadId = p.DriverBatchThreadId;
-        gOriginalPresentValues.PresentMode         = p.PresentMode;
-        gOriginalPresentValues.FinalState          = p.FinalState;
-        gOriginalPresentValues.SupportsTearing     = p.SupportsTearing;
-        gOriginalPresentValues.MMIO                = p.MMIO;
-        gOriginalPresentValues.SeenDxgkPresent     = p.SeenDxgkPresent;
-        gOriginalPresentValues.SeenWin32KEvents    = p.SeenWin32KEvents;
-        gOriginalPresentValues.DwmNotified         = p.DwmNotified;
-        gOriginalPresentValues.Completed           = p.Completed;
+        gOriginalPresentValues = p;
     }
 }
 
@@ -484,19 +494,6 @@ void DebugCreatePresent(PresentEvent const& p)
     PrintRuntime(p.Runtime);
     printf("\n");
 }
-
-void DebugCompletePresent(PresentEvent const& p, int indent)
-{
-    if (!gDebugTrace) return;
-    FlushModifiedPresent();
-    PrintUpdateHeader(p.Id, indent);
-    printf(" Completed=");
-    PrintBool(p.Completed);
-    printf("->");
-    PrintBool(true);
-    printf("\n");
-}
-
 
 void DebugLostPresent(PresentEvent const& p)
 {

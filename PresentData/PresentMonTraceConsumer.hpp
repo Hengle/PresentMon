@@ -121,6 +121,9 @@ struct PresentEvent {
     bool SeenWin32KEvents;
     bool DwmNotified;
     bool Completed;
+    #if DEBUG_VERBOSE
+    bool CompletePending;
+    #endif
 
     // Additional transient tracking state
     bool IsLost;                        // Whether this present has been timed-out, unlikely to ever complete.
@@ -212,14 +215,27 @@ struct PMTraceConsumer
     bool mSeenDxgkPresentInfo = false;
 
     // Store completed presents until the consumer thread removes them using
-    // DequeuePresents().  Completed presents are those that have progressed as
-    // far as they can through the pipeline before being either discarded or
-    // hitting the screen.
+    // Dequeue*PresentEvents().  Completed presents are those that have
+    // determined to be either discarded or displayed.  Lost presents were
+    // found in an unexpected state, likely due to a missed related ETW event.
+    //
+    // If a present received an INTC_ID, then we delay it's completion until we
+    // also see a task_FramePacer_Info event for it.  These should be emitted
+    // during the process' next DXGI Present() call.
+
     std::mutex mPresentEventMutex;
-    std::vector<std::shared_ptr<PresentEvent>> mPresentEvents;
+    std::vector<std::shared_ptr<PresentEvent>> mCompletePresentEvents;
 
     std::mutex mLostPresentEventMutex;
     std::vector<std::shared_ptr<PresentEvent>> mLostPresentEvents;
+
+    struct PendingCompletions {
+        std::vector<std::shared_ptr<PresentEvent>> mPresents;
+        size_t mCountAtPresentStart;
+    };
+
+    // [Process ID] => PendingCompletions
+    std::unordered_map<uint32_t, PendingCompletions> mPresentsToCompleteAfterNextPresent;
 
     // Process events
     std::mutex mProcessEventMutex;
@@ -386,7 +402,7 @@ struct PMTraceConsumer
     void DequeuePresentEvents(std::vector<std::shared_ptr<PresentEvent>>& outPresentEvents)
     {
         std::lock_guard<std::mutex> lock(mPresentEventMutex);
-        outPresentEvents.swap(mPresentEvents);
+        outPresentEvents.swap(mCompletePresentEvents);
     }
 
     void DequeueLostPresentEvents(std::vector<std::shared_ptr<PresentEvent>>& outPresentEvents)
@@ -406,7 +422,7 @@ struct PMTraceConsumer
     void HandleDxgkPresentHistory(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, PresentMode knownPresentMode);
     void HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint64_t token);
 
-    void CompletePresent(std::shared_ptr<PresentEvent> p, uint32_t recurseDepth=0);
+    void CompletePresent(std::shared_ptr<PresentEvent> p);
     std::shared_ptr<PresentEvent> FindBySubmitSequence(uint32_t submitSequence);
     std::shared_ptr<PresentEvent> FindOrCreatePresent(EVENT_HEADER const& hdr);
     void TrackPresentOnThread(std::shared_ptr<PresentEvent> present);
