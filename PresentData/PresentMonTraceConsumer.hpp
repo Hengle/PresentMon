@@ -83,7 +83,8 @@ struct PresentEvent {
 
     // Timestamps observed during present pipeline
     uint64_t TimeTaken;     // QPC duration between runtime present start and end
-    uint64_t ReadyTime;     // QPC value when the last GPU commands completed prior to presentation
+    uint64_t GPUStartTime;  // QPC value when the frame's first DMA packet started
+    uint64_t ReadyTime;     // QPC value when the frame's last DMA packet completed
     uint64_t ScreenTime;    // QPC value when the present was displayed on screen
 
     // Extra present parameters obtained through DXGI or D3D9 present
@@ -107,7 +108,7 @@ struct PresentEvent {
     uint64_t Hwnd;
     uint64_t TokenPtr;
     uint64_t CompositionSurfaceLuid;
-    uint64_t GPUDuration;            // Time during which DMA packet was running (0 if !mTrackGPU)
+    uint64_t GPUDuration;            // Time during which a frame's DMA packet was running on any node
     uint32_t QueueSubmitSequence;    // Submit sequence for the Present packet
     uint32_t DestWidth;
     uint32_t DestHeight;
@@ -173,7 +174,7 @@ private:
 //   [-> VSyncDPC or HSyncDPC (by submit sequence, for screen time)]
 //
 // Hardware Composed Independent Flip:
-//   Identical to hardware independent flip, but MMIOFlipMPO is received instead of MMIOFlip
+//   Identical to hardware independent flip, but VSyncDPCMPO and HSyncDPCMPO contains more than one valid plane and SubmitSequence.
 //
 // Composed Copy with GPU GDI (a.k.a. Win7 Blit):
 //   Runtime PresentStart -> DxgKrnl_Blit (by thread/process, for classification) ->
@@ -367,6 +368,7 @@ struct PMTraceConsumer
     // Tracking for GPU work contributing to each frame.  We need to track DMA
     // packet queuing to know how when each DMA packet actually ran.
     struct DmaDuration {
+        uint64_t mFirstDmaTime;         // QPC when the first DMA packet started
         uint64_t mAccumulatedDmaTime;   // QPC duration that at least one DMA packet was running
         uint64_t mDmaExecStartTime;     // QPC when the oldest running DMA packet started
         uint32_t mDmaExecCount;         // Number of running DMA packets
@@ -418,7 +420,7 @@ struct PMTraceConsumer
     void HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t submitSequence);
     void HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flags);
     void HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid);
-    void HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence);
+    void HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, bool isMultiplane);
     void HandleDxgkPresentHistory(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, PresentMode knownPresentMode);
     void HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint64_t token);
 

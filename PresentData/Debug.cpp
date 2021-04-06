@@ -227,6 +227,7 @@ void FlushModifiedPresent()
         _Fn(gModifiedPresent->_Name); \
     }
     FLUSH_MEMBER(PrintTimeDelta,     TimeTaken)
+    FLUSH_MEMBER(PrintTime,          GPUStartTime)
     FLUSH_MEMBER(PrintTime,          ReadyTime)
     FLUSH_MEMBER(PrintTime,          ScreenTime)
     FLUSH_MEMBER(PrintU64x,          SwapChainAddress)

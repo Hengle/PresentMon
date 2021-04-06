@@ -228,21 +228,21 @@ FILE* CreateLsrCsvFile(char const* path)
     }
     fprintf(fp, ",TimeInSeconds");
     if (args.mTrackDisplay) {
-        fprintf(fp, ",MsBetweenAppPresents,MsAppPresentToLsr");
+        fprintf(fp, ",msBetweenAppPresents,msAppPresentToLsr");
     }
-    fprintf(fp, ",MsBetweenLsrs,AppMissed,LsrMissed");
+    fprintf(fp, ",msBetweenLsrs,AppMissed,LsrMissed");
     if (args.mTrackDebug) {
-        fprintf(fp, ",MsSourceReleaseFromRenderingToLsrAcquire,MsAppCpuRenderFrame");
+        fprintf(fp, ",msSourceReleaseFromRenderingToLsrAcquire,msAppCpuRenderFrame");
     }
-    fprintf(fp, ",MsAppPoseLatency");
+    fprintf(fp, ",msAppPoseLatency");
     if (args.mTrackDebug) {
-        fprintf(fp, ",MsAppMisprediction,MsLsrCpuRenderFrame");
+        fprintf(fp, ",msAppMisprediction,msLsrCpuRenderFrame");
     }
-    fprintf(fp, ",MsLsrPoseLatency,MsActualLsrPoseLatency,MsTimeUntilVsync,MsLsrThreadWakeupToGpuEnd,MsLsrThreadWakeupError");
+    fprintf(fp, ",msLsrPoseLatency,msActualLsrPoseLatency,msTimeUntilVsync,msLsrThreadWakeupToGpuEnd,msLsrThreadWakeupError");
     if (args.mTrackDebug) {
-        fprintf(fp, ",MsLsrThreadWakeupToCpuRenderFrameStart,MsCpuRenderFrameStartToHeadPoseCallbackStart,MsGetHeadPose,MsHeadPoseCallbackStopToInputLatch,MsInputLatchToGpuSubmission");
+        fprintf(fp, ",msLsrThreadWakeupToCpuRenderFrameStart,msCpuRenderFrameStartToHeadPoseCallbackStart,msGetHeadPose,msHeadPoseCallbackStopToInputLatch,msInputLatchToGpuSubmission");
     }
-    fprintf(fp, ",MsLsrPreemption,MsLsrExecution,MsCopyPreemption,MsCopyExecution,MsGpuEndToVsync");
+    fprintf(fp, ",msLsrPreemption,msLsrExecution,msCopyPreemption,msCopyExecution,msGpuEndToVsync");
     fprintf(fp, "\n");
 
     return fp;

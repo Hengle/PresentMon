@@ -76,15 +76,15 @@ static void WriteCsvHeader(FILE* fp)
         ",PresentFlags"
         ",Dropped"
         ",TimeInSeconds"
-        ",MsInPresentAPI"
-        ",MsBetweenPresents");
+        ",msInPresentAPI"
+        ",msBetweenPresents");
     if (args.mTrackDisplay) {
         fprintf(fp,
             ",AllowsTearing"
             ",PresentMode"
-            ",MsUntilRenderComplete"
-            ",MsUntilDisplayed"
-            ",MsBetweenDisplayChange");
+            ",msUntilRenderComplete"
+            ",msUntilDisplayed"
+            ",msBetweenDisplayChange");
     }
     if (args.mTrackDebug) {
         fprintf(fp,
@@ -92,7 +92,9 @@ static void WriteCsvHeader(FILE* fp)
             ",DwmNotified");
     }
     if (args.mTrackGPU) {
-        fprintf(fp, ",GPUDuration");
+        fprintf(fp,
+            ",msUntilRenderStarts"
+            ",msGPUActive");
     }
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
@@ -138,10 +140,10 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double timeInSeconds          = QpcToSeconds(p.QpcTime);
     double msBetweenPresents      = 1000.0 * QpcDeltaToSeconds(p.QpcTime - lastPresented->QpcTime);
     double msInPresentApi         = 1000.0 * QpcDeltaToSeconds(p.TimeTaken);
+    double msUntilRenderStart     = 0.0;
     double msUntilRenderComplete  = 0.0;
     double msUntilDisplayed       = 0.0;
     double msBetweenDisplayChange = 0.0;
-    double msGPUDuration          = 0.0;
 
     if (args.mTrackDisplay) {
         if (p.ReadyTime > 0) {
@@ -158,7 +160,13 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     }
 
     if (args.mTrackGPU) {
-        msGPUDuration = 1000.0 * QpcDeltaToSeconds(p.GPUDuration);
+        if (p.GPUStartTime != 0) {
+            if (p.GPUStartTime < p.QpcTime) {
+                msUntilRenderStart = -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.GPUStartTime);
+            } else {
+                msUntilRenderStart = 1000.0 * QpcDeltaToSeconds(p.GPUStartTime - p.QpcTime);
+            }
+        }
     }
 
     // Temporary calculation while debugging.  All timestamps should be after QpcTime.
@@ -217,8 +225,9 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             p.DwmNotified);
     }
     if (args.mTrackGPU) {
-        fprintf(fp, ",%lf",
-            msGPUDuration);
+        fprintf(fp, ",%lf,%lf",
+            msUntilRenderStart,
+            1000.0 * QpcDeltaToSeconds(p.GPUDuration));
     }
     if (args.mOutputQpcTime) {
         if (args.mOutputQpcTimeInSeconds) {

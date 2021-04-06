@@ -72,6 +72,7 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , ProcessId(hdr.ProcessId)
     , ThreadId(hdr.ThreadId)
     , TimeTaken(0)
+    , GPUStartTime(0)
     , ReadyTime(0)
     , ScreenTime(0)
     , SwapChainAddress(0)
@@ -454,6 +455,7 @@ static PMTraceConsumer::DmaDuration* CreateDmaDuration(
     auto p = dmaDurations->emplace(processId, PMTraceConsumer::DmaDuration());
     auto dmaDuration = &p.first->second;
     if (p.second) {
+        dmaDuration->mFirstDmaTime = 0;
         dmaDuration->mAccumulatedDmaTime = 0;
         dmaDuration->mDmaExecStartTime = 0;
         dmaDuration->mDmaExecCount = 0;
@@ -528,20 +530,15 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
 
 void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t submitSequence)
 {
-    // Check if this is a present Packet being tracked, and if so get the
-    // relevant PresentEvent.
+    // Check if this is a present Packet being tracked...
     auto pEvent = FindBySubmitSequence(submitSequence);
     if (pEvent == nullptr) {
         return;
     }
 
     TRACK_PRESENT_PATH_SAVE_GENERATED_ID(pEvent);
-    DebugModifyPresent(*pEvent);
 
     // Assign any tracked accumulated GPU work to the present.
-    //
-    // If there are any DMA's executing across the present completion,
-    // assign their current duration to this present.
     //
     // mDmaDurations should be empty if mTrackGPU==false.
     //
@@ -553,18 +550,27 @@ void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t 
     auto dmaIter = mDmaDurations.find(pEvent->ProcessId);
     if (dmaIter != mDmaDurations.end()) {
         auto dmaDuration = &dmaIter->second;
+
+        DebugModifyPresent(*pEvent);
+        pEvent->GPUStartTime = dmaDuration->mFirstDmaTime;
+        pEvent->GPUDuration = dmaDuration->mAccumulatedDmaTime;
+        dmaDuration->mFirstDmaTime = 0;
+        dmaDuration->mAccumulatedDmaTime = 0;
+
+        // If there are any DMA's executing across the present completion,
+        // split their contribution across the two frames.
         if (dmaDuration->mDmaExecCount > 0) {
-            dmaDuration->mAccumulatedDmaTime += hdr.TimeStamp.QuadPart - dmaDuration->mDmaExecStartTime;
+            pEvent->GPUDuration += hdr.TimeStamp.QuadPart - dmaDuration->mDmaExecStartTime;
+            dmaDuration->mFirstDmaTime = hdr.TimeStamp.QuadPart;
             dmaDuration->mDmaExecStartTime = hdr.TimeStamp.QuadPart;
         }
-        pEvent->GPUDuration = dmaDuration->mAccumulatedDmaTime;
-        dmaDuration->mAccumulatedDmaTime = 0;
     }
 
-    // Complete the present for present modes for which packet completion
-    // implies display.
+    // If this is one of the present modes for which packet completion implies
+    // display, then complete the present now.
     if (pEvent->PresentMode == PresentMode::Hardware_Legacy_Copy_To_Front_Buffer ||
         (pEvent->PresentMode == PresentMode::Hardware_Legacy_Flip && !pEvent->MMIO)) {
+        DebugModifyPresent(*pEvent);
         pEvent->ReadyTime = hdr.TimeStamp.QuadPart;
         pEvent->ScreenTime = hdr.TimeStamp.QuadPart;
         pEvent->FinalState = PresentResult::Presented;
@@ -626,11 +632,6 @@ void PMTraceConsumer::HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t fl
         pEvent->ReadyTime = hdr.TimeStamp.QuadPart;
     }
 
-    if (pEvent->PresentMode == PresentMode::Hardware_Independent_Flip ||
-        pEvent->PresentMode == PresentMode::Composed_Flip) {
-        pEvent->PresentMode = PresentMode::Hardware_Composed_Independent_Flip;
-    }
-
     if (!flipEntryStatusAfterFlipValid) {
         return;
     }
@@ -661,7 +662,7 @@ void PMTraceConsumer::HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t fl
     }
 }
 
-void PMTraceConsumer::HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence)
+void PMTraceConsumer::HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, bool isMultiPlane)
 {
     // The VSyncDPC/HSyncDPC contains a field telling us what flipped to screen.
     // This is the way to track completion of a fullscreen present.
@@ -672,7 +673,15 @@ void PMTraceConsumer::HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSu
 
     TRACK_PRESENT_PATH_SAVE_GENERATED_ID(pEvent);
 
-    // Prevent double-complete when VSyncDPCMultiPlane and VSyncDPC are both sent for a plane.
+    if (isMultiPlane &&
+        (pEvent->PresentMode == PresentMode::Hardware_Independent_Flip || pEvent->PresentMode == PresentMode::Composed_Flip)) {
+        pEvent->PresentMode = PresentMode::Hardware_Composed_Independent_Flip;
+    }
+
+    // VSyncDPC and VSyncDPCMultiPlaneOverlay are both sent, with VSyncDPC only including flipSubmitSequence for one layer.
+    // VSyncDPCMultiPlaneOverlay is sent afterward and contains info on whether this vsync/hsync contains an overlay.
+    // So we should avoid updating ScreenTime and FinalState with the second event, but update isMultiPlane with the 
+    // correct information when we have them.
     if (pEvent->FinalState != PresentResult::Presented) {
         pEvent->ScreenTime = hdr.TimeStamp.QuadPart;
         pEvent->FinalState = PresentResult::Presented;
@@ -717,6 +726,10 @@ void PMTraceConsumer::HandleDxgkPresentHistory(
     presentEvent->FinalState = PresentResult::Unknown;
     presentEvent->TokenPtr = token;
 
+    auto iter = mDxgKrnlPresentHistoryTokens.find(token);
+    if (iter != mDxgKrnlPresentHistoryTokens.end()) {
+        RemoveLostPresent(iter->second);
+    }
     assert(mDxgKrnlPresentHistoryTokens.find(token) == mDxgKrnlPresentHistoryTokens.end());
     mDxgKrnlPresentHistoryTokens[token] = presentEvent;
 
@@ -745,6 +758,12 @@ void PMTraceConsumer::HandleDxgkPresentHistory(
             mPresentsByLegacyBlitToken[tokenData] = presentEvent;
             presentEvent->LegacyBlitTokenData = tokenData;
         }
+    }
+
+    // If we are not tracking further GPU/display-related events, complete the
+    // present here.
+    if (!mTrackDisplay) {
+        CompletePresent(presentEvent);
     }
 }
 
@@ -822,17 +841,9 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         return;
     }
     case Microsoft_Windows_DxgKrnl::QueuePacket_Stop::Id:
-    {
-        EventDataDesc desc[] = {
-            { L"SubmitSequence" },
-        };
-        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-        auto SubmitSequence = desc[0].GetData<uint32_t>();
-
         TRACK_PRESENT_PATH_GENERATE_ID();
-        HandleDxgkQueueComplete(hdr, SubmitSequence);
+        HandleDxgkQueueComplete(hdr, mMetadata.GetEventData<uint32_t>(pEventRecord, L"SubmitSequence"));
         return;
-    }
     case Microsoft_Windows_DxgKrnl::MMIOFlip_Info::Id:
     {
         EventDataDesc desc[] = {
@@ -863,41 +874,53 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         HandleDxgkMMIOFlipMPO(hdr, flipSubmitSequence, FlipEntryStatusAfterFlip, flipEntryStatusAfterFlipValid);
         return;
     }
+    case Microsoft_Windows_DxgKrnl::VSyncDPCMultiPlane_Info::Id:
     case Microsoft_Windows_DxgKrnl::HSyncDPCMultiPlane_Info::Id:
     {
-        // Used for Hardware Independent Flip, and Hardware Composed Flip to signal flipping to the screen 
-        // on Windows 10 build numbers 17134 and up where the associated display is connected to 
-        // integrated graphics
-        // MMIOFlipMPO [EntryStatus:FlipWaitHSync] ->HSync DPC
+        // HSync is used for Hardware Independent Flip, and Hardware Composed
+        // Flip to signal flipping to the screen on Windows 10 build numbers
+        // 17134 and up where the associated display is connected to integrated
+        // graphics
+        //
+        // MMIOFlipMPO [EntryStatus:FlipWaitHSync] -> HSync DPC
 
         TRACK_PRESENT_PATH_GENERATE_ID();
 
-        auto FlipCount = mMetadata.GetEventData<uint32_t>(pEventRecord, L"FlipEntryCount");
+        EventDataDesc desc[] = {
+            { L"PlaneCount" },
+            { L"FlipEntryCount" },
+        };
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        auto PlaneCount = desc[0].GetData<uint32_t>();
+        auto FlipCount  = desc[1].GetData<uint32_t>();
+
+        // The number of active planes is determined by the number of non-zero
+        // PresentIdOrPhysicalAddress (VSync) or ScannedPhysicalAddress (HSync)
+        // properties.
+        auto addressPropName = (hdr.EventDescriptor.Id == Microsoft_Windows_DxgKrnl::VSyncDPCMultiPlane_Info::Id && hdr.EventDescriptor.Version >= 1)
+            ? L"PresentIdOrPhysicalAddress"
+            : L"ScannedPhysicalAddress";
+
+        uint32_t activePlaneCount = 0;
+        for (uint32_t id = 0; id < PlaneCount; id++) {
+            if (mMetadata.GetEventData<uint64_t>(pEventRecord, addressPropName, id) != 0) {
+                activePlaneCount++;
+            }
+        }
+
+        auto isMultiPlane = activePlaneCount > 1;
         for (uint32_t i = 0; i < FlipCount; i++) {
-            // TODO: Combine these into single GetEventData() call?
             auto FlipId = mMetadata.GetEventData<uint64_t>(pEventRecord, L"FlipSubmitSequence", i);
-            HandleDxgkSyncDPC(hdr, (uint32_t)(FlipId >> 32u));
+            HandleDxgkSyncDPC(hdr, (uint32_t)(FlipId >> 32u), isMultiPlane);
         }
         return;
-    }
-    case Microsoft_Windows_DxgKrnl::VSyncDPCMultiPlane_Info::Id:
-    {
-        TRACK_PRESENT_PATH_GENERATE_ID();
-
-        auto FlipCount = mMetadata.GetEventData<uint32_t>(pEventRecord, L"FlipEntryCount");
-        for (uint32_t i = 0; i < FlipCount; i++) {
-            // TODO: Combine these into single GetEventData() call?
-            auto FlipId = mMetadata.GetEventData<uint64_t>(pEventRecord, L"FlipSubmitSequence", i);
-            HandleDxgkSyncDPC(hdr, (uint32_t)(FlipId >> 32u));
-        }
-        break;
     }
     case Microsoft_Windows_DxgKrnl::VSyncDPC_Info::Id:
     {
         TRACK_PRESENT_PATH_GENERATE_ID();
 
         auto FlipFenceId = mMetadata.GetEventData<uint64_t>(pEventRecord, L"FlipFenceId");
-        HandleDxgkSyncDPC(hdr, (uint32_t)(FlipFenceId >> 32u));
+        HandleDxgkSyncDPC(hdr, (uint32_t)(FlipFenceId >> 32u), false);
         return;
     }
     case Microsoft_Windows_DxgKrnl::Present_Info::Id:
@@ -922,7 +945,6 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             // the end of the present.  This can happen due to batched presents or
             // non-instrumented present APIs (i.e., not DXGI nor D3D9).
             if (present->ThreadId != hdr.ThreadId) {
-                present->DriverBatchThreadId = hdr.ThreadId;
                 if (present->TimeTaken == 0) {
                     present->TimeTaken = hdr.TimeStamp.QuadPart - present->QpcTime;
                 }
@@ -1182,7 +1204,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 if (node->mQueueCount == _countof(Node::mSequenceId)) {
                     // mSequenceId array is too small (or, DmaPacket_Info
                     // events didn't fire for some reason).  This seems to always
-                    // hit when an application closes... no sure why yet.
+                    // hit when an application closes...
                     return;
                 }
 
@@ -1191,6 +1213,11 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 node->mDmaDuration[queueIndex] = dmaDuration;
                 node->mSequenceId[queueIndex] = SequenceId;
                 node->mQueueCount += 1;
+
+                // Note the starting time of the first DMA packet
+                if (dmaDuration->mFirstDmaTime == 0) {
+                    dmaDuration->mFirstDmaTime = hdr.TimeStamp.QuadPart;
+                }
 
                 // If the queue was empty, the packet starts running right
                 // away, otherwise it is just enqueued and will start running
@@ -1504,7 +1531,9 @@ void PMTraceConsumer::HandleWin7DxgkVSyncDPC(EVENT_RECORD* pEventRecord)
     TRACK_PRESENT_PATH_GENERATE_ID();
 
     auto pVSyncDPCEvent = reinterpret_cast<Win7::DXGKETW_SCHEDULER_VSYNC_DPC*>(pEventRecord->UserData);
-    HandleDxgkSyncDPC(pEventRecord->EventHeader, (uint32_t)(pVSyncDPCEvent->FlipFenceId.QuadPart >> 32u));
+
+    // Windows 7 does not support MultiPlaneOverlay.
+    HandleDxgkSyncDPC(pEventRecord->EventHeader, (uint32_t)(pVSyncDPCEvent->FlipFenceId.QuadPart >> 32u), false);
 }
 
 void PMTraceConsumer::HandleWin7DxgkMMIOFlip(EVENT_RECORD* pEventRecord)
@@ -1928,8 +1957,8 @@ void PMTraceConsumer::CompletePresent(std::shared_ptr<PresentEvent> p)
     }
 
     // Throw away events until we've seen at least one Dxgk PresentInfo event
-    // (unless we're not tracking display in which case we don't enable Dxgk
-    // provider)
+    // (unless we're not tracking display in which case provider start order
+    // is not an issue)
     if (mTrackDisplay && !mSeenDxgkPresentInfo) {
         RemoveLostPresent(p);
         return;
@@ -2036,6 +2065,9 @@ std::shared_ptr<PresentEvent> PMTraceConsumer::FindOrCreatePresent(EVENT_HEADER 
     });
     if (processIter != presentsByThisProcess.end()) {
         auto presentEvent = processIter->second;
+        assert(presentEvent->DriverBatchThreadId == 0);
+        DebugModifyPresent(*presentEvent);
+        presentEvent->DriverBatchThreadId = hdr.ThreadId;
         mPresentByThreadId.emplace(hdr.ThreadId, presentEvent);
         return presentEvent;
     }
