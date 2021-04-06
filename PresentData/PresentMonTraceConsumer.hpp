@@ -158,7 +158,7 @@ private:
 //   [-> VSyncDPC or HSyncDPC (by submit sequence, for screen time)]
 //
 // Hardware Composed Independent Flip:
-//   Identical to hardware independent flip, but MMIOFlipMPO is received instead of MMIOFlip
+//   Identical to hardware independent flip, but VSyncDPCMPO and HSyncDPCMPO contains more than one valid plane and SubmitSequence.
 //
 // Composed Copy with GPU GDI (a.k.a. Win7 Blit):
 //   Runtime PresentStart -> DxgKrnl_Blit (by thread/process, for classification) ->
@@ -200,11 +200,11 @@ struct PMTraceConsumer
     bool mSeenDxgkPresentInfo = false;
 
     // Store completed presents until the consumer thread removes them using
-    // DequeuePresents().  Completed presents are those that have progressed as
-    // far as they can through the pipeline before being either discarded or
-    // hitting the screen.
+    // Dequeue*PresentEvents().  Completed presents are those that have
+    // determined to be either discarded or displayed.  Lost presents were
+    // found in an unexpected state, likely due to a missed related ETW event.
     std::mutex mPresentEventMutex;
-    std::vector<std::shared_ptr<PresentEvent>> mPresentEvents;
+    std::vector<std::shared_ptr<PresentEvent>> mCompletePresentEvents;
 
     std::mutex mLostPresentEventMutex;
     std::vector<std::shared_ptr<PresentEvent>> mLostPresentEvents;
@@ -374,7 +374,7 @@ struct PMTraceConsumer
     void DequeuePresentEvents(std::vector<std::shared_ptr<PresentEvent>>& outPresentEvents)
     {
         std::lock_guard<std::mutex> lock(mPresentEventMutex);
-        outPresentEvents.swap(mPresentEvents);
+        outPresentEvents.swap(mCompletePresentEvents);
     }
 
     void DequeueLostPresentEvents(std::vector<std::shared_ptr<PresentEvent>>& outPresentEvents)
@@ -390,7 +390,7 @@ struct PMTraceConsumer
     void HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t submitSequence);
     void HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flags);
     void HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid);
-    void HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence);
+    void HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, bool isMultiplane);
     void HandleDxgkPresentHistory(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, PresentMode knownPresentMode);
     void HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint64_t token);
 
