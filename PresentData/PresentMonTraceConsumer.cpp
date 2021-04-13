@@ -85,6 +85,9 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , INTC_DriverWorkEnd(0)
     , INTC_GPUStart(0)
     , INTC_GPUEnd(0)
+    , INTC_KernelDriverSubmitStart(0)
+    , INTC_KernelDriverSubmitEnd(0)
+    , INTC_KernelDriverFenceReport(0)
     , INTC_PresentAPICall(0)
     , INTC_ScheduledFlipTime(0)
     , INTC_ActualFlipTime(0)
@@ -174,8 +177,11 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             { L"GPUStart" },
             { L"GPUEnd" },
             { L"PresentAPICall" },
-            { L"ScheduledFlipTime" },
+            { L"TargetFrameTime" }, // { L"ScheduledFlipTime" },
             { L"ActualFlipTime" },
+            { L"KernelDriverSubmitStart" },
+            { L"KernelDriverSubmitEnd" },
+            { L"KernelDriverFenceReport" },
         };
         mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
         auto FrameID           = desc[0].GetData<uint64_t>();
@@ -188,6 +194,9 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         auto PresentAPICall    = desc[7].GetData<uint64_t>();
         auto ScheduledFlipTime = desc[8].GetData<uint64_t>();
         auto ActualFlipTime    = desc[9].GetData<uint64_t>();
+        auto KernelDriverSubmitStart = desc[10].GetData<uint64_t>();
+        auto KernelDriverSubmitEnd   = desc[11].GetData<uint64_t>();
+        auto KernelDriverFenceReport = desc[12].GetData<uint64_t>();
 
         // Search for the present in the pending completions first, as that is
         // the most likely location.
@@ -223,6 +232,9 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             present->INTC_PresentAPICall    = PresentAPICall;
             present->INTC_ScheduledFlipTime = ScheduledFlipTime;
             present->INTC_ActualFlipTime    = ActualFlipTime;
+            present->INTC_KernelDriverSubmitStart = KernelDriverSubmitStart;
+            present->INTC_KernelDriverSubmitEnd   = KernelDriverSubmitEnd;
+            present->INTC_KernelDriverFenceReport = KernelDriverFenceReport;
         }
         break;
     }

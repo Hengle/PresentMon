@@ -103,6 +103,9 @@ struct PresentEvent {
     uint64_t INTC_PresentAPICall;
     uint64_t INTC_ScheduledFlipTime;
     uint64_t INTC_ActualFlipTime;
+    uint64_t INTC_KernelDriverSubmitStart;
+    uint64_t INTC_KernelDriverSubmitEnd;
+    uint64_t INTC_KernelDriverFenceReport;
 
     // Properties deduced by watching events through present pipeline
     uint64_t Hwnd;

@@ -51,8 +51,8 @@ enum class Channel : uint8_t {
     static Keyword  const Keyword = (Keyword) keyword_; \
 };
 
-EVENT_DESCRIPTOR_DECL(task_FramePacer_Info,     0x0013, 0x00, 0x10, 0x00, 0x00, 0x0006, 0x8000000000000010)
-EVENT_DESCRIPTOR_DECL(task_DdiPresentDXGI_Info, 0x0536, 0x00, 0x10, 0x00, 0x00, 0x0038, 0x8000000000000010)
+EVENT_DESCRIPTOR_DECL(task_FramePacer_Info,     0x0013, 0x00, 0x10, 0x00, 0x00, 0x0006, 0x0000000000000010)
+EVENT_DESCRIPTOR_DECL(task_DdiPresentDXGI_Info, 0x0014, 0x00, 0x10, 0x00, 0x00, 0x0038, 0x0000000000000010)
 
 #undef EVENT_DESCRIPTOR_DECL
 

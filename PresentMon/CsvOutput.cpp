@@ -109,6 +109,9 @@ static void WriteCsvHeader(FILE* fp)
     fprintf(fp, ",INTC_PresentAPICall");
     fprintf(fp, ",INTC_ScheduledFlipTime");
     fprintf(fp, ",INTC_ActualFlipTime");
+    fprintf(fp, ",INTC_KernelDriverSubmitStart");
+    fprintf(fp, ",INTC_KernelDriverSubmitEnd");
+    fprintf(fp, ",INTC_KernelDriverFenceReport");
     fprintf(fp, "\n");
 }
 
@@ -199,6 +202,20 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
                                   p.INTC_ActualFlipTime    >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_ActualFlipTime    - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_ActualFlipTime);
 
+    auto INTC_KernelDriverSubmitStart =
+        p.INTC_KernelDriverSubmitStart == 0 ? 0.0 :
+        p.INTC_KernelDriverSubmitStart >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_KernelDriverSubmitStart          - p.QpcTime) :
+                                                     -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_KernelDriverSubmitStart);
+    auto INTC_KernelDriverSubmitEnd =
+        p.INTC_KernelDriverSubmitEnd   == 0 ? 0.0 :
+        p.INTC_KernelDriverSubmitEnd   >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_KernelDriverSubmitEnd            - p.QpcTime) :
+                                                     -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_KernelDriverSubmitEnd);
+
+    auto INTC_KernelDriverFenceReport =
+        p.INTC_KernelDriverFenceReport == 0 ? 0.0 :
+        p.INTC_KernelDriverFenceReport >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_KernelDriverFenceReport            - p.QpcTime) :
+                                                     -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_KernelDriverFenceReport);
+
     // Output in CSV format
     fprintf(fp, "%s,%d,0x%016llX,%s,%d,%d,%s,%lf,%lf,%lf",
         processInfo->mModuleName.c_str(),
@@ -246,6 +263,9 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     fprintf(fp, ",%lf", INTC_PresentAPICall);
     fprintf(fp, ",%lf", INTC_ScheduledFlipTime);
     fprintf(fp, ",%lf", INTC_ActualFlipTime);
+    fprintf(fp, ",%lf", INTC_KernelDriverSubmitStart);
+    fprintf(fp, ",%lf", INTC_KernelDriverSubmitEnd);
+    fprintf(fp, ",%lf", INTC_KernelDriverFenceReport);
     fprintf(fp, "\n");
 }
 
