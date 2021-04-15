@@ -101,7 +101,7 @@ struct PresentEvent {
     uint64_t INTC_GPUStart;
     uint64_t INTC_GPUEnd;
     uint64_t INTC_PresentAPICall;
-    uint64_t INTC_ScheduledFlipTime;
+    uint64_t INTC_TargetFrameTime;
     uint64_t INTC_ActualFlipTime;
     uint64_t INTC_KernelDriverSubmitStart;
     uint64_t INTC_KernelDriverSubmitEnd;

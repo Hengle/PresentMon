@@ -89,7 +89,7 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , INTC_KernelDriverSubmitEnd(0)
     , INTC_KernelDriverFenceReport(0)
     , INTC_PresentAPICall(0)
-    , INTC_ScheduledFlipTime(0)
+    , INTC_TargetFrameTime(0)
     , INTC_ActualFlipTime(0)
     , Hwnd(0)
     , TokenPtr(0)
@@ -177,7 +177,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             { L"GPUStart" },
             { L"GPUEnd" },
             { L"PresentAPICall" },
-            { L"TargetFrameTime" }, // { L"ScheduledFlipTime" },
+            { L"TargetFrameTime" },
             { L"ActualFlipTime" },
             { L"KernelDriverSubmitStart" },
             { L"KernelDriverSubmitEnd" },
@@ -192,7 +192,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         auto GPUStart          = desc[5].GetData<uint64_t>();
         auto GPUEnd            = desc[6].GetData<uint64_t>();
         auto PresentAPICall    = desc[7].GetData<uint64_t>();
-        auto ScheduledFlipTime = desc[8].GetData<uint64_t>();
+        auto TargetFrameTime   = desc[8].GetData<uint64_t>();
         auto ActualFlipTime    = desc[9].GetData<uint64_t>();
         auto KernelDriverSubmitStart = desc[10].GetData<uint64_t>();
         auto KernelDriverSubmitEnd   = desc[11].GetData<uint64_t>();
@@ -230,7 +230,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             present->INTC_GPUStart          = GPUStart;
             present->INTC_GPUEnd            = GPUEnd;
             present->INTC_PresentAPICall    = PresentAPICall;
-            present->INTC_ScheduledFlipTime = ScheduledFlipTime;
+            present->INTC_TargetFrameTime   = TargetFrameTime;
             present->INTC_ActualFlipTime    = ActualFlipTime;
             present->INTC_KernelDriverSubmitStart = KernelDriverSubmitStart;
             present->INTC_KernelDriverSubmitEnd   = KernelDriverSubmitEnd;

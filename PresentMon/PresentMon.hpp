@@ -134,7 +134,7 @@ void WaitForConsumerThreadToExit();
 void IncrementRecordingCount();
 OutputCsv GetOutputCsv(ProcessInfo* processInfo);
 void CloseOutputCsv(ProcessInfo* processInfo);
-void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEvent const& p);
+void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEvent* p);
 const char* FinalStateToDroppedString(PresentResult res);
 const char* PresentModeToString(PresentMode mode);
 const char* RuntimeToString(Runtime rt);

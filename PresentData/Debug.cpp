@@ -242,7 +242,7 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintTime,          INTC_GPUStart)
     FLUSH_MEMBER(PrintTime,          INTC_GPUEnd)
     FLUSH_MEMBER(PrintTime,          INTC_PresentAPICall)
-    FLUSH_MEMBER(PrintU64,           INTC_ScheduledFlipTime)
+    FLUSH_MEMBER(PrintU64,           INTC_TargetFrameTime)
     */
     FLUSH_MEMBER(PrintTime,          INTC_ActualFlipTime)
     FLUSH_MEMBER(PrintU64x,          Hwnd)
@@ -339,8 +339,8 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
             printf("                             PresentAPICall    = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
                                                                           PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
                                                                           printf("\n");
-            printf("                             ScheduledFlipTime = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"ScheduledFlipTime"));
-                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ScheduledFlipTime"));
+            printf("                             TargetFrameTime   = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"TargetFrameTime"));
+                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"TargetFrameTime"));
                                                                           printf("\n");
             printf("                             ActualFlipTime    = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
                                                                           PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));

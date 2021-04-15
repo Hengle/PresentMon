@@ -115,9 +115,10 @@ static void WriteCsvHeader(FILE* fp)
     fprintf(fp, "\n");
 }
 
-void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEvent const& p)
+void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEvent* pp)
 {
     auto const& args = GetCommandLineArgs();
+    auto const& p = *pp;
 
     // Don't output dropped frames (if requested).
     auto presented = p.FinalState == PresentResult::Presented;
@@ -172,7 +173,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
         }
     }
 
-    // Temporary calculation while debugging.  All timestamps should be after QpcTime.
+    // Temporary calculation while debugging.  Allow timestamps to be before or after QpcTime for now.
     auto INTC_AppWorkStart      = p.INTC_AppWorkStart      == 0 ? 0.0 :
                                   p.INTC_AppWorkStart      >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_AppWorkStart      - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_AppWorkStart);
@@ -194,13 +195,24 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     auto INTC_PresentAPICall    = p.INTC_PresentAPICall    == 0 ? 0.0 :
                                   p.INTC_PresentAPICall    >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_PresentAPICall    - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_PresentAPICall);
-    auto INTC_ScheduledFlipTime = p.INTC_ScheduledFlipTime == 0 ? 0.0 :
-                                  p.INTC_ScheduledFlipTime >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_ScheduledFlipTime - p.QpcTime) :
-                                                                         -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_ScheduledFlipTime);
-
     auto INTC_ActualFlipTime    = p.INTC_ActualFlipTime    == 0 ? 0.0 :
                                   p.INTC_ActualFlipTime    >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_ActualFlipTime    - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_ActualFlipTime);
+
+
+    // ScheduledFlipTime[N] = max(max(ScheduledFlipTime[N-1], ActualFlipTime[N-1]) + TargetFrameTime[N]), ActualFlipTime[N])
+    //
+    // NOTE: once ScheduledFlipTime is computed for a particular present, we store it by overwriting p.INTC_TargetFrameTime.
+    double INTC_ScheduledFlipTime = 0.0;
+    if (p.INTC_TargetFrameTime != 0 && chain.mLastDisplayedPresentIndex > 0) {
+        auto lastDisplayed = chain.mPresentHistory[chain.mLastDisplayedPresentIndex % SwapChainData::PRESENT_HISTORY_MAX_COUNT].get();
+        auto base = max(
+                lastDisplayed->INTC_TargetFrameTime, // really ScheduledFlipTime[N-1]
+                lastDisplayed->INTC_ActualFlipTime);
+        pp->INTC_TargetFrameTime = max(base + p.INTC_TargetFrameTime, p.INTC_ActualFlipTime);
+        INTC_ScheduledFlipTime = pp->INTC_TargetFrameTime >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(pp->INTC_TargetFrameTime - p.QpcTime) :
+                                                                        -1000.0 * QpcDeltaToSeconds(p.QpcTime - pp->INTC_TargetFrameTime);
+    }
 
     auto INTC_KernelDriverSubmitStart =
         p.INTC_KernelDriverSubmitStart == 0 ? 0.0 :
