@@ -234,7 +234,7 @@ ULONG EnableProviders(
 
     if ( pmConsumer->mTrackQueueTimers || pmConsumer->mTrackCpuGpuSync )
     {
-        anyKeywordMask = static_cast< std::underlying_type<Intel_Graphics_D3D10::Keyword>::type >( Intel_Graphics_D3D10::Keyword::cIntelGraphicsD3D10_Analytic );
+        anyKeywordMask = 0; // static_cast< std::underlying_type<Intel_Graphics_D3D10::Keyword>::type >( Intel_Graphics_D3D10::Keyword::cIntelGraphicsD3D10_Analytic );
         eventIds.clear();
         if ( pmConsumer->mTrackQueueTimers )
         {

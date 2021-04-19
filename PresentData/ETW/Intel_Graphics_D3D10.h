@@ -31,24 +31,24 @@ struct __declspec(uuid("{AD367E62-97EF-4B20-8235-E8AB49DB0C23}")) GUID_STRUCT;
 static const auto GUID = __uuidof(GUID_STRUCT);
 
 enum class Keyword : uint64_t {
-    kCritical                    = 0x1,
-    kDdiResourceFlow             = 0x2,
-    kPAVP                        = 0x4,
-    kDdi                         = 0x8,
-    kGenericDebug_Event          = 0x10,
-    kGPA                         = 0x20,
-    kResidency                   = 0x40,
-    kKmthandle                   = 0x80,
-    kThreadId                    = 0x100,
-    kUmdalias                    = 0x200,
-    kVa_Mapping                  = 0x400,
-    kVa_Patching                 = 0x800,
-    kVerbose                     = 0x1000,
-    kCpuGpuSync_Event            = 0x2000,
-    kDynamicBuffers              = 0x10000,
-    kQueueTimer_Event            = 0x20000,
-    kMonzaDdi                    = 0x40000,
-    kMonzaDdiThreading           = 0x80000,
+    kCritical = 0x1,
+    kDdiResourceFlow = 0x2,
+    kPAVP = 0x4,
+    kGenericDebug_Event = 0x10,
+    kGPA = 0x20,
+    kResidency = 0x40,
+    kKmthandle = 0x80,
+    kThreadId = 0x100,
+    kUmdalias = 0x200,
+    kVa_Mapping = 0x400,
+    kVa_Patching = 0x800,
+    kVerbose = 0x1000,
+    kDdiL0 = 0x2000,
+    kDdiL1 = 0x4000,
+    kDdiL2 = 0x8000,
+    kDynamicBuffers = 0x10000,
+    kQueueTimer_Event = 0x20000,
+    kCpuGpuSync_Event = 0x40000,
     cIntelGraphicsD3D10_Analytic = 0x8000000000000000,
 };
 
@@ -74,8 +74,8 @@ enum class Channel : uint8_t {
     static Keyword  const Keyword = (Keyword) keyword_; \
 };
 
-EVENT_DESCRIPTOR_DECL(CpuGpuSync_Start , 0x0013, 0x00, 0x10, 0x00, 0x01, 0x0006, 0x8000000000002000)
-EVENT_DESCRIPTOR_DECL(CpuGpuSync_Stop  , 0x0014, 0x00, 0x10, 0x00, 0x02, 0x0006, 0x8000000000002000)
+EVENT_DESCRIPTOR_DECL(CpuGpuSync_Start , 0x0013, 0x00, 0x10, 0x00, 0x01, 0x0006, 0x8000000000040000)
+EVENT_DESCRIPTOR_DECL(CpuGpuSync_Stop  , 0x0014, 0x00, 0x10, 0x00, 0x02, 0x0006, 0x8000000000040000)
 EVENT_DESCRIPTOR_DECL(QueueTimers_Start, 0x003b, 0x00, 0x10, 0x00, 0x01, 0x0010, 0x8000000000020000)
 EVENT_DESCRIPTOR_DECL(QueueTimers_Info , 0x003c, 0x00, 0x10, 0x00, 0x00, 0x0010, 0x8000000000020000)
 EVENT_DESCRIPTOR_DECL(QueueTimers_Stop , 0x003d, 0x00, 0x10, 0x00, 0x02, 0x0010, 0x8000000000020000)
