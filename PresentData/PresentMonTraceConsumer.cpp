@@ -424,32 +424,11 @@ void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t 
 
     TRACK_PRESENT_PATH_SAVE_GENERATED_ID(pEvent);
 
-    // Assign any tracked accumulated GPU work to the present.
-    //
-    // mDmaDurations should be empty if mTrackGPU==false.
-    //
-    // TODO: there is an assumption here that no subsequent DMA packet can
-    // complete before we see this QueuePacket_Stop event.  If that happens,
-    // that DMA packet will mistakenly be assigned to this present.  I'm not
-    // sure if that is possible... but regardless, it is necessarily a very
-    // short duration so shouldn't be significant.
-    auto dmaIter = mDmaDurations.find(pEvent->ProcessId);
-    if (dmaIter != mDmaDurations.end()) {
-        auto dmaDuration = &dmaIter->second;
-
-        DebugModifyPresent(*pEvent);
-        pEvent->GPUStartTime = dmaDuration->mFirstDmaTime;
-        pEvent->GPUDuration = dmaDuration->mAccumulatedDmaTime;
-        dmaDuration->mFirstDmaTime = 0;
-        dmaDuration->mAccumulatedDmaTime = 0;
-
-        // If there are any DMA's executing across the present completion,
-        // split their contribution across the two frames.
-        if (dmaDuration->mDmaExecCount > 0) {
-            pEvent->GPUDuration += hdr.TimeStamp.QuadPart - dmaDuration->mDmaExecStartTime;
-            dmaDuration->mFirstDmaTime = hdr.TimeStamp.QuadPart;
-            dmaDuration->mDmaExecStartTime = hdr.TimeStamp.QuadPart;
-        }
+    // TODO: Because it queue packet completion happens sometime after DMA
+    // completion, it's possible that some small portion of the next frame's
+    // GPU work has started and will be attributed to this frame.
+    if (mTrackGPU) {
+        AssignAccumulatedGPUWork(pEvent, hdr.TimeStamp.QuadPart);
     }
 
     // If this is one of the present modes for which packet completion implies
@@ -490,6 +469,10 @@ void PMTraceConsumer::HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipS
 
     pEvent->ReadyTime = hdr.TimeStamp.QuadPart;
 
+    if (mTrackGPU && pEvent->GPUDuration == 0) {
+        AssignAccumulatedGPUWork(pEvent, hdr.TimeStamp.QuadPart);
+    }
+
     if (pEvent->PresentMode == PresentMode::Composed_Flip) {
         pEvent->PresentMode = PresentMode::Hardware_Independent_Flip;
     }
@@ -516,6 +499,10 @@ void PMTraceConsumer::HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t fl
     // Avoid double-marking a single present packet coming from the MPO API
     if (pEvent->ReadyTime == 0) {
         pEvent->ReadyTime = hdr.TimeStamp.QuadPart;
+    }
+
+    if (mTrackGPU && pEvent->GPUDuration == 0) {
+        AssignAccumulatedGPUWork(pEvent, hdr.TimeStamp.QuadPart);
     }
 
     if (!flipEntryStatusAfterFlipValid) {
@@ -1012,41 +999,6 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             mContexts.erase(hContext);
             return;
         }
-#if 0
-        case Microsoft_Windows_DxgKrnl::SelectContext2_Info::Id:
-        {
-            EventDataDesc desc[] = {
-                { L"pDxgAdapter" },
-                { L"hContext" },
-                { L"NodeOrdinal" },
-            };
-            mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-            auto pDxgAdapter = desc[0].GetData<uint64_t>();
-            auto hContext    = desc[1].GetData<uint64_t>();
-            auto NodeOrdinal = desc[2].GetData<uint32_t>();
-
-            if (hContext == 0) {
-                return;
-            }
-
-            auto p = mContexts.emplace(hContext, PMTraceConsumer::Context());
-            if (p.second) {
-                auto p2 = mNodes[pDxgAdapter].emplace(NodeOrdinal, Node());
-                auto node = &p2.first->second;
-                if (p2.second) {
-                    node->mQueueIndex = 0;
-                    node->mQueueCount = 0;
-                }
-
-                auto context = &p.first->second;
-                context->mNode = node;
-                context->mGPUTime = 0;
-            } else {
-                assert(p.first->second.mNode == &mNodes[pDxgAdapter][NodeOrdinal]);
-            }
-            return;
-        }
-#endif
 
         // DmaPacket_Start occurs when a packet is enqueued onto a node.
         case Microsoft_Windows_DxgKrnl::DmaPacket_Start::Id:
@@ -1833,6 +1785,31 @@ void PMTraceConsumer::RemoveLostPresent(std::shared_ptr<PresentEvent> p)
 
     // mAllPresents
     mAllPresents[p->mAllPresentsTrackingIndex] = nullptr;
+}
+
+// Assign any tracked accumulated GPU work to the present.
+//
+// mDmaDurations should be empty if mTrackGPU==false.
+void PMTraceConsumer::AssignAccumulatedGPUWork(std::shared_ptr<PresentEvent> const& present, uint64_t currentQpc)
+{
+    auto dmaIter = mDmaDurations.find(present->ProcessId);
+    if (dmaIter != mDmaDurations.end()) {
+        auto dmaDuration = &dmaIter->second;
+
+        DebugModifyPresent(*present);
+        present->GPUStartTime = dmaDuration->mFirstDmaTime;
+        present->GPUDuration = dmaDuration->mAccumulatedDmaTime;
+        dmaDuration->mFirstDmaTime = 0;
+        dmaDuration->mAccumulatedDmaTime = 0;
+
+        // If there are any DMA's executing across the present completion,
+        // split their contribution across the two frames.
+        if (dmaDuration->mDmaExecCount > 0) {
+            present->GPUDuration += currentQpc - dmaDuration->mDmaExecStartTime;
+            dmaDuration->mFirstDmaTime = currentQpc;
+            dmaDuration->mDmaExecStartTime = currentQpc;
+        }
+    }
 }
 
 void PMTraceConsumer::CompletePresent(std::shared_ptr<PresentEvent> p)
