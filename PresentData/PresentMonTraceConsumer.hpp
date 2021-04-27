@@ -103,6 +103,8 @@ struct PresentEvent {
     uint64_t INTC_PresentAPICall;
     uint64_t INTC_TargetFrameTime;
     uint64_t INTC_ActualFlipTime;
+    uint64_t INTC_FlipReceivedTime;
+    uint64_t INTC_FlipProgrammingTime;
     uint64_t INTC_KernelDriverSubmitStart;
     uint64_t INTC_KernelDriverSubmitEnd;
     uint64_t INTC_KernelDriverFenceReport;

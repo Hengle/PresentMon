@@ -99,19 +99,22 @@ static void WriteCsvHeader(FILE* fp)
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
     }
-    fprintf(fp, ",INTC_ID");
-    fprintf(fp, ",INTC_AppWorkStart");
-    fprintf(fp, ",INTC_AppSimulationTime");
-    fprintf(fp, ",INTC_DriverWorkStart");
-    fprintf(fp, ",INTC_DriverWorkEnd");
-    fprintf(fp, ",INTC_GPUStart");
-    fprintf(fp, ",INTC_GPUEnd");
-    fprintf(fp, ",INTC_PresentAPICall");
-    fprintf(fp, ",INTC_ScheduledFlipTime");
-    fprintf(fp, ",INTC_ActualFlipTime");
-    fprintf(fp, ",INTC_KernelDriverSubmitStart");
-    fprintf(fp, ",INTC_KernelDriverSubmitEnd");
-    fprintf(fp, ",INTC_KernelDriverFenceReport");
+    fprintf(fp,
+        ",INTC_ID"
+        ",INTC_AppWorkStart"
+        ",INTC_AppSimulationTime"
+        ",INTC_DriverWorkStart"
+        ",INTC_DriverWorkEnd"
+        ",INTC_GPUStart"
+        ",INTC_GPUEnd"
+        ",INTC_PresentAPICall"
+        ",INTC_ScheduledFlipTime"
+        ",INTC_ActualFlipTime"
+        ",INTC_FlipReceived"
+        ",INTC_FlipProgrammingTime"
+        ",INTC_KernelDriverSubmitStart"
+        ",INTC_KernelDriverSubmitEnd"
+        ",INTC_KernelDriverFenceReport");
     fprintf(fp, "\n");
 }
 
@@ -175,43 +178,48 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
 
     // Temporary calculation while debugging.  Allow timestamps to be before or after QpcTime for now.
     auto INTC_AppWorkStart      = p.INTC_AppWorkStart      == 0 ? 0.0 :
-                                  p.INTC_AppWorkStart      >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_AppWorkStart      - p.QpcTime) :
+                                  p.INTC_AppWorkStart      >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_AppWorkStart - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_AppWorkStart);
     auto INTC_AppSimulationTime = p.INTC_AppSimulationTime == 0 ? 0.0 :
                                   p.INTC_AppSimulationTime >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_AppSimulationTime - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_AppSimulationTime);
     auto INTC_DriverWorkStart   = p.INTC_DriverWorkStart   == 0 ? 0.0 :
-                                  p.INTC_DriverWorkStart   >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_DriverWorkStart   - p.QpcTime) :
+                                  p.INTC_DriverWorkStart   >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_DriverWorkStart - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_DriverWorkStart);
     auto INTC_DriverWorkEnd     = p.INTC_DriverWorkEnd     == 0 ? 0.0 :
-                                  p.INTC_DriverWorkEnd     >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_DriverWorkEnd     - p.QpcTime) :
+                                  p.INTC_DriverWorkEnd     >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_DriverWorkEnd - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_DriverWorkEnd);
     auto INTC_GPUStart          = p.INTC_GPUStart          == 0 ? 0.0 :
-                                  p.INTC_GPUStart          >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_GPUStart          - p.QpcTime) :
+                                  p.INTC_GPUStart          >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_GPUStart - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_GPUStart);
     auto INTC_GPUEnd            = p.INTC_GPUEnd            == 0 ? 0.0 :
-                                  p.INTC_GPUEnd            >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_GPUEnd            - p.QpcTime) :
+                                  p.INTC_GPUEnd            >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_GPUEnd - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_GPUEnd);
     auto INTC_PresentAPICall    = p.INTC_PresentAPICall    == 0 ? 0.0 :
-                                  p.INTC_PresentAPICall    >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_PresentAPICall    - p.QpcTime) :
+                                  p.INTC_PresentAPICall    >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_PresentAPICall - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_PresentAPICall);
     auto INTC_ActualFlipTime    = p.INTC_ActualFlipTime    == 0 ? 0.0 :
-                                  p.INTC_ActualFlipTime    >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_ActualFlipTime    - p.QpcTime) :
+                                  p.INTC_ActualFlipTime    >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_ActualFlipTime - p.QpcTime) :
                                                                          -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_ActualFlipTime);
+    auto INTC_FlipReceivedTime  = p.INTC_FlipReceivedTime  == 0 ? 0.0 :
+                                  p.INTC_FlipReceivedTime  >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_FlipReceivedTime - p.QpcTime) :
+                                                                         -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_FlipReceivedTime);
+    auto INTC_FlipProgrammingTime = p.INTC_FlipProgrammingTime == 0 ? 0.0 :
+                                    p.INTC_FlipProgrammingTime >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p.INTC_FlipProgrammingTime - p.QpcTime) :
+                                                                             -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.INTC_FlipProgrammingTime);
 
-
-    // ScheduledFlipTime[N] = max(max(ScheduledFlipTime[N-1], ActualFlipTime[N-1]) + TargetFrameTime[N]), ActualFlipTime[N])
-    //
-    // NOTE: once ScheduledFlipTime is computed for a particular present, we store it by overwriting p.INTC_TargetFrameTime.
+    // ScheduledFlipTime[N] = max(ScheduledFlipTime[N-1], FlipReceivedTime[N-1]) + TargetFrameTime[N]
     double INTC_ScheduledFlipTime = 0.0;
     if (p.INTC_TargetFrameTime != 0 && chain.mLastDisplayedPresentIndex > 0) {
         auto lastDisplayed = chain.mPresentHistory[chain.mLastDisplayedPresentIndex % SwapChainData::PRESENT_HISTORY_MAX_COUNT].get();
-        auto base = max(
-                lastDisplayed->INTC_TargetFrameTime, // really ScheduledFlipTime[N-1]
-                lastDisplayed->INTC_ActualFlipTime);
-        pp->INTC_TargetFrameTime = max(base + p.INTC_TargetFrameTime, p.INTC_ActualFlipTime);
-        INTC_ScheduledFlipTime = pp->INTC_TargetFrameTime >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(pp->INTC_TargetFrameTime - p.QpcTime) :
-                                                                        -1000.0 * QpcDeltaToSeconds(p.QpcTime - pp->INTC_TargetFrameTime);
+
+        // NOTE: once ScheduledFlipTime is computed for a particular present,
+        // we store it by overwriting p.INTC_TargetFrameTime.
+        auto scheduledQpc = max(lastDisplayed->INTC_TargetFrameTime, lastDisplayed->INTC_FlipReceivedTime) + pp->INTC_TargetFrameTime;
+        pp->INTC_TargetFrameTime = scheduledQpc;
+
+        INTC_ScheduledFlipTime = scheduledQpc >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(scheduledQpc - p.QpcTime) :
+                                                            -1000.0 * QpcDeltaToSeconds(p.QpcTime - scheduledQpc);
     }
 
     auto INTC_KernelDriverSubmitStart =
@@ -275,6 +283,8 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     fprintf(fp, ",%lf", INTC_PresentAPICall);
     fprintf(fp, ",%lf", INTC_ScheduledFlipTime);
     fprintf(fp, ",%lf", INTC_ActualFlipTime);
+    fprintf(fp, ",%lf", INTC_FlipReceivedTime);
+    fprintf(fp, ",%lf", INTC_FlipProgrammingTime);
     fprintf(fp, ",%lf", INTC_KernelDriverSubmitStart);
     fprintf(fp, ",%lf", INTC_KernelDriverSubmitEnd);
     fprintf(fp, ",%lf", INTC_KernelDriverFenceReport);

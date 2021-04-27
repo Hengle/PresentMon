@@ -91,6 +91,8 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , INTC_PresentAPICall(0)
     , INTC_TargetFrameTime(0)
     , INTC_ActualFlipTime(0)
+    , INTC_FlipReceivedTime(0)
+    , INTC_FlipProgrammingTime(0)
     , Hwnd(0)
     , TokenPtr(0)
     , CompositionSurfaceLuid(0)
@@ -179,6 +181,8 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             { L"PresentAPICall" },
             { L"TargetFrameTime" },
             { L"ActualFlipTime" },
+            { L"FlipReceivedTime" },
+            { L"FlipProgrammingTime" },
             { L"KernelDriverSubmitStart" },
             { L"KernelDriverSubmitEnd" },
             { L"KernelDriverFenceReport" },
@@ -194,9 +198,11 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         auto PresentAPICall    = desc[7].GetData<uint64_t>();
         auto TargetFrameTime   = desc[8].GetData<uint64_t>();
         auto ActualFlipTime    = desc[9].GetData<uint64_t>();
-        auto KernelDriverSubmitStart = desc[10].GetData<uint64_t>();
-        auto KernelDriverSubmitEnd   = desc[11].GetData<uint64_t>();
-        auto KernelDriverFenceReport = desc[12].GetData<uint64_t>();
+        auto FlipReceivedTime        = desc[10].GetData<uint64_t>();
+        auto FlipProgrammingTime     = desc[11].GetData<uint64_t>();
+        auto KernelDriverSubmitStart = desc[12].GetData<uint64_t>();
+        auto KernelDriverSubmitEnd   = desc[13].GetData<uint64_t>();
+        auto KernelDriverFenceReport = desc[14].GetData<uint64_t>();
 
         // Search for the present in the pending completions first, as that is
         // the most likely location.
@@ -232,6 +238,8 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             present->INTC_PresentAPICall    = PresentAPICall;
             present->INTC_TargetFrameTime   = TargetFrameTime;
             present->INTC_ActualFlipTime    = ActualFlipTime;
+            present->INTC_FlipReceivedTime        = FlipReceivedTime;
+            present->INTC_FlipProgrammingTime     = FlipProgrammingTime;
             present->INTC_KernelDriverSubmitStart = KernelDriverSubmitStart;
             present->INTC_KernelDriverSubmitEnd   = KernelDriverSubmitEnd;
             present->INTC_KernelDriverFenceReport = KernelDriverFenceReport;
