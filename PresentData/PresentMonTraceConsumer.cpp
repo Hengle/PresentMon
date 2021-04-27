@@ -342,6 +342,7 @@ static PMTraceConsumer::DmaDuration* CreateDmaDuration(
     auto dmaDuration = &p.first->second;
     if (p.second) {
         dmaDuration->mFirstDmaTime = 0;
+        dmaDuration->mLastDmaTime = 0;
         dmaDuration->mAccumulatedDmaTime = 0;
         dmaDuration->mDmaExecStartTime = 0;
         dmaDuration->mDmaExecCount = 0;
@@ -1177,6 +1178,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 assert(dmaDuration == node->mDmaDuration[node->mQueueIndex]);
                 if (dmaDuration->mDmaExecCount == 0) {
                     dmaDuration->mAccumulatedDmaTime += hdr.TimeStamp.QuadPart - dmaDuration->mDmaExecStartTime;
+                    dmaDuration->mLastDmaTime = hdr.TimeStamp.QuadPart;
                 }
 
                 // If there was another queued packet, start it
@@ -1798,13 +1800,16 @@ void PMTraceConsumer::AssignAccumulatedGPUWork(std::shared_ptr<PresentEvent> con
 
         DebugModifyPresent(*present);
         present->GPUStartTime = dmaDuration->mFirstDmaTime;
+        present->ReadyTime = dmaDuration->mLastDmaTime;
         present->GPUDuration = dmaDuration->mAccumulatedDmaTime;
         dmaDuration->mFirstDmaTime = 0;
+        dmaDuration->mLastDmaTime = 0;
         dmaDuration->mAccumulatedDmaTime = 0;
 
         // If there are any DMA's executing across the present completion,
         // split their contribution across the two frames.
         if (dmaDuration->mDmaExecCount > 0) {
+            present->ReadyTime = currentQpc;
             present->GPUDuration += currentQpc - dmaDuration->mDmaExecStartTime;
             dmaDuration->mFirstDmaTime = currentQpc;
             dmaDuration->mDmaExecStartTime = currentQpc;

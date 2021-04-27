@@ -136,8 +136,12 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double msBetweenDisplayChange = 0.0;
 
     if (args.mTrackDisplay) {
-        if (p.ReadyTime > 0) {
-            msUntilRenderComplete = 1000.0 * QpcDeltaToSeconds(p.ReadyTime - p.QpcTime);
+        if (p.ReadyTime != 0) {
+            if (p.ReadyTime < p.QpcTime) {
+                msUntilRenderComplete = -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.ReadyTime);
+            } else {
+                msUntilRenderComplete = 1000.0 * QpcDeltaToSeconds(p.ReadyTime - p.QpcTime);
+            }
         }
         if (presented) {
             msUntilDisplayed = 1000.0 * QpcDeltaToSeconds(p.ScreenTime - p.QpcTime);

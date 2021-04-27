@@ -341,6 +341,7 @@ struct PMTraceConsumer
     // packet queuing to know how when each DMA packet actually ran.
     struct DmaDuration {
         uint64_t mFirstDmaTime;         // QPC when the first DMA packet started
+        uint64_t mLastDmaTime;          // QPC when the last DMA packet completed
         uint64_t mAccumulatedDmaTime;   // QPC duration that at least one DMA packet was running
         uint64_t mDmaExecStartTime;     // QPC when the oldest running DMA packet started
         uint32_t mDmaExecCount;         // Number of running DMA packets
