@@ -26,6 +26,7 @@ struct MRTraceConsumer;
 struct TraceSession {
     LARGE_INTEGER mStartQpc = {};
     LARGE_INTEGER mQpcFrequency = {};
+    FILETIME mStartTime = {};
     PMTraceConsumer* mPMConsumer = nullptr;
     MRTraceConsumer* mMRConsumer = nullptr;
     TRACEHANDLE mSessionHandle = 0;                         // invalid session handles are 0

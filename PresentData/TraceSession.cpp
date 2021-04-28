@@ -407,12 +407,27 @@ ULONG TraceSession::Start(
     }
 
     // -------------------------------------------------------------------------
-    // Store trace properties
+    // Save the initial tame to base capture off of.  ETL captures use the 
+    // time of the first event, which matches GPUVIEW usage, and realtime
+    // captures are based off the timestamp here.
+
     mQpcFrequency = traceProps.LogfileHeader.PerfFreq;
 
-    // Use current time as start for realtime traces (instead of the first event time)
-    if (!saveFirstTimestamp) {
-        QueryPerformanceCounter(&mStartQpc);
+    if (etlPath != nullptr) {
+        SYSTEMTIME ust = {};
+        SYSTEMTIME lst = {};
+        FileTimeToSystemTime((FILETIME const*) &traceProps.LogfileHeader.StartTime, &ust);
+        SystemTimeToTzSpecificLocalTime(&traceProps.LogfileHeader.TimeZone, &ust, &lst);
+        SystemTimeToFileTime(&lst, &mStartTime);
+    } else {
+        LARGE_INTEGER qpc1 = {};
+        LARGE_INTEGER qpc2 = {};
+        FILETIME ft = {};
+        QueryPerformanceCounter(&qpc1);
+        GetSystemTimeAsFileTime(&ft);
+        QueryPerformanceCounter(&qpc2);
+        FileTimeToLocalFileTime(&ft, &mStartTime);
+        mStartQpc.QuadPart = qpc1.QuadPart + (qpc2.QuadPart - qpc1.QuadPart) / 2;
     }
 
     DebugInitialize(&mStartQpc, mQpcFrequency);

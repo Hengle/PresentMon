@@ -328,6 +328,7 @@ static void PrintHelp()
 
         "Beta options", nullptr,
         "-qpc_time_s",              "Output present time as a performance counter value converted to seconds.",
+        "-date_time",               "Output present time as a date and time with nanosecond precision.",
         "-terminate_existing",      "Terminate any existing PresentMon realtime trace sessions, then exit."
                                     " Use with -session_name to target particular sessions.",
         "-track_gpu",               "Tracks the duration of each process' GPU work performed between presents."
@@ -404,6 +405,7 @@ bool ParseCommandLine(int argc, char** argv)
     args->mOutputCsvToStdout = false;
     args->mOutputQpcTime = false;
     args->mOutputQpcTimeInSeconds = false;
+    args->mOutputDateTime = false;
     args->mScrollLockIndicator = false;
     args->mExcludeDropped = false;
     args->mConsoleOutputType = ConsoleOutput::Full;
@@ -457,6 +459,7 @@ bool ParseCommandLine(int argc, char** argv)
 
         // Beta options:
         else if (ParseArg(argv[i], "qpc_time_s"))            { args->mOutputQpcTimeInSeconds     = true; continue; }
+        else if (ParseArg(argv[i], "date_time"))             { args->mOutputDateTime             = true; continue; }
         else if (ParseArg(argv[i], "terminate_existing"))    { args->mTerminateExisting          = true; continue; }
         else if (ParseArg(argv[i], "track_gpu"))             { args->mTrackGPU                   = true; continue; }
         else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR                   = true; continue; }
@@ -504,6 +507,13 @@ bool ParseCommandLine(int argc, char** argv)
         args->mOutputQpcTime = true;
     }
 
+    // -date_time is mutually exclusive to -qpc_time and -qpc_time_s
+    if (args->mOutputDateTime && (args->mOutputQpcTime || args->mOutputQpcTimeInSeconds)) {
+        fprintf(stderr, "error: -date_time and -qpc_time or -qpc_time_s cannot be used at the same time.\n");
+        PrintHelp();
+        return false;
+    }
+
     // Disallow hotkey of CTRL+C, CTRL+SCROLL, and F12
     if (args->mHotkeySupport) {
         if ((args->mHotkeyModifiers & MOD_CONTROL) != 0 && (
@@ -521,13 +531,17 @@ bool ParseCommandLine(int argc, char** argv)
         }
     }
 
-    // If -no_csv is used, ignore -qpc_time, -qpc_time_s, -multi_csv,
+    // If -no_csv is used, ignore -date_time, -qpc_time, -qpc_time_s, -multi_csv,
     // -output_file, or -output_stdout if they are also used.
     if (!args->mOutputCsvToFile) {
         if (args->mOutputQpcTime) {
             fprintf(stderr, "warning: -qpc_time and -qpc_time_s are only relevant for CSV output; ignoring due to -no_csv.\n");
             args->mOutputQpcTime = false;
             args->mOutputQpcTimeInSeconds = false;
+        }
+        if (args->mOutputDateTime) {
+            fprintf(stderr, "warning: -date_time is only relevant for CSV output; ignoring due to -no_csv.\n");
+            args->mOutputDateTime = false;
         }
         if (args->mMultiCsv) {
             fprintf(stderr, "warning: -multi_csv and -no_csv arguments are not compatible; ignoring -multi_csv.\n");
@@ -596,6 +610,7 @@ bool ParseCommandLine(int argc, char** argv)
         args->mConsoleOutputType == ConsoleOutput::Simple ||
         args->mOutputQpcTime ||
         args->mOutputQpcTimeInSeconds ||
+        args->mOutputDateTime ||
         args->mHotkeySupport ||
         args->mDelay != 0 ||
         args->mTimer != 0 ||
