@@ -100,7 +100,7 @@ void QpcTimeTest(wchar_t const* qpcTimeArg)
 
     auto idxTimeInSeconds = csv.GetColumnIndex("TimeInSeconds");
     auto idxQPCTime       = csv.GetColumnIndex("QPCTime");
-    EXPECT_NE(idxTimeInSeconds, SIZE_MAX);
+    EXPECT_NE(idxTimeInSeconds, SIZE_MAX);  // Tests to no support -date_time yet
     EXPECT_NE(idxQPCTime,       SIZE_MAX);
 
     auto t0 = 0.0;

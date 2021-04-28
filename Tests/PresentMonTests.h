@@ -36,6 +36,7 @@ struct PresentMonCsv
         "PresentFlags",
         "Dropped",
         "TimeInSeconds",
+        "PresentTime",
         "MsBetweenPresents",
         "MsInPresentAPI",
     };

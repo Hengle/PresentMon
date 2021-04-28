@@ -76,9 +76,9 @@ static void WriteCsvHeader(FILE* fp)
         ",SyncInterval"
         ",PresentFlags"
         ",Dropped"
-        ",TimeInSeconds"
+        ",%s"
         ",MsInPresentAPI"
-        ",MsBetweenPresents");
+        ",MsBetweenPresents", args.mOutputDateTime ? "PresentTime" : "TimeInSeconds");
     if (args.mTrackDisplay) {
         fprintf(fp,
             ",AllowsTearing"
@@ -129,14 +129,13 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     auto lastPresented = chain.mPresentHistory[(chain.mNextPresentIndex - 1) % SwapChainData::PRESENT_HISTORY_MAX_COUNT].get();
 
     // Compute frame statistics.
-    double timeInSeconds          = QpcToSeconds(p.QpcTime);
-    double msBetweenPresents      = 1000.0 * QpcDeltaToSeconds(p.QpcTime - lastPresented->QpcTime);
-    double msInPresentApi         = 1000.0 * QpcDeltaToSeconds(p.TimeTaken);
-    double msUntilRenderComplete  = 0.0;
-    double msUntilDisplayed       = 0.0;
+    double msBetweenPresents = 1000.0 * QpcDeltaToSeconds(p.QpcTime - lastPresented->QpcTime);
+    double msInPresentApi = 1000.0 * QpcDeltaToSeconds(p.TimeTaken);
+    double msUntilRenderComplete = 0.0;
+    double msUntilDisplayed = 0.0;
     double msBetweenDisplayChange = 0.0;
-    double msGPUDuration          = 0.0;
-    double msGPUVideoDuration     = 0.0;
+    double msGPUDuration = 0.0;
+    double msGPUVideoDuration = 0.0;
 
     if (args.mTrackDisplay) {
         if (p.ReadyTime > 0) {
@@ -160,15 +159,30 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     }
 
     // Output in CSV format
-    fprintf(fp, "%s,%d,0x%016llX,%s,%d,%d,%s,%lf,%lf,%lf",
+    fprintf(fp, "%s,%d,0x%016llX,%s,%d,%d,%s,",
         processInfo->mModuleName.c_str(),
         p.ProcessId,
         p.SwapChainAddress,
         RuntimeToString(p.Runtime),
         p.SyncInterval,
         p.PresentFlags,
-        FinalStateToDroppedString(p.FinalState),
-        timeInSeconds,
+        FinalStateToDroppedString(p.FinalState));
+    if (args.mOutputDateTime) {
+        SYSTEMTIME st = {};
+        uint64_t ns = 0;
+        QpcToLocalSystemTime(p.QpcTime, &st, &ns);
+        fprintf(fp, "%u-%u-%u %u:%02u:%02u.%09llu",
+            st.wYear,
+            st.wMonth,
+            st.wDay,
+            st.wHour,
+            st.wMinute,
+            st.wSecond,
+            ns);
+    } else {
+        fprintf(fp, "%lf", QpcToSeconds(p.QpcTime));
+    }
+    fprintf(fp, ",%lf,%lf",
         msInPresentApi,
         msBetweenPresents);
     if (args.mTrackDisplay) {

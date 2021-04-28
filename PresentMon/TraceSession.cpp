@@ -172,3 +172,13 @@ double QpcToSeconds(uint64_t qpc)
 {
     return QpcDeltaToSeconds(qpc - gSession.mStartQpc.QuadPart);
 }
+
+void QpcToLocalSystemTime(uint64_t qpc, SYSTEMTIME* st, uint64_t* ns)
+{
+    auto tns = (qpc - gSession.mStartQpc.QuadPart) * 1000000000ull / gSession.mQpcFrequency.QuadPart;
+    auto t100ns = tns / 100;
+    auto ft = (*(uint64_t*) &gSession.mStartTime) + t100ns;
+
+    FileTimeToSystemTime((FILETIME const*) &ft, st);
+    *ns = (ft - (ft / 10000000ull) * 10000000ull) * 100ull + (tns - t100ns * 100ull);
+}
