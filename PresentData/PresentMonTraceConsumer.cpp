@@ -78,21 +78,22 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , SwapChainAddress(0)
     , SyncInterval(-1)
     , PresentFlags(0)
-    , INTC_ID(0)
+    , INTC_FrameID(0)
     , INTC_AppWorkStart(0)
     , INTC_AppSimulationTime(0)
     , INTC_DriverWorkStart(0)
     , INTC_DriverWorkEnd(0)
-    , INTC_GPUStart(0)
-    , INTC_GPUEnd(0)
     , INTC_KernelDriverSubmitStart(0)
     , INTC_KernelDriverSubmitEnd(0)
+    , INTC_GPUStart(0)
+    , INTC_GPUEnd(0)
     , INTC_KernelDriverFenceReport(0)
     , INTC_PresentAPICall(0)
     , INTC_TargetFrameTime(0)
-    , INTC_ActualFlipTime(0)
     , INTC_FlipReceivedTime(0)
+    , INTC_FlipReportTime(0)
     , INTC_FlipProgrammingTime(0)
+    , INTC_ActualFlipTime(0)
     , Hwnd(0)
     , TokenPtr(0)
     , CompositionSurfaceLuid(0)
@@ -159,7 +160,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
 
         auto present = FindOrCreatePresent(hdr);
         DebugModifyPresent(*present);
-        present->INTC_ID = FrameID;
+        present->INTC_FrameID = FrameID;
         break;
     }
 
@@ -176,40 +177,42 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             { L"AppSimulationTime" },
             { L"DriverWorkStart" },
             { L"DriverWorkEnd" },
-            { L"GPUStart" },
-            { L"GPUEnd" },
-            { L"PresentAPICall" },
-            { L"TargetFrameTime" },
-            { L"ActualFlipTime" },
-            { L"FlipReceivedTime" },
-            { L"FlipProgrammingTime" },
             { L"KernelDriverSubmitStart" },
             { L"KernelDriverSubmitEnd" },
+            { L"GPUStart" },
+            { L"GPUEnd" },
             { L"KernelDriverFenceReport" },
+            { L"PresentAPICall" },
+            { L"TargetFrameTime" },
+            { L"FlipReceivedTime" },
+            { L"FlipReportTime" },
+            { L"FlipProgrammingTime" },
+            { L"ActualFlipTime" },
         };
         mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-        auto FrameID           = desc[0].GetData<uint64_t>();
-        auto AppWorkStart      = desc[1].GetData<uint64_t>();
-        auto AppSimulationTime = desc[2].GetData<uint64_t>();
-        auto DriverWorkStart   = desc[3].GetData<uint64_t>();
-        auto DriverWorkEnd     = desc[4].GetData<uint64_t>();
-        auto GPUStart          = desc[5].GetData<uint64_t>();
-        auto GPUEnd            = desc[6].GetData<uint64_t>();
-        auto PresentAPICall    = desc[7].GetData<uint64_t>();
-        auto TargetFrameTime   = desc[8].GetData<uint64_t>();
-        auto ActualFlipTime    = desc[9].GetData<uint64_t>();
-        auto FlipReceivedTime        = desc[10].GetData<uint64_t>();
-        auto FlipProgrammingTime     = desc[11].GetData<uint64_t>();
-        auto KernelDriverSubmitStart = desc[12].GetData<uint64_t>();
-        auto KernelDriverSubmitEnd   = desc[13].GetData<uint64_t>();
-        auto KernelDriverFenceReport = desc[14].GetData<uint64_t>();
+        auto FrameID                 = desc[0].GetData<uint64_t>();
+        auto AppWorkStart            = desc[1].GetData<uint64_t>();
+        auto AppSimulationTime       = desc[2].GetData<uint64_t>();
+        auto DriverWorkStart         = desc[3].GetData<uint64_t>();
+        auto DriverWorkEnd           = desc[4].GetData<uint64_t>();
+        auto KernelDriverSubmitStart = desc[5].GetData<uint64_t>();
+        auto KernelDriverSubmitEnd   = desc[6].GetData<uint64_t>();
+        auto GPUStart                = desc[7].GetData<uint64_t>();
+        auto GPUEnd                  = desc[8].GetData<uint64_t>();
+        auto KernelDriverFenceReport = desc[9].GetData<uint64_t>();
+        auto PresentAPICall          = desc[10].GetData<uint64_t>();
+        auto TargetFrameTime         = desc[11].GetData<uint64_t>();
+        auto FlipReceivedTime        = desc[12].GetData<uint64_t>();
+        auto FlipReportTime          = desc[13].GetData<uint64_t>();
+        auto FlipProgrammingTime     = desc[14].GetData<uint64_t>();
+        auto ActualFlipTime          = desc[15].GetData<uint64_t>();
 
         // Search for the present in the pending completions first, as that is
         // the most likely location.
         PresentEvent* present = nullptr;
         auto const& pendingCompletions = mPresentsToCompleteAfterNextPresent[hdr.ProcessId].mPresents;
         for (auto const& p : pendingCompletions) {
-            if (p->INTC_ID == FrameID) {
+            if (p->INTC_FrameID == FrameID) {
                 present = p.get();
                 break;
             }
@@ -220,7 +223,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             auto const& processOrderedPresents = mPresentsByProcess[hdr.ProcessId];
             for (auto ii = processOrderedPresents.begin(); ii != processOrderedPresents.end(); ++ii) {
                 auto p = ii->second.get();
-                if (p->INTC_ID == FrameID) {
+                if (p->INTC_FrameID == FrameID) {
                     present = p;
                     break;
                 }
@@ -229,20 +232,21 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
 
         if (present != nullptr) {
             DebugModifyPresent(*present);
-            present->INTC_AppWorkStart      = AppWorkStart;
-            present->INTC_AppSimulationTime = AppSimulationTime;
-            present->INTC_DriverWorkStart   = DriverWorkStart;
-            present->INTC_DriverWorkEnd     = DriverWorkEnd;
-            present->INTC_GPUStart          = GPUStart;
-            present->INTC_GPUEnd            = GPUEnd;
-            present->INTC_PresentAPICall    = PresentAPICall;
-            present->INTC_TargetFrameTime   = TargetFrameTime;
-            present->INTC_ActualFlipTime    = ActualFlipTime;
-            present->INTC_FlipReceivedTime        = FlipReceivedTime;
-            present->INTC_FlipProgrammingTime     = FlipProgrammingTime;
+            present->INTC_AppWorkStart            = AppWorkStart;
+            present->INTC_AppSimulationTime       = AppSimulationTime;
+            present->INTC_DriverWorkStart         = DriverWorkStart;
+            present->INTC_DriverWorkEnd           = DriverWorkEnd;
             present->INTC_KernelDriverSubmitStart = KernelDriverSubmitStart;
             present->INTC_KernelDriverSubmitEnd   = KernelDriverSubmitEnd;
+            present->INTC_GPUStart                = GPUStart;
+            present->INTC_GPUEnd                  = GPUEnd;
             present->INTC_KernelDriverFenceReport = KernelDriverFenceReport;
+            present->INTC_PresentAPICall          = PresentAPICall;
+            present->INTC_TargetFrameTime         = TargetFrameTime;
+            present->INTC_FlipReceivedTime        = FlipReceivedTime;
+            present->INTC_FlipReportTime          = FlipReportTime;
+            present->INTC_FlipProgrammingTime     = FlipProgrammingTime;
+            present->INTC_ActualFlipTime          = ActualFlipTime;
         }
         break;
     }
@@ -2025,7 +2029,7 @@ void PMTraceConsumer::CompletePresent(std::shared_ptr<PresentEvent> p)
     p->Completed = true;
 
     std::vector<std::shared_ptr<PresentEvent>>* completeQueue = nullptr;
-    auto deferCompletion = p->INTC_ID > 0;
+    auto deferCompletion = p->INTC_FrameID > 0;
     if (deferCompletion) {
         completeQueue = &mPresentsToCompleteAfterNextPresent[p->ProcessId].mPresents;
         #if DEBUG_VERBOSE

@@ -51,31 +51,9 @@ enum class Channel : uint8_t {
     static Keyword  const Keyword = (Keyword) keyword_; \
 };
 
-EVENT_DESCRIPTOR_DECL(task_FramePacer_Info,     0x0013, 0x00, 0x10, 0x00, 0x00, 0x0006, 0x0000000000000010)
-EVENT_DESCRIPTOR_DECL(task_DdiPresentDXGI_Info, 0x0014, 0x00, 0x10, 0x00, 0x00, 0x0038, 0x0000000000000010)
+EVENT_DESCRIPTOR_DECL(task_DdiPresentDXGI_Info, 0x003f, 0x00, 0x10, 0x00, 0x00, 0x0012, 0x0000000000000010)
+EVENT_DESCRIPTOR_DECL(task_FramePacer_Info,     0x0040, 0x00, 0x10, 0x00, 0x00, 0x0013, 0x0000000000000010)
 
 #undef EVENT_DESCRIPTOR_DECL
-
-#pragma warning(push)
-#pragma warning(disable: 4200) // nonstandard extension used: zero-sized array in struct
-
-#pragma pack(push)
-#pragma pack(1)
-
-struct task_FramePacer_Info_Struct {
-    uint64_t    FrameID;
-    uint64_t    AppWorkStart;
-    uint64_t    AppSimulationTime;
-    uint64_t    DriverWorkStart;
-    uint64_t    DriverWorkEnd;
-    uint64_t    GPUStart;
-    uint64_t    GPUEnd;
-    uint64_t    PresentAPICall;
-    uint64_t    ScheduledFlipTime;
-    uint64_t    ActualFlipTime;
-};
-
-#pragma pack(pop)
-#pragma warning(pop)
 
 }

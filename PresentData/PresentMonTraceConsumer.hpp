@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2020 Intel Corporation
+Copyright 2017-2021 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -93,21 +93,22 @@ struct PresentEvent {
     uint32_t PresentFlags;
 
     // Intel frame-pacing data
-    uint64_t INTC_ID;
+    uint64_t INTC_FrameID;
     uint64_t INTC_AppWorkStart;
     uint64_t INTC_AppSimulationTime;
     uint64_t INTC_DriverWorkStart;
     uint64_t INTC_DriverWorkEnd;
-    uint64_t INTC_GPUStart;
-    uint64_t INTC_GPUEnd;
-    uint64_t INTC_PresentAPICall;
-    uint64_t INTC_TargetFrameTime;
-    uint64_t INTC_ActualFlipTime;
-    uint64_t INTC_FlipReceivedTime;
-    uint64_t INTC_FlipProgrammingTime;
     uint64_t INTC_KernelDriverSubmitStart;
     uint64_t INTC_KernelDriverSubmitEnd;
+    uint64_t INTC_GPUStart;
+    uint64_t INTC_GPUEnd;
     uint64_t INTC_KernelDriverFenceReport;
+    uint64_t INTC_PresentAPICall;
+    uint64_t INTC_TargetFrameTime;
+    uint64_t INTC_FlipReceivedTime;
+    uint64_t INTC_FlipReportTime;
+    uint64_t INTC_FlipProgrammingTime;
+    uint64_t INTC_ActualFlipTime;
 
     // Properties deduced by watching events through present pipeline
     uint64_t Hwnd;
