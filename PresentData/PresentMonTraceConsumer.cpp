@@ -2145,7 +2145,8 @@ void PMTraceConsumer::TrackPresentOnThread(std::shared_ptr<PresentEvent> present
     auto ii = mPresentsToCompleteAfterNextPresent.find(present->ProcessId);
     if (ii != mPresentsToCompleteAfterNextPresent.end()) {
         auto pendingCompletions = &ii->second;
-        pendingCompletions->mCountAtPresentStart = pendingCompletions->mPresents.size();
+        pendingCompletions->mCountAtPreviousPreviousPresentStart = pendingCompletions->mCountAtPreviousPresentStart;
+        pendingCompletions->mCountAtPreviousPresentStart = pendingCompletions->mPresents.size();
     }
 }
 
@@ -2176,15 +2177,15 @@ void PMTraceConsumer::RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPres
     }
 
     // Complete any presents whose completion was pending at the beginning of
-    // the Present() call.  This should ensure that any INTC
+    // the previous Present() call.  This should ensure that any INTC
     // task_FramePacer_Info events related to those presents have been
     // observed.
     auto ii = mPresentsToCompleteAfterNextPresent.find(hdr.ProcessId);
     if (ii != mPresentsToCompleteAfterNextPresent.end()) {
         auto pendingCompletions = &ii->second;
-        if (pendingCompletions->mCountAtPresentStart > 0) {
+        if (pendingCompletions->mCountAtPreviousPreviousPresentStart > 0) {
             auto pb = pendingCompletions->mPresents.begin();
-            auto pe = pb + pendingCompletions->mCountAtPresentStart;
+            auto pe = pb + pendingCompletions->mCountAtPreviousPreviousPresentStart;
 
             #if DEBUG_VERBOSE
             for (auto pi = pb; pi != pe; ++pi) {
@@ -2197,7 +2198,10 @@ void PMTraceConsumer::RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPres
                 std::lock_guard<std::mutex> lock(mPresentEventMutex);
                 mCompletePresentEvents.insert(mCompletePresentEvents.end(), pb, pe);
             }
+
             pendingCompletions->mPresents.erase(pb, pe);
+            pendingCompletions->mCountAtPreviousPresentStart -= pendingCompletions->mCountAtPreviousPreviousPresentStart;
+            pendingCompletions->mCountAtPreviousPreviousPresentStart = 0;
         }
 
         // Even if pendingCompletions->mPresents is empty, we leave the

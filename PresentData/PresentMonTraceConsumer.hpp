@@ -228,7 +228,7 @@ struct PMTraceConsumer
     //
     // If a present received an INTC_ID, then we delay it's completion until we
     // also see a task_FramePacer_Info event for it.  These should be emitted
-    // during the process' next DXGI Present() call.
+    // during one of the process' next two DXGI Present() calls.
 
     std::mutex mPresentEventMutex;
     std::vector<std::shared_ptr<PresentEvent>> mCompletePresentEvents;
@@ -238,7 +238,8 @@ struct PMTraceConsumer
 
     struct PendingCompletions {
         std::vector<std::shared_ptr<PresentEvent>> mPresents;
-        size_t mCountAtPresentStart;
+        size_t mCountAtPreviousPresentStart = 0;
+        size_t mCountAtPreviousPreviousPresentStart = 0;
     };
 
     // [Process ID] => PendingCompletions
