@@ -233,18 +233,7 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintU64x,          SwapChainAddress)
     FLUSH_MEMBER(PrintU32,           SyncInterval)
     FLUSH_MEMBER(PrintU32,           PresentFlags)
-    FLUSH_MEMBER(PrintU64,           INTC_ID)
-    /*
-    FLUSH_MEMBER(PrintTime,          INTC_AppWorkStart)
-    FLUSH_MEMBER(PrintTime,          INTC_AppSimulationTime)
-    FLUSH_MEMBER(PrintTime,          INTC_DriverWorkStart)
-    FLUSH_MEMBER(PrintTime,          INTC_DriverWorkEnd)
-    FLUSH_MEMBER(PrintTime,          INTC_GPUStart)
-    FLUSH_MEMBER(PrintTime,          INTC_GPUEnd)
-    FLUSH_MEMBER(PrintTime,          INTC_PresentAPICall)
-    FLUSH_MEMBER(PrintU64,           INTC_TargetFrameTime)
-    */
-    FLUSH_MEMBER(PrintTime,          INTC_ActualFlipTime)
+    FLUSH_MEMBER(PrintU64,           INTC_FrameID)
     FLUSH_MEMBER(PrintU64x,          Hwnd)
     FLUSH_MEMBER(PrintU64x,          TokenPtr)
     FLUSH_MEMBER(PrintTimeDelta,     GPUDuration)
@@ -318,33 +307,22 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
                 L"FrameID", PrintU64,
             });
 #if 0
-            printf("                             AppWorkStart      = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));
-                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));
-                                                                          printf("\n");
-            printf("                             AppSimulationTime = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime"));
-                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime"));
-                                                                          printf("\n");
-            printf("                             DriverWorkStart   = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));
-                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));
-                                                                          printf("\n");
-            printf("                             DriverWorkEnd     = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));
-                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));
-                                                                          printf("\n");
-            printf("                             GPUStart          = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));
-                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));
-                                                                          printf("\n");
-            printf("                             GPUEnd            = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));
-                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));
-                                                                          printf("\n");
-            printf("                             PresentAPICall    = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
-                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
-                                                                          printf("\n");
-            printf("                             TargetFrameTime   = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"TargetFrameTime"));
-                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"TargetFrameTime"));
-                                                                          printf("\n");
-            printf("                             ActualFlipTime    = 0x%016llx = ", metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
-                                                                          PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
-                                                                          printf("\n");
+            printf(  "%*sAppWorkStart            = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));
+            printf("\n%*sAppSimulationTime       = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime"));
+            printf("\n%*sDriverWorkStart         = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));
+            printf("\n%*sDriverWorkEnd           = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));
+            printf("\n%*sKernelDriverSubmitStart = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitStart"));
+            printf("\n%*sKernelDriverSubmitEnd   = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitEnd"));
+            printf("\n%*sGPUStart                = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));
+            printf("\n%*sGPUEnd                  = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));
+            printf("\n%*sKernelDriverFenceReport = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverFenceReport"));
+            printf("\n%*sPresentAPICall          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
+            printf("\n%*sTargetFrameTime         = ", 29, ""); PrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, L"TargetFrameTime"));
+            printf("\n%*sFlipReceivedTime        = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReceivedTime"));
+            printf("\n%*sFlipReportTime          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReportTime"));
+            printf("\n%*sFlipProgrammingTime     = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipProgrammingTime"));
+            printf("\n%*sActualFlipTime          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
+            printf("\n");
 #endif
             break;
         }
