@@ -1827,16 +1827,23 @@ void PMTraceConsumer::HandleDWMEvent(EVENT_RECORD* pEventRecord)
     }
 }
 
-void PMTraceConsumer::RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> p)
+void PMTraceConsumer::RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> p, bool deferCompletion)
 {
     // Remove the present from any struct that would only host the event temporarily.
     // Currently defined as all structures except for mPresentsByProcess, 
     // mPresentsByProcessAndSwapChain, and mAllPresents.
 
     // mPresentByThreadId
-    auto threadEventIter = mPresentByThreadId.find(p->ThreadId);
-    if (threadEventIter != mPresentByThreadId.end() && threadEventIter->second == p) {
-        mPresentByThreadId.erase(threadEventIter);
+    //
+    // There are cases where a present can complete before Present()
+    // returns.  If the completion is being deferred, then leave the
+    // present in mPresentByThreadId so that subsequent Present_Stop
+    // events can look it up still.
+    if (!deferCompletion) {
+        auto threadEventIter = mPresentByThreadId.find(p->ThreadId);
+        if (threadEventIter != mPresentByThreadId.end() && threadEventIter->second == p) {
+            mPresentByThreadId.erase(threadEventIter);
+        }
     }
 
     if (p->DriverBatchThreadId != 0) {
@@ -1941,7 +1948,7 @@ void PMTraceConsumer::RemoveLostPresent(std::shared_ptr<PresentEvent> p)
 
     // Remove the present from any struct that would only host the event temporarily.
     // Should we loop through and remove the dependent presents?
-    RemovePresentFromTemporaryTrackingCollections(p);
+    RemovePresentFromTemporaryTrackingCollections(p, false);
 
     // mPresentsByProcess
     auto& presentsByThisProcess = mPresentsByProcess[p->ProcessId];
@@ -2002,7 +2009,8 @@ void PMTraceConsumer::CompletePresent(std::shared_ptr<PresentEvent> p)
     p->DependentPresents.clear();
 
     // Remove it from any tracking maps that it may have been inserted into
-    RemovePresentFromTemporaryTrackingCollections(p);
+    auto deferCompletion = p->INTC_FrameID > 0;
+    RemovePresentFromTemporaryTrackingCollections(p, deferCompletion);
 
     // TODO: Only way to CompletePresent() a present without
     // FindOrCreatePresent() finding it first is the while loop below, in which
@@ -2029,7 +2037,6 @@ void PMTraceConsumer::CompletePresent(std::shared_ptr<PresentEvent> p)
     p->Completed = true;
 
     std::vector<std::shared_ptr<PresentEvent>>* completeQueue = nullptr;
-    auto deferCompletion = p->INTC_FrameID > 0;
     if (deferCompletion) {
         completeQueue = &mPresentsToCompleteAfterNextPresent[p->ProcessId].mPresents;
         #if DEBUG_VERBOSE
