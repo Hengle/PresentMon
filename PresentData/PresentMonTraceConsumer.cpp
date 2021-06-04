@@ -210,7 +210,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         // Search for the present in the pending completions first, as that is
         // the most likely location.
         PresentEvent* present = nullptr;
-        auto const& pendingCompletions = mPresentsToCompleteAfterNextPresent[hdr.ProcessId].mPresents;
+        auto const& pendingCompletions = mPendingCompletions[hdr.ProcessId].mPresents;
         for (auto const& p : pendingCompletions) {
             if (p->INTC_FrameID == FrameID) {
                 present = p.get();
@@ -2038,7 +2038,7 @@ void PMTraceConsumer::CompletePresent(std::shared_ptr<PresentEvent> p)
 
     std::vector<std::shared_ptr<PresentEvent>>* completeQueue = nullptr;
     if (deferCompletion) {
-        completeQueue = &mPresentsToCompleteAfterNextPresent[p->ProcessId].mPresents;
+        completeQueue = &mPendingCompletions[p->ProcessId].mPresents;
         #if DEBUG_VERBOSE
         p->CompletePending = true;
         #endif
@@ -2148,12 +2148,12 @@ void PMTraceConsumer::TrackPresentOnThread(std::shared_ptr<PresentEvent> present
 
     // If this process has pending completions, note how many were pending at
     // the beginning of the Present() call.  These will be flushed at the end
-    // of the Present() call.
-    auto ii = mPresentsToCompleteAfterNextPresent.find(present->ProcessId);
-    if (ii != mPresentsToCompleteAfterNextPresent.end()) {
+    // of the NUM_PRESENTS_TO_WAIT_FOR'th subsequent Present() call.
+    auto ii = mPendingCompletions.find(present->ProcessId);
+    if (ii != mPendingCompletions.end()) {
         auto pendingCompletions = &ii->second;
-        pendingCompletions->mCountAtPreviousPreviousPresentStart = pendingCompletions->mCountAtPreviousPresentStart;
-        pendingCompletions->mCountAtPreviousPresentStart = pendingCompletions->mPresents.size();
+        pendingCompletions->mCountAtPresentStart[pendingCompletions->mCountIndex] = (uint32_t) pendingCompletions->mPresents.size();
+        pendingCompletions->mCountIndex = (pendingCompletions->mCountIndex + 1) % PendingCompletions::NUM_PRESENTS_TO_WAIT_FOR;
     }
 }
 
@@ -2183,16 +2183,14 @@ void PMTraceConsumer::RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPres
         }
     }
 
-    // Complete any presents whose completion was pending at the beginning of
-    // the previous Present() call.  This should ensure that any INTC
-    // task_FramePacer_Info events related to those presents have been
-    // observed.
-    auto ii = mPresentsToCompleteAfterNextPresent.find(hdr.ProcessId);
-    if (ii != mPresentsToCompleteAfterNextPresent.end()) {
+    // Flush any presents whose NUM_PRESENTS_TO_WAIT_FOR have now expired.
+    auto ii = mPendingCompletions.find(hdr.ProcessId);
+    if (ii != mPendingCompletions.end()) {
         auto pendingCompletions = &ii->second;
-        if (pendingCompletions->mCountAtPreviousPreviousPresentStart > 0) {
+        auto expiredCount = pendingCompletions->mCountAtPresentStart[pendingCompletions->mCountIndex];
+        if (expiredCount > 0) {
             auto pb = pendingCompletions->mPresents.begin();
-            auto pe = pb + pendingCompletions->mCountAtPreviousPreviousPresentStart;
+            auto pe = pb + expiredCount;
 
             #if DEBUG_VERBOSE
             for (auto pi = pb; pi != pe; ++pi) {
@@ -2207,14 +2205,14 @@ void PMTraceConsumer::RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPres
             }
 
             pendingCompletions->mPresents.erase(pb, pe);
-            pendingCompletions->mCountAtPreviousPresentStart -= pendingCompletions->mCountAtPreviousPreviousPresentStart;
-            pendingCompletions->mCountAtPreviousPreviousPresentStart = 0;
+            for (uint32_t i = 0; i < PendingCompletions::NUM_PRESENTS_TO_WAIT_FOR; ++i) {
+                pendingCompletions->mCountAtPresentStart[i] -= expiredCount;
+            }
         }
 
         // Even if pendingCompletions->mPresents is empty, we leave the
         // mPresentsToCompleteAfterNextPresent entry because we're likely to
-        // keep using it for this process.  Note, however, that it will never
-        // be cleared until PresentMon exits.
+        // keep using it for this process.
     }
 }
 
