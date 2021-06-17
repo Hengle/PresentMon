@@ -361,8 +361,8 @@ static PMTraceConsumer::DmaDuration* CreateDmaDuration(
         //Init CpuGpuSync
         for (uint32_t type = Intel_Graphics_D3D10::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; type < Intel_Graphics_D3D10::SYNC_TYPE_LAST; type++)
         {
-            process->mCpuGpuSyncStartTimes[type] = 0;
-            process->mCpuGpuSyncAccumTimes[type] = 0;
+            dmaDuration->mCpuGpuSyncStartTimes[type] = 0;
+            dmaDuration->mCpuGpuSyncAccumTimes[type] = 0;
         }
     }
     return dmaDuration;
@@ -2104,12 +2104,12 @@ void PMTraceConsumer::HandleIGfxD3D10QueueTimersEvent( EVENT_RECORD* pEventRecor
 
     auto const& hdr = pEventRecord->EventHeader;
 
-    auto processIter = mProcesses.find( hdr.ProcessId );
-    if (processIter == mProcesses.end()) {
+    auto iter = mDmaDurations.find( hdr.ProcessId );
+    if (iter == mDmaDurations.end()) {
         printf( "Could find processId %d\n", hdr.ProcessId );
         return;
     }
-    auto process = &processIter->second;
+    auto dmaDuration = &iter->second;
 
     switch (hdr.EventDescriptor.Id) {
     case Intel_Graphics_D3D10::QueueTimers_Info::Id:
@@ -2121,47 +2121,47 @@ void PMTraceConsumer::HandleIGfxD3D10QueueTimersEvent( EVENT_RECORD* pEventRecor
         }
      
         // FrameTimeApp & Drv will go here
-        if (process->mQueueTimersStartTimes[TimerType] > 0)
+        if (dmaDuration->mQueueTimersStartTimes[TimerType] > 0)
         {
-            process->mQueueTimersAccumTimes[TimerType] += hdr.TimeStamp.QuadPart - process->mQueueTimersStartTimes[TimerType];
+            dmaDuration->mQueueTimersAccumTimes[TimerType] += hdr.TimeStamp.QuadPart - dmaDuration->mQueueTimersStartTimes[TimerType];
         }
-        process->mQueueTimersStartTimes[TimerType] = hdr.TimeStamp.QuadPart;
+        dmaDuration->mQueueTimersStartTimes[TimerType] = hdr.TimeStamp.QuadPart;
 
         if (TimerType == Intel_Graphics_D3D10::FRAME_TIME_APP)
         {
             //Copy & Init all Producer timers
-            presentEvent->QueueTimers[TimerType] = process->mQueueTimersAccumTimes[TimerType];
-            process->mQueueTimersAccumTimes[TimerType] = 0;
+            presentEvent->QueueTimers[TimerType] = dmaDuration->mQueueTimersAccumTimes[TimerType];
+            dmaDuration->mQueueTimersAccumTimes[TimerType] = 0;
             for (uint32_t type = Intel_Graphics_D3D10::WAIT_IF_FULL_TIMER; type < Intel_Graphics_D3D10::WAIT_IF_EMPTY_TIMER; type++)
             {
-                presentEvent->QueueTimers[type] = process->mQueueTimersAccumTimes[type];
-                process->mQueueTimersAccumTimes[type] = 0;
+                presentEvent->QueueTimers[type] = dmaDuration->mQueueTimersAccumTimes[type];
+                dmaDuration->mQueueTimersAccumTimes[type] = 0;
             }
         }
         else if (TimerType == Intel_Graphics_D3D10::FRAME_TIME_DRIVER)
         {
             //Copy & Init all Consumer timers
-            presentEvent->QueueTimers[TimerType] = process->mQueueTimersAccumTimes[TimerType];
-            process->mQueueTimersAccumTimes[TimerType] = 0;
+            presentEvent->QueueTimers[TimerType] = dmaDuration->mQueueTimersAccumTimes[TimerType];
+            dmaDuration->mQueueTimersAccumTimes[TimerType] = 0;
             for (uint32_t type = Intel_Graphics_D3D10::WAIT_IF_EMPTY_TIMER; type < Intel_Graphics_D3D10::FRAME_TIME_APP; type++)
             {
-                presentEvent->QueueTimers[type] = process->mQueueTimersAccumTimes[type];
-                process->mQueueTimersAccumTimes[type] = 0;
+                presentEvent->QueueTimers[type] = dmaDuration->mQueueTimersAccumTimes[type];
+                dmaDuration->mQueueTimersAccumTimes[type] = 0;
             }
         }
         break;
     }
     case Intel_Graphics_D3D10::QueueTimers_Start::Id:
     {
-        process->mQueueTimersStartTimes[TimerType] = hdr.TimeStamp.QuadPart;
+        dmaDuration->mQueueTimersStartTimes[TimerType] = hdr.TimeStamp.QuadPart;
         break;
     }
     case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
     {
-        if (process->mQueueTimersStartTimes[TimerType] > 0)
+        if (dmaDuration->mQueueTimersStartTimes[TimerType] > 0)
         {
-            process->mQueueTimersAccumTimes[TimerType] += hdr.TimeStamp.QuadPart - process->mQueueTimersStartTimes[TimerType];
-            process->mQueueTimersStartTimes[TimerType] = 0;
+            dmaDuration->mQueueTimersAccumTimes[TimerType] += hdr.TimeStamp.QuadPart - dmaDuration->mQueueTimersStartTimes[TimerType];
+            dmaDuration->mQueueTimersStartTimes[TimerType] = 0;
         }
         break;
     }
@@ -2182,25 +2182,25 @@ void PMTraceConsumer::HandleIGfxD3D10CpuGpuSyncEvent( EVENT_RECORD* pEventRecord
 
     auto const& hdr = pEventRecord->EventHeader;
 
-    auto processIter = mProcesses.find( hdr.ProcessId );
-    if (processIter == mProcesses.end()) {
+    auto iter = mDmaDurations.find( hdr.ProcessId );
+    if (iter == mDmaDurations.end()) {
         printf( "Could find processId %d\n", hdr.ProcessId );
         return;
     }
-    auto process = &processIter->second;
+    auto dmaDuration = &iter->second;
 
     switch (hdr.EventDescriptor.Id) {
     case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
     {
-        process->mCpuGpuSyncStartTimes[SyncType] = hdr.TimeStamp.QuadPart;
+        dmaDuration->mCpuGpuSyncStartTimes[SyncType] = hdr.TimeStamp.QuadPart;
         break;
     }
     case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
     {
-        if (process->mCpuGpuSyncStartTimes[SyncType] > 0)
+        if (dmaDuration->mCpuGpuSyncStartTimes[SyncType] > 0)
         {
-            process->mCpuGpuSyncAccumTimes[SyncType] += hdr.TimeStamp.QuadPart - process->mCpuGpuSyncStartTimes[SyncType];
-            process->mCpuGpuSyncStartTimes[SyncType] = 0;
+            dmaDuration->mCpuGpuSyncAccumTimes[SyncType] += hdr.TimeStamp.QuadPart - dmaDuration->mCpuGpuSyncStartTimes[SyncType];
+            dmaDuration->mCpuGpuSyncStartTimes[SyncType] = 0;
         }
         break;
     }

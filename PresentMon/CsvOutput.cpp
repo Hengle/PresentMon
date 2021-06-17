@@ -143,7 +143,6 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double msUntilRenderComplete  = 0.0;
     double msUntilDisplayed       = 0.0;
     double msBetweenDisplayChange = 0.0;
-    double msGPUDuration          = 0.0;
     double msQueueTimers[Intel_Graphics_D3D10::WAIT_TIMERS_COUNT];
     double msCpuGpuSync[Intel_Graphics_D3D10::SYNC_TYPE_LAST];
 
