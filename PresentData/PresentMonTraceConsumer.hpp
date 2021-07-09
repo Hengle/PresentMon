@@ -326,33 +326,33 @@ struct PMTraceConsumer
 
     // Tracking for GPU work contributing to each frame.  We need to track DMA
     // packet queuing to know how when each DMA packet actually ran.
-    struct DmaDuration {
-        uint64_t mFirstDmaTime;         // QPC when the first DMA packet started
-        uint64_t mLastDmaTime;          // QPC when the last DMA packet completed
-        uint64_t mAccumulatedDmaTime;   // QPC duration that at least one DMA packet was running
-        uint64_t mDmaExecStartTime;     // QPC when the oldest running DMA packet started
-        uint32_t mDmaExecCount;         // Number of running DMA packets
+    struct FrameDmaPackets {
+        uint64_t mFirstDmaTime;         // QPC when the first DMA packet started for the current frame
+        uint64_t mLastDmaTime;          // QPC when the last DMA packet completed for the current frame
+        uint64_t mAccumulatedDmaTime;   // QPC duration while at least one DMA packet was running during the current frame
+        uint64_t mRunningDmaStartTime;  // QPC when the oldest currently-running DMA packet started
+        uint32_t mRunningDmaCount;      // Number of currently-running DMA packets
     };
 
+    // A queue of up to 10 scheduled dma packets.  Using 10 to fill 2
+    // cachelines.  10 should be more than we need, but 4 (fills 1 cacheline)
+    // is not enough.
     struct Node {
-        uint64_t mStartTime;            // QPC when the current packet started running
-        uint32_t mQueueIndex;           // Index into mDmaDurations and mSequenceId for current running packet
-        uint32_t mQueueCount;           // Number of enqueued packets
-
-        // 9 is to fit into two cache lines (one is not enough)
-        DmaDuration* mDmaDuration[9];   // Accumulation duration of enqueued packets
-        uint32_t mSequenceId[9];        // Sequence IDs for enqueued packets
+        FrameDmaPackets* mFrameDmaPackets[10];  // Frame state for enqueued packets
+        uint32_t mSequenceId[10];               // Sequence IDs for enqueued packets
+        uint32_t mQueueIndex;                   // Index into mFrameDmaPackets and mSequenceId for currently-running packet
+        uint32_t mQueueCount;                   // Number of enqueued packets
     };
 
     struct Context {
-        DmaDuration* mDmaDuration;
+        FrameDmaPackets* mFrameDmaPackets;
         Node* mNode;
     };
 
     std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes; // pDxgAdapter -> NodeOrdinal -> Node
     std::unordered_map<uint64_t, uint64_t> mDevices;                          // hDevice -> pDxgAdapter
     std::unordered_map<uint64_t, Context> mContexts;                          // hContext -> Context
-    std::unordered_map<uint32_t, DmaDuration> mDmaDurations;                  // ProcessID -> DmaDuration
+    std::unordered_map<uint32_t, FrameDmaPackets> mProcessFrameDmaPackets;    // ProcessID -> FrameDmaPackets
 
 
     void DequeueProcessEvents(std::vector<ProcessEvent>& outProcessEvents)
@@ -384,7 +384,6 @@ struct PMTraceConsumer
     void HandleDxgkPresentHistory(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, PresentMode knownPresentMode);
     void HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint64_t token);
 
-    void AssignAccumulatedGPUWork(std::shared_ptr<PresentEvent> const& present, uint64_t currentQpc);
     void CompletePresent(std::shared_ptr<PresentEvent> const& p);
     void CompletePresentHelper(std::shared_ptr<PresentEvent> const& p, OrderedPresents* completed);
     void CompleteDeferredCompletion(std::shared_ptr<PresentEvent> const& present);

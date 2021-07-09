@@ -437,4 +437,20 @@ void DebugLostPresent(PresentEvent const& p)
     printf("\n");
 }
 
+void DebugFirstDmaStart()
+{
+    printf("                             FirstDmaTime\n");
+}
+
+void DebugDmaAccumulated(uint64_t currentTime, uint64_t addedTime)
+{
+    printf("                             DmaTimeAccumulated: ");
+    PrintTimeDelta(currentTime);
+    printf(" + ");
+    PrintTimeDelta(addedTime);
+    printf(" => ");
+    PrintTimeDelta(currentTime + addedTime);
+    printf("\n");
+}
+
 #endif // if DEBUG_VERBOSE

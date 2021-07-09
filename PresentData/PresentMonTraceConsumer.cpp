@@ -318,22 +318,6 @@ void PMTraceConsumer::HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterv
     }
 }
 
-static PMTraceConsumer::DmaDuration* CreateDmaDuration(
-    uint32_t processId,
-    std::unordered_map<uint32_t, PMTraceConsumer::DmaDuration>* dmaDurations)
-{
-    auto p = dmaDurations->emplace(processId, PMTraceConsumer::DmaDuration());
-    auto dmaDuration = &p.first->second;
-    if (p.second) {
-        dmaDuration->mFirstDmaTime = 0;
-        dmaDuration->mLastDmaTime = 0;
-        dmaDuration->mAccumulatedDmaTime = 0;
-        dmaDuration->mDmaExecStartTime = 0;
-        dmaDuration->mDmaExecCount = 0;
-    }
-    return dmaDuration;
-}
-
 void PMTraceConsumer::HandleDxgkQueueSubmit(
     EVENT_HEADER const& hdr,
     uint32_t packetType,
@@ -342,13 +326,13 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
     bool present,
     bool supportsDxgkPresentEvent)
 {
-    // Create a DmaDuration for this context (for cases where the context was
-    // created before the capture was started)
+    // Create a FrameDmaPackets for this context (for cases where the context
+    // was created before the capture was started)
     //
     // mContexts should be empty if mTrackGPU==false.
     auto contextIter = mContexts.find(context);
-    if (contextIter != mContexts.end() && contextIter->second.mDmaDuration == nullptr) {
-        contextIter->second.mDmaDuration = CreateDmaDuration(hdr.ProcessId, &mDmaDurations);
+    if (contextIter != mContexts.end() && contextIter->second.mFrameDmaPackets == nullptr) {
+        contextIter->second.mFrameDmaPackets = &mProcessFrameDmaPackets.emplace(hdr.ProcessId, PMTraceConsumer::FrameDmaPackets{}).first->second;
     }
 
     // If we know we're never going to get a DxgkPresent event for a given blt, then let's try to determine if it's a redirected blt or not.
@@ -409,11 +393,44 @@ void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t 
 
     TRACK_PRESENT_PATH_SAVE_GENERATED_ID(pEvent);
 
-    // TODO: Because it queue packet completion happens sometime after DMA
-    // completion, it's possible that some small portion of the next frame's
-    // GPU work has started and will be attributed to this frame.
-    if (mTrackGPU) {
-        AssignAccumulatedGPUWork(pEvent, hdr.TimeStamp.QuadPart);
+    // Assign any tracked accumulated GPU work to the present.
+    //
+    // mProcessFrameDmaPackets should be empty if mTrackGPU==false.
+    //
+    // Note: there is a potential race here because QueuePacket_Info occurs
+    // sometime after DmaPacket_Info it's possible that some small portion of
+    // the next frame's GPU work has both started and completed before
+    // QueuePacket_Info and will be attributed to this frame.  However, this is
+    // necessarily a small amount of work, and we can't use DMA packets as not
+    // all present types create them.
+    auto dmaIter = mProcessFrameDmaPackets.find(pEvent->ProcessId);
+    if (dmaIter != mProcessFrameDmaPackets.end()) {
+        auto frameDmaPackets = &dmaIter->second;
+
+        DebugModifyPresent(*pEvent);
+        pEvent->GPUStartTime = frameDmaPackets->mFirstDmaTime;
+        pEvent->ReadyTime = frameDmaPackets->mLastDmaTime;
+        pEvent->GPUDuration = frameDmaPackets->mAccumulatedDmaTime;
+        frameDmaPackets->mFirstDmaTime = 0;
+        frameDmaPackets->mLastDmaTime = 0;
+        frameDmaPackets->mAccumulatedDmaTime = 0;
+
+        // There are some cases where the QueuePacket_Stop timestamp is before
+        // the previous dma packet completes.  e.g., this seems to be typical
+        // of DWM present packets.  In these cases, instead of loosing track of
+        // the previous dma work, we split it at this time and assign portions
+        // to both frames.  Note this is incorrect, as the dma's full cost
+        // should be fully attributed to the previous frame.
+        if (frameDmaPackets->mRunningDmaCount > 0) {
+            auto accumulatedTime = hdr.TimeStamp.QuadPart - frameDmaPackets->mRunningDmaStartTime;
+            DebugDmaAccumulated(pEvent->GPUDuration, accumulatedTime);
+
+            pEvent->ReadyTime = hdr.TimeStamp.QuadPart;
+            pEvent->GPUDuration += accumulatedTime;
+            frameDmaPackets->mFirstDmaTime = hdr.TimeStamp.QuadPart;
+            frameDmaPackets->mRunningDmaStartTime = hdr.TimeStamp.QuadPart;
+            DebugFirstDmaStart();
+        }
     }
 
     // If this is one of the present modes for which packet completion implies
@@ -454,10 +471,6 @@ void PMTraceConsumer::HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipS
 
     pEvent->ReadyTime = hdr.TimeStamp.QuadPart;
 
-    if (mTrackGPU && pEvent->GPUDuration == 0) {
-        AssignAccumulatedGPUWork(pEvent, hdr.TimeStamp.QuadPart);
-    }
-
     if (pEvent->PresentMode == PresentMode::Composed_Flip) {
         pEvent->PresentMode = PresentMode::Hardware_Independent_Flip;
     }
@@ -486,10 +499,6 @@ void PMTraceConsumer::HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t fl
     if (pEvent->ReadyTime == 0) {
         DebugModifyPresent(*pEvent);
         pEvent->ReadyTime = hdr.TimeStamp.QuadPart;
-    }
-
-    if (mTrackGPU && pEvent->GPUDuration == 0) {
-        AssignAccumulatedGPUWork(pEvent, hdr.TimeStamp.QuadPart);
     }
 
     if (!flipEntryStatusAfterFlipValid) {
@@ -968,17 +977,17 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 node->mQueueCount = 0;
             }
 
-            // Create a DmaDuration unless this was a DCStart (in which case it's
-            // generated by xperf)
-            DmaDuration* dmaDuration = hdr.EventDescriptor.Id == Microsoft_Windows_DxgKrnl::Context_Start::Id
-                ? CreateDmaDuration(hdr.ProcessId, &mDmaDurations)
+            // Create a FrameDmaPackets unless this was a DCStart (in which
+            // case it's generated by xperf)
+            FrameDmaPackets* frameDmaPackets = hdr.EventDescriptor.Id == Microsoft_Windows_DxgKrnl::Context_Start::Id
+                ? &mProcessFrameDmaPackets.emplace(hdr.ProcessId, PMTraceConsumer::FrameDmaPackets{}).first->second
                 : nullptr;
 
             // Sometimes there are duplicate start events, make sure that they say the same thing
             assert(mContexts.find(hDevice) == mContexts.end() || mContexts.find(hDevice)->second.mNode == node);
 
             auto context = &mContexts.emplace(hContext, PMTraceConsumer::Context()).first->second;
-            context->mDmaDuration = dmaDuration;
+            context->mFrameDmaPackets = frameDmaPackets;
             context->mNode = node;
             return;
         }
@@ -1016,47 +1025,44 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             auto ii = mContexts.find(hContext);
             if (ii != mContexts.end()) {
                 auto context = &ii->second;
-                auto dmaDuration = context->mDmaDuration;
+                auto frameDmaPackets = context->mFrameDmaPackets;
                 auto node = context->mNode;
 
-                // A very rare (never observed) race exists where process can
-                // still be nullptr here.  The context must have been created
-                // and this packet must have been submitted to the queue before
-                // the capture started.
+                // A very rare (never observed) race exists where frameDmaPackets
+                // can still be nullptr here.  The context must have been
+                // created and this packet must have been submitted to the
+                // queue before the capture started.
                 //
                 // In this case, we have to ignore the DMA packet otherwise the
                 // node and process tracking will become out of sync.
-                if (dmaDuration == nullptr) {
+                if (frameDmaPackets == nullptr) {
                     return;
                 }
 
                 if (node->mQueueCount == _countof(Node::mSequenceId)) {
-                    // mSequenceId array is too small (or, DmaPacket_Info
-                    // events didn't fire for some reason).  This seems to always
-                    // hit when an application closes...
+                    // mFrameDmaPackets/mSequenceId arrays are too small (or,
+                    // DmaPacket_Info events didn't fire for some reason).
+                    // This seems to always hit when an application closes...
                     return;
                 }
 
                 // Enqueue the packet
                 auto queueIndex = (node->mQueueIndex + node->mQueueCount) % _countof(Node::mSequenceId);
-                node->mDmaDuration[queueIndex] = dmaDuration;
+                node->mFrameDmaPackets[queueIndex] = frameDmaPackets;
                 node->mSequenceId[queueIndex] = SequenceId;
                 node->mQueueCount += 1;
-
-                // Note the starting time of the first DMA packet
-                if (dmaDuration->mFirstDmaTime == 0) {
-                    dmaDuration->mFirstDmaTime = hdr.TimeStamp.QuadPart;
-                }
 
                 // If the queue was empty, the packet starts running right
                 // away, otherwise it is just enqueued and will start running
                 // after all previous packets complete.
                 if (node->mQueueCount == 1) {
-                    node->mStartTime = hdr.TimeStamp.QuadPart;
-
-                    dmaDuration->mDmaExecCount += 1;
-                    if (dmaDuration->mDmaExecCount == 1) {
-                        dmaDuration->mDmaExecStartTime = hdr.TimeStamp.QuadPart;
+                    frameDmaPackets->mRunningDmaCount += 1;
+                    if (frameDmaPackets->mRunningDmaCount == 1) {
+                        frameDmaPackets->mRunningDmaStartTime = hdr.TimeStamp.QuadPart;
+                        if (frameDmaPackets->mFirstDmaTime == 0) {
+                            frameDmaPackets->mFirstDmaTime = hdr.TimeStamp.QuadPart;
+                            DebugFirstDmaStart();
+                        }
                     }
                 }
             }
@@ -1090,7 +1096,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             auto ii = mContexts.find(hContext);
             if (ii != mContexts.end()) {
                 auto context = &ii->second;
-                auto dmaDuration = context->mDmaDuration;
+                auto frameDmaPackets = context->mFrameDmaPackets;
                 auto node = context->mNode;
 
                 // It's possible to miss DmaPacket events during realtime
@@ -1101,17 +1107,16 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 // we didn't know the process yet) then SequenceId will be
                 // smaller than expected.  If this happens, we ignore the
                 // DmaPacket_Info event which means that, if there was idle
-                // time before the missing DmaPacket_Start event, mGPUTime will
-                // be too large.
+                // time before the missing DmaPacket_Start event,
+                // mAccumulatedDmaTime will be too large.
                 //
                 // measured: ----------------  -------     ---------------------
                 //                                            [---   [--
                 // actual:   [-----]  [-----]  [-----]     [-----]-----]-------]
                 //           ^     ^  x     ^  ^     ^        x  ^   ^
                 //           s1    i1 s2    i2 s3    i3       s2 i1  s3
-
                 auto runningSequenceId = node->mSequenceId[node->mQueueIndex];
-                if (dmaDuration == nullptr || node->mQueueCount == 0 || SequenceId < runningSequenceId) {
+                if (frameDmaPackets == nullptr || node->mQueueCount == 0 || SequenceId < runningSequenceId) {
                     return;
                 }
 
@@ -1138,7 +1143,6 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 // actual:   [-----]  [-----]  [-----]     [-----]-----]-------]
                 //           ^     ^  ^     x  ^     ^        ^  ^     x
                 //           s1    i1 s2    i2 s3    i3       s2 i1    i2
-
                 if (SequenceId > runningSequenceId) {
                     for (uint32_t missingCount = 1; ; ++missingCount) {
                         if (missingCount == node->mQueueCount) {
@@ -1148,12 +1152,12 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                         uint32_t queueIndex = (node->mQueueIndex + missingCount) % _countof(Node::mSequenceId);
                         if (node->mSequenceId[queueIndex] == SequenceId) {
                             // Move current packet into this slot
-                            node->mDmaDuration[queueIndex] = node->mDmaDuration[node->mQueueIndex];
+                            node->mFrameDmaPackets[queueIndex] = node->mFrameDmaPackets[node->mQueueIndex];
                             node->mSequenceId[queueIndex] = node->mSequenceId[node->mQueueIndex];
                             node->mQueueIndex = queueIndex;
                             node->mQueueCount -= missingCount;
 
-                            dmaDuration = node->mDmaDuration[node->mQueueIndex];
+                            frameDmaPackets = node->mFrameDmaPackets[node->mQueueIndex];
                             break;
                         }
                     }
@@ -1161,25 +1165,30 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 
                 // Pop the completed packet from the queue
                 node->mQueueCount -= 1;
-                dmaDuration->mDmaExecCount -= 1;
+                frameDmaPackets->mRunningDmaCount -= 1;
 
                 // If this was the process' last executing packet, accumulate
                 // the execution duration into the process' count.
-                assert(dmaDuration == node->mDmaDuration[node->mQueueIndex]);
-                if (dmaDuration->mDmaExecCount == 0) {
-                    dmaDuration->mAccumulatedDmaTime += hdr.TimeStamp.QuadPart - dmaDuration->mDmaExecStartTime;
-                    dmaDuration->mLastDmaTime = hdr.TimeStamp.QuadPart;
+                assert(frameDmaPackets == node->mFrameDmaPackets[node->mQueueIndex]);
+                if (frameDmaPackets->mRunningDmaCount == 0) {
+                    auto accumulatedTime = hdr.TimeStamp.QuadPart - frameDmaPackets->mRunningDmaStartTime;
+                    DebugDmaAccumulated(frameDmaPackets->mAccumulatedDmaTime, accumulatedTime);
+                    frameDmaPackets->mLastDmaTime = hdr.TimeStamp.QuadPart;
+                    frameDmaPackets->mAccumulatedDmaTime += accumulatedTime;
+                    frameDmaPackets->mRunningDmaStartTime = 0;
                 }
 
                 // If there was another queued packet, start it
                 if (node->mQueueCount > 0) {
-                    node->mStartTime  = hdr.TimeStamp.QuadPart;
                     node->mQueueIndex = (node->mQueueIndex + 1) % _countof(Node::mSequenceId);
-
-                    dmaDuration = node->mDmaDuration[node->mQueueIndex];
-                    dmaDuration->mDmaExecCount += 1;
-                    if (dmaDuration->mDmaExecCount == 1) {
-                        dmaDuration->mDmaExecStartTime = hdr.TimeStamp.QuadPart;
+                    frameDmaPackets = node->mFrameDmaPackets[node->mQueueIndex];
+                    frameDmaPackets->mRunningDmaCount += 1;
+                    if (frameDmaPackets->mRunningDmaCount == 1) {
+                        frameDmaPackets->mRunningDmaStartTime = hdr.TimeStamp.QuadPart;
+                        if (frameDmaPackets->mFirstDmaTime == 0) {
+                            frameDmaPackets->mFirstDmaTime = hdr.TimeStamp.QuadPart;
+                            DebugFirstDmaStart();
+                        }
                     }
                 }
             }
@@ -1760,34 +1769,6 @@ void PMTraceConsumer::RemoveLostPresent(std::shared_ptr<PresentEvent> p)
     {
         std::lock_guard<std::mutex> lock(mLostPresentEventMutex);
         mLostPresentEvents.push_back(p);
-    }
-}
-
-// Assign any tracked accumulated GPU work to the present.
-//
-// mDmaDurations should be empty if mTrackGPU==false.
-void PMTraceConsumer::AssignAccumulatedGPUWork(std::shared_ptr<PresentEvent> const& present, uint64_t currentQpc)
-{
-    auto dmaIter = mDmaDurations.find(present->ProcessId);
-    if (dmaIter != mDmaDurations.end()) {
-        auto dmaDuration = &dmaIter->second;
-
-        DebugModifyPresent(*present);
-        present->GPUStartTime = dmaDuration->mFirstDmaTime;
-        present->ReadyTime = dmaDuration->mLastDmaTime;
-        present->GPUDuration = dmaDuration->mAccumulatedDmaTime;
-        dmaDuration->mFirstDmaTime = 0;
-        dmaDuration->mLastDmaTime = 0;
-        dmaDuration->mAccumulatedDmaTime = 0;
-
-        // If there are any DMA's executing across the present completion,
-        // split their contribution across the two frames.
-        if (dmaDuration->mDmaExecCount > 0) {
-            present->ReadyTime = currentQpc;
-            present->GPUDuration += currentQpc - dmaDuration->mDmaExecStartTime;
-            dmaDuration->mFirstDmaTime = currentQpc;
-            dmaDuration->mDmaExecStartTime = currentQpc;
-        }
     }
 }
 

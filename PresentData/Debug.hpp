@@ -34,6 +34,12 @@ void DebugModifyPresent(PresentEvent const& p);
 // Call when a present is lost
 void DebugLostPresent(PresentEvent const& p);
 
+// Call when 
+void DebugFirstDmaStart();
+
+// Call when 
+void DebugDmaAccumulated(uint64_t currentTime, uint64_t addedTime);
+
 #else
 
 #define DebugInitialize(firstTimestamp, timestampFrequency) (void) firstTimestamp, timestampFrequency
@@ -42,5 +48,7 @@ void DebugLostPresent(PresentEvent const& p);
 #define DebugCreatePresent(p)                               (void) p
 #define DebugModifyPresent(p)                               (void) p
 #define DebugLostPresent(p)                                 (void) p
+#define DebugFirstDmaStart()
+#define DebugDmaAccumulated(currentTime, addedTime)         (void) currentTime, addedTime
 
 #endif
