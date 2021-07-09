@@ -75,17 +75,6 @@ public:
         }
 
         // Compare gold/test CSV data rows
-        for (size_t h = 0; h < _countof(PresentMonCsv::headerColumnIndex_); ++h) {
-            if ((testCsv.headerColumnIndex_[h] == SIZE_MAX) != (goldCsv.headerColumnIndex_[h] == SIZE_MAX)) {
-                AddTestFailure(__FILE__, __LINE__, "CSVs have different headers: %s", PresentMonCsv::GetHeader((uint32_t) h));
-                printf("GOLD = %ls\n", goldCsv_.c_str());
-                printf("TEST = %ls\n", testCsv_.c_str());
-                goldCsv.Close();
-                testCsv.Close();
-                return;
-            }
-        }
-
         for (;;) {
             auto goldDone = !goldCsv.ReadRow();
             auto testDone = !testCsv.ReadRow();

@@ -1,4 +1,4 @@
-Application,ProcessID,SwapChainAddress,Runtime,SyncInterval,PresentFlags,Dropped,TimeInSeconds,msInPresentAPI,msBetweenPresents,AllowsTearing,PresentMode,msUntilRenderComplete,msUntilDisplayed,msBetweenDisplayChange,WasBatched,DwmNotified,msUntilRenderStarts,msGPUActive,QPCTime
+Application,ProcessID,SwapChainAddress,Runtime,SyncInterval,PresentFlags,Dropped,TimeInSeconds,msInPresentAPI,msBetweenPresents,AllowsTearing,PresentMode,msUntilRenderComplete,msUntilDisplayed,msBetweenDisplayChange,WasBatched,DwmNotified,msUntilRenderStart,msGPUActive,QPCTime
 dwm.exe,1268,0x00000224B280A1C0,DXGI,1,0,0,0.499074,0.090700,16.295500,0,Hardware: Legacy Flip,0.296800,16.434700,16.678400,0,0,-16.171700,0.292800,2078174981
 Presenter.exe,10792,0x0000020979A6D5F8,D3D9,-1,0,0,0.483505,15.922200,7.513500,0,Composed: Copy with GPU GDI,16.107100,48.684100,16.680500,1,1,15.888900,0.212700,2078019292
 dwm.exe,1268,0x00000224B280A1C0,DXGI,1,0,0,0.515716,0.076200,16.642800,0,Hardware: Legacy Flip,0.294700,16.472400,16.680500,0,0,-16.575600,0.236200,2078341409

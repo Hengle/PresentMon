@@ -93,7 +93,7 @@ static void WriteCsvHeader(FILE* fp)
     }
     if (args.mTrackGPU) {
         fprintf(fp,
-            ",msUntilRenderStarts"
+            ",msUntilRenderStart"
             ",msGPUActive");
     }
     if (args.mOutputQpcTime) {

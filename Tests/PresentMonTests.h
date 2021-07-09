@@ -60,6 +60,22 @@ struct PresentMonCsv
 
     static constexpr char const* const OPT_HEADER[] = {
         "QPCTime",
+        "INTC_FrameID",
+        "INTC_AppWorkStart",
+        "INTC_AppSimulationTime",
+        "INTC_DriverWorkStart",
+        "INTC_DriverWorkEnd",
+        "INTC_KernelDriverSubmitStart",
+        "INTC_KernelDriverSubmitEnd",
+        "INTC_GPUStart",
+        "INTC_GPUEnd",
+        "INTC_KernelDriverFenceReport",
+        "INTC_PresentAPICall",
+        "INTC_ScheduledFlipTime",
+        "INTC_FlipReceivedTime",
+        "INTC_FlipReportTime",
+        "INTC_FlipProgrammingTime",
+        "INTC_ActualFlipTime",
     };
 
     static constexpr char const* GetHeader(size_t idx)

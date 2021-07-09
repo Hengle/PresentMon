@@ -194,4 +194,7 @@ exit /b 0
     "%pmdir%\%pmtest%" --presentmon="%pmdir%\%~1" --golddir="%pmdir%\Tests\Gold"
     if not "%errorlevel%"=="0" set /a errorcount=%errorcount%+1
     echo.
+    "%pmdir%\%pmtest%" --presentmon="%pmdir%\%~1" --golddir="%pmdir%\..\traces\frame_pacing\tests" --gtest_filter="GoldEtlCsvTests.*"
+    if not "%errorlevel%"=="0" set /a errorcount=%errorcount%+1
+    echo.
     exit /b 0
