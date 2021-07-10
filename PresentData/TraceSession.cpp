@@ -1,24 +1,5 @@
-/*
-Copyright 2017-2020 Intel Corporation
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
+// Copyright (C) 2020-2021 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
@@ -422,7 +403,10 @@ ULONG TraceSession::Start(
     }
 
     // -------------------------------------------------------------------------
-    // Store trace properties
+    // Save the initial time to base capture off of.  ETL captures use the
+    // time of the first event, which matches GPUVIEW usage, and realtime
+    // captures are based off the timestamp here.
+
     switch (traceProps.LogfileHeader.ReservedFlags) {
     case 2: // System time
         mQpcFrequency.QuadPart = 10000000ull;
@@ -435,9 +419,21 @@ ULONG TraceSession::Start(
         break;
     }
 
-    // Use current time as start for realtime traces (instead of the first event time)
-    if (!saveFirstTimestamp) {
-        QueryPerformanceCounter(&mStartQpc);
+    if (saveFirstTimestamp) {
+        SYSTEMTIME ust = {};
+        SYSTEMTIME lst = {};
+        FileTimeToSystemTime((FILETIME const*) &traceProps.LogfileHeader.StartTime, &ust);
+        SystemTimeToTzSpecificLocalTime(&traceProps.LogfileHeader.TimeZone, &ust, &lst);
+        SystemTimeToFileTime(&lst, &mStartTime);
+    } else {
+        LARGE_INTEGER qpc1 = {};
+        LARGE_INTEGER qpc2 = {};
+        FILETIME ft = {};
+        QueryPerformanceCounter(&qpc1);
+        GetSystemTimeAsFileTime(&ft);
+        QueryPerformanceCounter(&qpc2);
+        FileTimeToLocalFileTime(&ft, &mStartTime);
+        mStartQpc.QuadPart = qpc1.QuadPart + (qpc2.QuadPart - qpc1.QuadPart) / 2;
     }
 
     DebugInitialize(&mStartQpc, mQpcFrequency);

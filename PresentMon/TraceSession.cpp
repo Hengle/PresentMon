@@ -1,24 +1,6 @@
-/*
-Copyright 2017-2021 Intel Corporation
+// Copyright (C) 2017,2019-2021 Intel Corporation
+// SPDX-License-Identifier: MIT
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
 #include "PresentMon.hpp"
 
 #include "../PresentData/TraceSession.hpp"
@@ -170,4 +152,14 @@ uint64_t SecondsDeltaToQpc(double secondsDelta)
 double QpcToSeconds(uint64_t qpc)
 {
     return QpcDeltaToSeconds(qpc - gSession.mStartQpc.QuadPart);
+}
+
+void QpcToLocalSystemTime(uint64_t qpc, SYSTEMTIME* st, uint64_t* ns)
+{
+    auto tns = (qpc - gSession.mStartQpc.QuadPart) * 1000000000ull / gSession.mQpcFrequency.QuadPart;
+    auto t100ns = tns / 100;
+    auto ft = (*(uint64_t*) &gSession.mStartTime) + t100ns;
+
+    FileTimeToSystemTime((FILETIME const*) &ft, st);
+    *ns = (ft - (ft / 10000000ull) * 10000000ull) * 100ull + (tns - t100ns * 100ull);
 }

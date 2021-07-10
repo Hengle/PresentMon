@@ -1,24 +1,5 @@
-/*
-Copyright 2017-2021 Intel Corporation
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
+// Copyright (C) 2017-2021 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #include "PresentMonTraceConsumer.hpp"
 
@@ -34,6 +15,7 @@ SOFTWARE.
 #include <assert.h>
 #include <d3d9.h>
 #include <dxgi.h>
+#include <unordered_set>
 
 #ifdef DEBUG
 static constexpr int PRESENTEVENT_CIRCULAR_BUFFER_SIZE = 32768;
@@ -74,6 +56,7 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , TimeTaken(0)
     , GPUStartTime(0)
     , ReadyTime(0)
+    , GPUDuration(0)
     , ScreenTime(0)
     , SwapChainAddress(0)
     , SyncInterval(-1)
@@ -97,7 +80,6 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , Hwnd(0)
     , TokenPtr(0)
     , CompositionSurfaceLuid(0)
-    , GPUDuration(0)
     , QueueSubmitSequence(0)
     , DestWidth(0)
     , DestHeight(0)
@@ -109,13 +91,13 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , MMIO(false)
     , SeenDxgkPresent(false)
     , SeenWin32KEvents(false)
+    , SeenINTCFramePacerInfo(false)
     , DwmNotified(false)
-    , Completed(false)
-    #if DEBUG_VERBOSE
-    , CompletePending(false)
-    #endif
+    , SeenInFrameEvent(false)
+    , CompletionIsDeferred(false)
+    , IsCompleted(false)
     , IsLost(false)
-    , mAllPresentsTrackingIndex(0)
+    , mAllPresentsTrackingIndex(UINT32_MAX)
     , DxgKrnlHContext(0)
     , Win32KPresentCount(0)
     , Win32KBindId(0)
@@ -207,29 +189,34 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         auto FlipProgrammingTime     = desc[14].GetData<uint64_t>();
         auto ActualFlipTime          = desc[15].GetData<uint64_t>();
 
-        // Search for the present in the pending completions first, as that is
-        // the most likely location.
-        PresentEvent* present = nullptr;
-        auto const& pendingCompletions = mPendingCompletions[hdr.ProcessId].mPresents;
-        for (auto const& p : pendingCompletions) {
-            if (p->INTC_FrameID == FrameID) {
-                present = p.get();
-                break;
-            }
-        }
-
-        // If not found, also check in-flight presents for this process
-        if (present == nullptr) {
-            auto const& processOrderedPresents = mPresentsByProcess[hdr.ProcessId];
-            for (auto ii = processOrderedPresents.begin(); ii != processOrderedPresents.end(); ++ii) {
-                auto p = ii->second.get();
-                if (p->INTC_FrameID == FrameID) {
-                    present = p;
+        // Search for the present in the deferred completions first, as that is
+        // the most likely location.  If found, remove it from
+        // mDeferredCompletions.
+        std::shared_ptr<PresentEvent> present;
+        auto deferredIter = mDeferredCompletions.find(hdr.ProcessId);
+        if (deferredIter != mDeferredCompletions.end()) {
+            auto deferredCompletions = &deferredIter->second;
+            for (auto ii = deferredCompletions->begin(), ie = deferredCompletions->end(); ii != ie; ++ii) {
+                if (ii->first->INTC_FrameID == FrameID) {
+                    present = ii->first;
+                    deferredCompletions->erase(ii);
                     break;
                 }
             }
         }
 
+        // If not found, also check in-flight presents for this process
+        if (present == nullptr) {
+            for (auto const& tuple : mPresentsByProcess[hdr.ProcessId]) {
+                if (tuple.second->INTC_FrameID == FrameID) {
+                    present = tuple.second;
+                    break;
+                }
+            }
+        }
+
+        // If found, add the frame pacer info and complete it if completion is
+        // deferred.
         if (present != nullptr) {
             DebugModifyPresent(*present);
             present->INTC_AppWorkStart            = AppWorkStart;
@@ -247,6 +234,11 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             present->INTC_FlipReportTime          = FlipReportTime;
             present->INTC_FlipProgrammingTime     = FlipProgrammingTime;
             present->INTC_ActualFlipTime          = ActualFlipTime;
+            present->SeenINTCFramePacerInfo       = true;
+
+            if (present->CompletionIsDeferred) {
+                CompleteDeferredCompletion(present);
+            }
         }
         break;
     }
@@ -472,21 +464,6 @@ void PMTraceConsumer::HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterv
     }
 }
 
-static PMTraceConsumer::DmaDuration* CreateDmaDuration(
-    uint32_t processId,
-    std::unordered_map<uint32_t, PMTraceConsumer::DmaDuration>* dmaDurations)
-{
-    auto p = dmaDurations->emplace(processId, PMTraceConsumer::DmaDuration());
-    auto dmaDuration = &p.first->second;
-    if (p.second) {
-        dmaDuration->mFirstDmaTime = 0;
-        dmaDuration->mAccumulatedDmaTime = 0;
-        dmaDuration->mDmaExecStartTime = 0;
-        dmaDuration->mDmaExecCount = 0;
-    }
-    return dmaDuration;
-}
-
 void PMTraceConsumer::HandleDxgkQueueSubmit(
     EVENT_HEADER const& hdr,
     uint32_t packetType,
@@ -495,13 +472,13 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
     bool present,
     bool supportsDxgkPresentEvent)
 {
-    // Create a DmaDuration for this context (for cases where the context was
-    // created before the capture was started)
+    // Create a FrameDmaPackets for this context (for cases where the context
+    // was created before the capture was started)
     //
     // mContexts should be empty if mTrackGPU==false.
     auto contextIter = mContexts.find(context);
-    if (contextIter != mContexts.end() && contextIter->second.mDmaDuration == nullptr) {
-        contextIter->second.mDmaDuration = CreateDmaDuration(hdr.ProcessId, &mDmaDurations);
+    if (contextIter != mContexts.end() && contextIter->second.mFrameDmaPackets == nullptr) {
+        contextIter->second.mFrameDmaPackets = &mProcessFrameDmaPackets.emplace(hdr.ProcessId, PMTraceConsumer::FrameDmaPackets{}).first->second;
     }
 
     // If we know we're never going to get a DxgkPresent event for a given blt, then let's try to determine if it's a redirected blt or not.
@@ -564,29 +541,41 @@ void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t 
 
     // Assign any tracked accumulated GPU work to the present.
     //
-    // mDmaDurations should be empty if mTrackGPU==false.
+    // mProcessFrameDmaPackets should be empty if mTrackGPU==false.
     //
-    // TODO: there is an assumption here that no subsequent DMA packet can
-    // complete before we see this QueuePacket_Stop event.  If that happens,
-    // that DMA packet will mistakenly be assigned to this present.  I'm not
-    // sure if that is possible... but regardless, it is necessarily a very
-    // short duration so shouldn't be significant.
-    auto dmaIter = mDmaDurations.find(pEvent->ProcessId);
-    if (dmaIter != mDmaDurations.end()) {
-        auto dmaDuration = &dmaIter->second;
+    // Note: there is a potential race here because QueuePacket_Info occurs
+    // sometime after DmaPacket_Info it's possible that some small portion of
+    // the next frame's GPU work has both started and completed before
+    // QueuePacket_Info and will be attributed to this frame.  However, this is
+    // necessarily a small amount of work, and we can't use DMA packets as not
+    // all present types create them.
+    auto dmaIter = mProcessFrameDmaPackets.find(pEvent->ProcessId);
+    if (dmaIter != mProcessFrameDmaPackets.end()) {
+        auto frameDmaPackets = &dmaIter->second;
 
         DebugModifyPresent(*pEvent);
-        pEvent->GPUStartTime = dmaDuration->mFirstDmaTime;
-        pEvent->GPUDuration = dmaDuration->mAccumulatedDmaTime;
-        dmaDuration->mFirstDmaTime = 0;
-        dmaDuration->mAccumulatedDmaTime = 0;
+        pEvent->GPUStartTime = frameDmaPackets->mFirstDmaTime;
+        pEvent->ReadyTime = frameDmaPackets->mLastDmaTime;
+        pEvent->GPUDuration = frameDmaPackets->mAccumulatedDmaTime;
+        frameDmaPackets->mFirstDmaTime = 0;
+        frameDmaPackets->mLastDmaTime = 0;
+        frameDmaPackets->mAccumulatedDmaTime = 0;
 
-        // If there are any DMA's executing across the present completion,
-        // split their contribution across the two frames.
-        if (dmaDuration->mDmaExecCount > 0) {
-            pEvent->GPUDuration += hdr.TimeStamp.QuadPart - dmaDuration->mDmaExecStartTime;
-            dmaDuration->mFirstDmaTime = hdr.TimeStamp.QuadPart;
-            dmaDuration->mDmaExecStartTime = hdr.TimeStamp.QuadPart;
+        // There are some cases where the QueuePacket_Stop timestamp is before
+        // the previous dma packet completes.  e.g., this seems to be typical
+        // of DWM present packets.  In these cases, instead of loosing track of
+        // the previous dma work, we split it at this time and assign portions
+        // to both frames.  Note this is incorrect, as the dma's full cost
+        // should be fully attributed to the previous frame.
+        if (frameDmaPackets->mRunningDmaCount > 0) {
+            auto accumulatedTime = hdr.TimeStamp.QuadPart - frameDmaPackets->mRunningDmaStartTime;
+            DebugDmaAccumulated(pEvent->GPUDuration, accumulatedTime);
+
+            pEvent->ReadyTime = hdr.TimeStamp.QuadPart;
+            pEvent->GPUDuration += accumulatedTime;
+            frameDmaPackets->mFirstDmaTime = hdr.TimeStamp.QuadPart;
+            frameDmaPackets->mRunningDmaStartTime = hdr.TimeStamp.QuadPart;
+            DebugFirstDmaStart();
         }
     }
 
@@ -642,7 +631,8 @@ void PMTraceConsumer::HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipS
     }
 }
 
-void PMTraceConsumer::HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid)
+void PMTraceConsumer::HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence,
+                                            uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid)
 {
     auto pEvent = FindBySubmitSequence(flipSubmitSequence);
     if (pEvent == nullptr) {
@@ -653,6 +643,7 @@ void PMTraceConsumer::HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t fl
 
     // Avoid double-marking a single present packet coming from the MPO API
     if (pEvent->ReadyTime == 0) {
+        DebugModifyPresent(*pEvent);
         pEvent->ReadyTime = hdr.TimeStamp.QuadPart;
     }
 
@@ -664,11 +655,12 @@ void PMTraceConsumer::HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t fl
 
     // Present could tear if we're not waiting for vsync
     if (flipEntryStatusAfterFlip != (uint32_t) Microsoft_Windows_DxgKrnl::FlipEntryStatus::FlipWaitVSync) {
+        DebugModifyPresent(*pEvent);
         pEvent->SupportsTearing = true;
     }
 
     // For the VSync ahd HSync paths, we'll wait for the corresponding ?SyncDPC
-    // event before being considering the present complete to get a more-accurate
+    // event before considering the present complete to get a more-accurate
     // ScreenTime (see HandleDxgkSyncDPC).
     if (flipEntryStatusAfterFlip == (uint32_t) Microsoft_Windows_DxgKrnl::FlipEntryStatus::FlipWaitVSync ||
         flipEntryStatusAfterFlip == (uint32_t) Microsoft_Windows_DxgKrnl::FlipEntryStatus::FlipWaitHSync) {
@@ -677,6 +669,7 @@ void PMTraceConsumer::HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t fl
 
     TRACK_PRESENT_PATH(pEvent);
 
+    DebugModifyPresent(*pEvent);
     pEvent->FinalState = PresentResult::Presented;
     if (flipEntryStatusAfterFlip == (uint32_t) Microsoft_Windows_DxgKrnl::FlipEntryStatus::FlipWaitComplete) {
         pEvent->ScreenTime = hdr.TimeStamp.QuadPart;
@@ -806,10 +799,12 @@ void PMTraceConsumer::HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint
         ? hdr.TimeStamp.QuadPart
         : std::min(eventIter->second->ReadyTime, (uint64_t) hdr.TimeStamp.QuadPart);
 
+    // Composed Composition Atlas or Win7 Flip does not have DWM events indicating intent to present this frame.
     if (eventIter->second->PresentMode == PresentMode::Composed_Composition_Atlas ||
         (eventIter->second->PresentMode == PresentMode::Composed_Flip && !eventIter->second->SeenWin32KEvents)) {
         mPresentsWaitingForDWM.emplace_back(eventIter->second);
         eventIter->second->PresentInDwmWaitingStruct = true;
+        eventIter->second->DwmNotified = true;
     }
 
     if (eventIter->second->PresentMode == PresentMode::Composed_Copy_GPU_GDI) {
@@ -1006,7 +1001,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 
             for (uint32_t i = 0; i < mAllPresentsNextIndex; ++i) {
                 auto& p = mAllPresents[i];
-                if (p != nullptr && !p->Completed && !p->IsLost) {
+                if (p != nullptr && !p->IsLost) {
                     RemoveLostPresent(p);
                 }
             }
@@ -1128,17 +1123,17 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 node->mQueueCount = 0;
             }
 
-            // Create a DmaDuration unless this was a DCStart (in which case it's
-            // generated by xperf)
-            DmaDuration* dmaDuration = hdr.EventDescriptor.Id == Microsoft_Windows_DxgKrnl::Context_Start::Id
-                ? CreateDmaDuration(hdr.ProcessId, &mDmaDurations)
+            // Create a FrameDmaPackets unless this was a DCStart (in which
+            // case it's generated by xperf)
+            FrameDmaPackets* frameDmaPackets = hdr.EventDescriptor.Id == Microsoft_Windows_DxgKrnl::Context_Start::Id
+                ? &mProcessFrameDmaPackets.emplace(hdr.ProcessId, PMTraceConsumer::FrameDmaPackets{}).first->second
                 : nullptr;
 
             // Sometimes there are duplicate start events, make sure that they say the same thing
             assert(mContexts.find(hDevice) == mContexts.end() || mContexts.find(hDevice)->second.mNode == node);
 
             auto context = &mContexts.emplace(hContext, PMTraceConsumer::Context()).first->second;
-            context->mDmaDuration = dmaDuration;
+            context->mFrameDmaPackets = frameDmaPackets;
             context->mNode = node;
             return;
         }
@@ -1150,41 +1145,6 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             mContexts.erase(hContext);
             return;
         }
-#if 0
-        case Microsoft_Windows_DxgKrnl::SelectContext2_Info::Id:
-        {
-            EventDataDesc desc[] = {
-                { L"pDxgAdapter" },
-                { L"hContext" },
-                { L"NodeOrdinal" },
-            };
-            mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-            auto pDxgAdapter = desc[0].GetData<uint64_t>();
-            auto hContext    = desc[1].GetData<uint64_t>();
-            auto NodeOrdinal = desc[2].GetData<uint32_t>();
-
-            if (hContext == 0) {
-                return;
-            }
-
-            auto p = mContexts.emplace(hContext, PMTraceConsumer::Context());
-            if (p.second) {
-                auto p2 = mNodes[pDxgAdapter].emplace(NodeOrdinal, Node());
-                auto node = &p2.first->second;
-                if (p2.second) {
-                    node->mQueueIndex = 0;
-                    node->mQueueCount = 0;
-                }
-
-                auto context = &p.first->second;
-                context->mNode = node;
-                context->mGPUTime = 0;
-            } else {
-                assert(p.first->second.mNode == &mNodes[pDxgAdapter][NodeOrdinal]);
-            }
-            return;
-        }
-#endif
 
         // DmaPacket_Start occurs when a packet is enqueued onto a node.
         case Microsoft_Windows_DxgKrnl::DmaPacket_Start::Id:
@@ -1211,47 +1171,44 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             auto ii = mContexts.find(hContext);
             if (ii != mContexts.end()) {
                 auto context = &ii->second;
-                auto dmaDuration = context->mDmaDuration;
+                auto frameDmaPackets = context->mFrameDmaPackets;
                 auto node = context->mNode;
 
-                // A very rare (never observed) race exists where process can
-                // still be nullptr here.  The context must have been created
-                // and this packet must have been submitted to the queue before
-                // the capture started.
+                // A very rare (never observed) race exists where frameDmaPackets
+                // can still be nullptr here.  The context must have been
+                // created and this packet must have been submitted to the
+                // queue before the capture started.
                 //
                 // In this case, we have to ignore the DMA packet otherwise the
                 // node and process tracking will become out of sync.
-                if (dmaDuration == nullptr) {
+                if (frameDmaPackets == nullptr) {
                     return;
                 }
 
                 if (node->mQueueCount == _countof(Node::mSequenceId)) {
-                    // mSequenceId array is too small (or, DmaPacket_Info
-                    // events didn't fire for some reason).  This seems to always
-                    // hit when an application closes...
+                    // mFrameDmaPackets/mSequenceId arrays are too small (or,
+                    // DmaPacket_Info events didn't fire for some reason).
+                    // This seems to always hit when an application closes...
                     return;
                 }
 
                 // Enqueue the packet
                 auto queueIndex = (node->mQueueIndex + node->mQueueCount) % _countof(Node::mSequenceId);
-                node->mDmaDuration[queueIndex] = dmaDuration;
+                node->mFrameDmaPackets[queueIndex] = frameDmaPackets;
                 node->mSequenceId[queueIndex] = SequenceId;
                 node->mQueueCount += 1;
-
-                // Note the starting time of the first DMA packet
-                if (dmaDuration->mFirstDmaTime == 0) {
-                    dmaDuration->mFirstDmaTime = hdr.TimeStamp.QuadPart;
-                }
 
                 // If the queue was empty, the packet starts running right
                 // away, otherwise it is just enqueued and will start running
                 // after all previous packets complete.
                 if (node->mQueueCount == 1) {
-                    node->mStartTime = hdr.TimeStamp.QuadPart;
-
-                    dmaDuration->mDmaExecCount += 1;
-                    if (dmaDuration->mDmaExecCount == 1) {
-                        dmaDuration->mDmaExecStartTime = hdr.TimeStamp.QuadPart;
+                    frameDmaPackets->mRunningDmaCount += 1;
+                    if (frameDmaPackets->mRunningDmaCount == 1) {
+                        frameDmaPackets->mRunningDmaStartTime = hdr.TimeStamp.QuadPart;
+                        if (frameDmaPackets->mFirstDmaTime == 0) {
+                            frameDmaPackets->mFirstDmaTime = hdr.TimeStamp.QuadPart;
+                            DebugFirstDmaStart();
+                        }
                     }
                 }
             }
@@ -1285,7 +1242,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             auto ii = mContexts.find(hContext);
             if (ii != mContexts.end()) {
                 auto context = &ii->second;
-                auto dmaDuration = context->mDmaDuration;
+                auto frameDmaPackets = context->mFrameDmaPackets;
                 auto node = context->mNode;
 
                 // It's possible to miss DmaPacket events during realtime
@@ -1296,17 +1253,16 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 // we didn't know the process yet) then SequenceId will be
                 // smaller than expected.  If this happens, we ignore the
                 // DmaPacket_Info event which means that, if there was idle
-                // time before the missing DmaPacket_Start event, mGPUTime will
-                // be too large.
+                // time before the missing DmaPacket_Start event,
+                // mAccumulatedDmaTime will be too large.
                 //
                 // measured: ----------------  -------     ---------------------
                 //                                            [---   [--
                 // actual:   [-----]  [-----]  [-----]     [-----]-----]-------]
                 //           ^     ^  x     ^  ^     ^        x  ^   ^
                 //           s1    i1 s2    i2 s3    i3       s2 i1  s3
-
                 auto runningSequenceId = node->mSequenceId[node->mQueueIndex];
-                if (dmaDuration == nullptr || node->mQueueCount == 0 || SequenceId < runningSequenceId) {
+                if (frameDmaPackets == nullptr || node->mQueueCount == 0 || SequenceId < runningSequenceId) {
                     return;
                 }
 
@@ -1333,7 +1289,6 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 // actual:   [-----]  [-----]  [-----]     [-----]-----]-------]
                 //           ^     ^  ^     x  ^     ^        ^  ^     x
                 //           s1    i1 s2    i2 s3    i3       s2 i1    i2
-
                 if (SequenceId > runningSequenceId) {
                     for (uint32_t missingCount = 1; ; ++missingCount) {
                         if (missingCount == node->mQueueCount) {
@@ -1343,12 +1298,12 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                         uint32_t queueIndex = (node->mQueueIndex + missingCount) % _countof(Node::mSequenceId);
                         if (node->mSequenceId[queueIndex] == SequenceId) {
                             // Move current packet into this slot
-                            node->mDmaDuration[queueIndex] = node->mDmaDuration[node->mQueueIndex];
+                            node->mFrameDmaPackets[queueIndex] = node->mFrameDmaPackets[node->mQueueIndex];
                             node->mSequenceId[queueIndex] = node->mSequenceId[node->mQueueIndex];
                             node->mQueueIndex = queueIndex;
                             node->mQueueCount -= missingCount;
 
-                            dmaDuration = node->mDmaDuration[node->mQueueIndex];
+                            frameDmaPackets = node->mFrameDmaPackets[node->mQueueIndex];
                             break;
                         }
                     }
@@ -1356,24 +1311,30 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 
                 // Pop the completed packet from the queue
                 node->mQueueCount -= 1;
-                dmaDuration->mDmaExecCount -= 1;
+                frameDmaPackets->mRunningDmaCount -= 1;
 
                 // If this was the process' last executing packet, accumulate
                 // the execution duration into the process' count.
-                assert(dmaDuration == node->mDmaDuration[node->mQueueIndex]);
-                if (dmaDuration->mDmaExecCount == 0) {
-                    dmaDuration->mAccumulatedDmaTime += hdr.TimeStamp.QuadPart - dmaDuration->mDmaExecStartTime;
+                assert(frameDmaPackets == node->mFrameDmaPackets[node->mQueueIndex]);
+                if (frameDmaPackets->mRunningDmaCount == 0) {
+                    auto accumulatedTime = hdr.TimeStamp.QuadPart - frameDmaPackets->mRunningDmaStartTime;
+                    DebugDmaAccumulated(frameDmaPackets->mAccumulatedDmaTime, accumulatedTime);
+                    frameDmaPackets->mLastDmaTime = hdr.TimeStamp.QuadPart;
+                    frameDmaPackets->mAccumulatedDmaTime += accumulatedTime;
+                    frameDmaPackets->mRunningDmaStartTime = 0;
                 }
 
                 // If there was another queued packet, start it
                 if (node->mQueueCount > 0) {
-                    node->mStartTime  = hdr.TimeStamp.QuadPart;
                     node->mQueueIndex = (node->mQueueIndex + 1) % _countof(Node::mSequenceId);
-
-                    dmaDuration = node->mDmaDuration[node->mQueueIndex];
-                    dmaDuration->mDmaExecCount += 1;
-                    if (dmaDuration->mDmaExecCount == 1) {
-                        dmaDuration->mDmaExecStartTime = hdr.TimeStamp.QuadPart;
+                    frameDmaPackets = node->mFrameDmaPackets[node->mQueueIndex];
+                    frameDmaPackets->mRunningDmaCount += 1;
+                    if (frameDmaPackets->mRunningDmaCount == 1) {
+                        frameDmaPackets->mRunningDmaStartTime = hdr.TimeStamp.QuadPart;
+                        if (frameDmaPackets->mFirstDmaTime == 0) {
+                            frameDmaPackets->mFirstDmaTime = hdr.TimeStamp.QuadPart;
+                            DebugFirstDmaStart();
+                        }
                     }
                 }
             }
@@ -1658,73 +1619,70 @@ void PMTraceConsumer::HandleWin32kEvent(EVENT_RECORD* pEventRecord)
         if (eventIter == mWin32KPresentHistoryTokens.end()) {
             return;
         }
-
-        auto &event = *eventIter->second;
-
-        DebugModifyPresent(event);
+        auto presentEvent = eventIter->second;
 
         switch (NewState) {
         case (uint32_t) Microsoft_Windows_Win32k::TokenState::InFrame: // Composition is starting
         {
-            TRACK_PRESENT_PATH(eventIter->second);
+            TRACK_PRESENT_PATH(presentEvent);
 
             // If we're compositing a newer present than the last known window
             // present, then the last known one was discarded.  We won't
             // necessarily see a transition to Discarded for it.
-            if (event.Hwnd) {
-                auto hWndIter = mLastWindowPresent.find(event.Hwnd);
+            if (presentEvent->Hwnd) {
+                auto hWndIter = mLastWindowPresent.find(presentEvent->Hwnd);
                 if (hWndIter == mLastWindowPresent.end()) {
-                    mLastWindowPresent.emplace(event.Hwnd, eventIter->second);
-                } else if (hWndIter->second != eventIter->second) {
+                    mLastWindowPresent.emplace(presentEvent->Hwnd, presentEvent);
+                } else if (hWndIter->second != presentEvent) {
                     DebugModifyPresent(*hWndIter->second);
                     hWndIter->second->FinalState = PresentResult::Discarded;
-                    hWndIter->second = eventIter->second;
-                    DebugModifyPresent(event);
+                    hWndIter->second = presentEvent;
                 }
             }
 
+            DebugModifyPresent(*presentEvent);
+            presentEvent->SeenInFrameEvent = true;
+
             bool iFlip = mMetadata.GetEventData<BOOL>(pEventRecord, L"IndependentFlip") != 0;
-            if (iFlip && event.PresentMode == PresentMode::Composed_Flip) {
-                event.PresentMode = PresentMode::Hardware_Independent_Flip;
+            if (iFlip && presentEvent->PresentMode == PresentMode::Composed_Flip) {
+                presentEvent->PresentMode = PresentMode::Hardware_Independent_Flip;
             }
             break;
         }
 
         case (uint32_t) Microsoft_Windows_Win32k::TokenState::Confirmed: // Present has been submitted
-            TRACK_PRESENT_PATH(eventIter->second);
+            TRACK_PRESENT_PATH(presentEvent);
 
             // Handle DO_NOT_SEQUENCE presents, which may get marked as confirmed,
             // if a frame was composed when this token was completed
-            if (event.FinalState == PresentResult::Unknown &&
-                (event.PresentFlags & DXGI_PRESENT_DO_NOT_SEQUENCE) != 0) {
-                event.FinalState = PresentResult::Discarded;
+            if (presentEvent->FinalState == PresentResult::Unknown &&
+                (presentEvent->PresentFlags & DXGI_PRESENT_DO_NOT_SEQUENCE) != 0) {
+                DebugModifyPresent(*presentEvent);
+                presentEvent->FinalState = PresentResult::Discarded;
             }
-            if (event.Hwnd) {
-                mLastWindowPresent.erase(event.Hwnd);
-            }
-            break;
-
-        case (uint32_t) Microsoft_Windows_Win32k::TokenState::Retired: // Present has been completed
-            TRACK_PRESENT_PATH(eventIter->second);
-
-            if (event.FinalState == PresentResult::Unknown) {
-                event.ScreenTime = hdr.TimeStamp.QuadPart;
-                event.FinalState = PresentResult::Presented;
+            if (presentEvent->Hwnd) {
+                mLastWindowPresent.erase(presentEvent->Hwnd);
             }
             break;
 
+        // Note: Going forward, TokenState::Retired events are no longer
+        // guaranteed to be sent at the end of a frame in multi-monitor
+        // scenarios.  Instead, we use DWM's present stats to understand the
+        // Composed Flip timeline.
         case (uint32_t) Microsoft_Windows_Win32k::TokenState::Discarded: // Present has been discarded
         {
-            TRACK_PRESENT_PATH(eventIter->second);
+            TRACK_PRESENT_PATH(presentEvent);
 
-            auto sharedPtr = eventIter->second;
             mWin32KPresentHistoryTokens.erase(eventIter);
 
-            if (event.FinalState == PresentResult::Unknown || event.ScreenTime == 0) {
-                event.FinalState = PresentResult::Discarded;
+            if (!presentEvent->SeenInFrameEvent && (presentEvent->FinalState == PresentResult::Unknown || presentEvent->ScreenTime == 0)) {
+                DebugModifyPresent(*presentEvent);
+                presentEvent->FinalState = PresentResult::Discarded;
+                CompletePresent(presentEvent);
+            } else if (presentEvent->PresentMode != PresentMode::Composed_Flip) {
+                CompletePresent(presentEvent);
             }
 
-            CompletePresent(sharedPtr);
             break;
         }
         }
@@ -1813,10 +1771,12 @@ void PMTraceConsumer::HandleDWMEvent(EVENT_RECORD* pEventRecord)
 
         PMTraceConsumer::Win32KPresentHistoryTokenKey key(luidSurface, PresentCount, bindId);
         auto eventIter = mWin32KPresentHistoryTokens.find(key);
-        if (eventIter != mWin32KPresentHistoryTokens.end()) {
+        if (eventIter != mWin32KPresentHistoryTokens.end() && eventIter->second->SeenInFrameEvent) {
             TRACK_PRESENT_PATH(eventIter->second);
             DebugModifyPresent(*eventIter->second);
             eventIter->second->DwmNotified = true;
+            mPresentsWaitingForDWM.emplace_back(eventIter->second);
+            eventIter->second->PresentInDwmWaitingStruct = true;
         }
         break;
     }
@@ -1827,19 +1787,24 @@ void PMTraceConsumer::HandleDWMEvent(EVENT_RECORD* pEventRecord)
     }
 }
 
-void PMTraceConsumer::RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> p, bool deferCompletion)
+// Remove the present from all temporary tracking structures.
+void PMTraceConsumer::RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> p, bool waitForPresentStop)
 {
-    // Remove the present from any struct that would only host the event temporarily.
-    // Currently defined as all structures except for mPresentsByProcess, 
-    // mPresentsByProcessAndSwapChain, and mAllPresents.
+    // mPresentsByProcess
+    mPresentsByProcess[p->ProcessId].erase(p->QpcTime);
+
+    // mAllPresents
+    if (p->mAllPresentsTrackingIndex != UINT32_MAX) {
+        mAllPresents[p->mAllPresentsTrackingIndex] = nullptr;
+    }
 
     // mPresentByThreadId
     //
-    // There are cases where a present can complete before Present()
-    // returns.  If the completion is being deferred, then leave the
-    // present in mPresentByThreadId so that subsequent Present_Stop
-    // events can look it up still.
-    if (!deferCompletion) {
+    // There are cases where a present can be displayed/dropped before
+    // Present() returns, in which case we defer completion and leave the
+    // PresentEvent in mPresentByThreadId so that subsequent Present_Stop
+    // events can still look it up.
+    if (!waitForPresentStop) {
         auto threadEventIter = mPresentByThreadId.find(p->ThreadId);
         if (threadEventIter != mPresentByThreadId.end() && threadEventIter->second == p) {
             mPresentByThreadId.erase(threadEventIter);
@@ -1847,9 +1812,11 @@ void PMTraceConsumer::RemovePresentFromTemporaryTrackingCollections(std::shared_
     }
 
     if (p->DriverBatchThreadId != 0) {
-        auto batchThreadEventIter = mPresentByThreadId.find(p->DriverBatchThreadId);
-        if (batchThreadEventIter != mPresentByThreadId.end() && batchThreadEventIter->second == p) {
-            mPresentByThreadId.erase(batchThreadEventIter);
+        // If the present was batched, it will by referenced in mPresentByThreadId
+        // by both ThreadId and DriverBatchThreadId.
+        auto threadEventIter = mPresentByThreadId.find(p->DriverBatchThreadId);
+        if (threadEventIter != mPresentByThreadId.end() && threadEventIter->second == p) {
+            mPresentByThreadId.erase(threadEventIter);
         }
     }
 
@@ -1925,138 +1892,177 @@ void PMTraceConsumer::RemovePresentFromTemporaryTrackingCollections(std::shared_
 
 void PMTraceConsumer::RemoveLostPresent(std::shared_ptr<PresentEvent> p)
 {
-    // This present has been timed out. Remove all references to it from all tracking structures.
-    // mPresentsByProcessAndSwapChain and mPresentsByProcess should always track the present's lifetime,
-    // so these also have an assert to validate this assumption.
-
-    DebugLostPresent(*p);
-
-    p->IsLost = true;
-
-    // Presents dependent on this event can no longer be trakced.
-    for (auto& dependentPresent : p->DependentPresents) {
-        if (!dependentPresent->IsLost) {
-            RemoveLostPresent(dependentPresent);
+    // If this is a DWM present, any other presents that contributed to it are
+    // also lost.
+    //
+    // PresentEvents that become lost are not removed from DependentPresents
+    // tracking, so we need to protect against lost events (but they have
+    // already been added to mLostPresentEvents etc.).
+    for (auto& p2 : p->DependentPresents) {
+        if (!p2->IsLost) {
+            RemoveLostPresent(p2);
         }
-        // The only place a lost present could still exist outside of mLostPresentEvents is the dependents list.
-        // A lost present has already been added to mLostPresentEvents, we should never modify it.
     }
     p->DependentPresents.clear();
 
-    // Completed Presented presents should not make it here.
-    assert(!(p->Completed && p->FinalState == PresentResult::Presented));
+    // Remove the present from any tracking structures.
+    auto waitForPresentStop = false;
+    RemovePresentFromTemporaryTrackingCollections(p, waitForPresentStop);
 
-    // Remove the present from any struct that would only host the event temporarily.
-    // Should we loop through and remove the dependent presents?
-    RemovePresentFromTemporaryTrackingCollections(p, false);
-
-    // mPresentsByProcess
-    auto& presentsByThisProcess = mPresentsByProcess[p->ProcessId];
-    presentsByThisProcess.erase(p->QpcTime);
-
-    // mPresentsByProcessAndSwapChain
-    auto& presentDeque = mPresentsByProcessAndSwapChain[std::make_tuple(p->ProcessId, p->SwapChainAddress)];
-
-    bool hasRemovedElement = false;
-    for (auto presentIter = presentDeque.begin(); presentIter != presentDeque.end(); presentIter++) {
-        // This loop should in theory be short because the present is old.
-        // If we are in this loop for dozens of times, something is likely wrong.
-        if (p == *presentIter) {
-            hasRemovedElement = true;
-            presentDeque.erase(presentIter);
-            break;
-        }
-    }
-    // We expect an element to be removed here.
-    assert(hasRemovedElement);
-
-    // Update the list of lost presents.
+    // Move the present into the consumer lost queue.
+    DebugLostPresent(*p);
+    p->IsLost = true;
     {
         std::lock_guard<std::mutex> lock(mLostPresentEventMutex);
-        mLostPresentEvents.push_back(mAllPresents[p->mAllPresentsTrackingIndex]);
+        mLostPresentEvents.push_back(p);
     }
-
-    // mAllPresents
-    mAllPresents[p->mAllPresentsTrackingIndex] = nullptr;
 }
 
-void PMTraceConsumer::CompletePresent(std::shared_ptr<PresentEvent> p)
+namespace {
+
+// Returns the number of subsequent Present_Stop events to wait before
+// completing the PresentEvent (due to missing expected events).
+uint32_t GetDeferredCompletionWaitCount(PresentEvent const& p)
 {
-    if (p->Completed && p->FinalState != PresentResult::Presented) {
-        DebugModifyPresent(*p);
-        p->FinalState = PresentResult::Error;
+    // Missing Present_Stop
+    if (p.Runtime != Runtime::Other && p.TimeTaken == 0) {
+        return 1;
     }
 
-    // Throw away events until we've seen at least one Dxgk PresentInfo event
-    // (unless we're not tracking display in which case provider start order
-    // is not an issue)
+    // Missing task_FramePacer_Info
+    if (p.INTC_FrameID > 0 && p.SeenINTCFramePacerInfo == false) {
+        return 16;
+    }
+
+    // All expected events already observed
+    return 0;
+}
+
+}
+
+void PMTraceConsumer::CompletePresentHelper(std::shared_ptr<PresentEvent> const& p, OrderedPresents* completed)
+{
+    // Skip processing if compltion is already deferred.
+    if (p->CompletionIsDeferred) {
+        return;
+    }
+
+    // Throw away initial PresentEvents until we've seen at least one Dxgk
+    // PresentInfo event (unless we're not tracking display in which case
+    // provider start order is not an issue).
     if (mTrackDisplay && !mSeenDxgkPresentInfo) {
         RemoveLostPresent(p);
         return;
     }
 
-    // Complete all other presents that were riding along with this one (i.e. this one came from DWM)
-    for (auto& p2 : p->DependentPresents) {
-        if (!p2->IsLost) {
-            DebugModifyPresent(*p2);
-            p2->ScreenTime = p->ScreenTime;
-            p2->FinalState = p->FinalState;
-            CompletePresent(p2);
+    // Remove the present from any tracking structures.
+    auto waitForPresentStop = p->Runtime != Runtime::Other && p->TimeTaken == 0;
+    RemovePresentFromTemporaryTrackingCollections(p, waitForPresentStop);
+
+    // If presented, remove any previous presents made on the same swap chain.
+    //
+    // We need to do this before the DWM dependencies to ensure dependent
+    // presents are completed twice.  If there is a previous DWM present there
+    // is also likely a previous dependent present and if we complete
+    // dependents first, we will Complete p1 twice.
+    //
+    // | Dependent | DWM |
+    // | p1        |     |
+    // |           | p2  |
+    // | p3        |     |
+    // |           | p4  |
+    if (p->FinalState == PresentResult::Presented) {
+        auto presentsByThisProcess = &mPresentsByProcess[p->ProcessId];
+        for (auto ii = presentsByThisProcess->begin(), ie = presentsByThisProcess->end(); ii != ie; ) {
+            auto p2 = ii->second;
+            ++ii; // increment iterator first as CompletePresentHelper() will remove it
+            if (p2->SwapChainAddress == p->SwapChainAddress) {
+                if (p2->QpcTime >= p->QpcTime) break;
+                CompletePresentHelper(p2, completed);
+            }
         }
-        // The only place a lost present could still exist outside of mLostPresentEvents is the dependents list.
-        // A lost present has already been added to mLostPresentEvents, we should never modify it.
+    }
+
+    // If this is a DWM present, complete any other present that contributed to
+    // it.  Each DWM present only completes each HWND's most recent Composed
+    // Flip PresentEvent, so we mark any others as discarded first, then
+    // proceed in order completing them all.
+    //
+    // PresentEvents that become lost are not removed from DependentPresents
+    // tracking, so we need to protect against lost events (but they have
+    // already been added to mLostPresentEvents etc.).
+    std::unordered_set<uint64_t> completedComposedFlipHwnds;
+    for (auto ii = p->DependentPresents.rbegin(), ie = p->DependentPresents.rend(); ii != ie; ++ii) {
+        auto p2 = *ii;
+        if (!p2->IsLost && p2->PresentMode == PresentMode::Composed_Flip && !completedComposedFlipHwnds.emplace(p2->Hwnd).second) {
+            DebugModifyPresent(*p2);
+            p2->FinalState = PresentResult::Discarded;
+        }
+    }
+    completedComposedFlipHwnds.clear();
+    for (auto p2 : p->DependentPresents) {
+        if (!p2->IsLost && p2->FinalState != PresentResult::Discarded) {
+            DebugModifyPresent(*p2);
+            p2->FinalState = p->FinalState;
+            p2->ScreenTime = p->ScreenTime;
+        }
+        CompletePresentHelper(p2, completed);
     }
     p->DependentPresents.clear();
 
-    // Remove it from any tracking maps that it may have been inserted into
-    auto deferCompletion = p->INTC_FrameID > 0;
-    RemovePresentFromTemporaryTrackingCollections(p, deferCompletion);
+    // The PresentEvent is now removed from all tracking structures and we can
+    // move it into the consumer thread queue. If it is still missing some
+    // expected events, we instead place it into the DeferredCompletions list
+    // where wait for some number of presents before moving into the consumer
+    // thread queue.
+    auto deferredWaitCount = GetDeferredCompletionWaitCount(*p);
+    if (deferredWaitCount > 0) {
+        DebugModifyPresent(*p);
+        p->CompletionIsDeferred = true;
+        mDeferredCompletions[p->ProcessId].emplace_back(p, deferredWaitCount);
+    } else {
+        DebugModifyPresent(*p);
+        p->IsCompleted = true;
+        completed->emplace(p->QpcTime, p);
+    }
+}
 
-    // TODO: Only way to CompletePresent() a present without
-    // FindOrCreatePresent() finding it first is the while loop below, in which
-    // case we should remove it there instead.  Or, when created by
-    // FindOrCreatePresent() (which itself is a separate TODO).
-    auto& presentsByThisProcess = mPresentsByProcess[p->ProcessId];
-    presentsByThisProcess.erase(p->QpcTime);
+void PMTraceConsumer::CompletePresent(std::shared_ptr<PresentEvent> const& p)
+{
+    // CompletePresentHelper() will complete the present and any of its
+    // dependencies.  We collect all completed presents into an OrderedPresents
+    // because the dependency walk only respects ordering for presents on the
+    // same SwapChain.
+    OrderedPresents completed;
+    CompletePresentHelper(p, &completed);
 
-    auto& presentDeque = mPresentsByProcessAndSwapChain[std::make_tuple(p->ProcessId, p->SwapChainAddress)];
-
-    // If presented, remove all previous presents up till this one.
-    if (p->FinalState == PresentResult::Presented) {
-        auto presentIter = presentDeque.begin();
-        while (presentIter != presentDeque.end() && *presentIter != p) {
-            CompletePresent(*presentIter);
-            presentIter = presentDeque.begin();
+    // Move the completed presents into the consumer thread queue.
+    auto numCompleted = completed.size();
+    if (numCompleted > 0) {
+        std::lock_guard<std::mutex> lock(mPresentEventMutex);
+        mCompletePresentEvents.reserve(mCompletePresentEvents.size() + numCompleted);
+        for (auto const& tuple : completed) {
+            mCompletePresentEvents.push_back(tuple.second);
         }
     }
+}
 
-    // Move the present into the consumer thread queue.  If a present might be
-    // receiving a task_FramePacer_Info event, then defer placing it into the
-    // queue until after the next Present() call.
-    DebugModifyPresent(*p);
-    p->Completed = true;
+void PMTraceConsumer::CompleteDeferredCompletion(std::shared_ptr<PresentEvent> const& present)
+{
+    assert(present->CompletionIsDeferred == true);
+    assert(present->IsCompleted == false);
 
-    std::vector<std::shared_ptr<PresentEvent>>* completeQueue = nullptr;
-    if (deferCompletion) {
-        completeQueue = &mPendingCompletions[p->ProcessId].mPresents;
-        #if DEBUG_VERBOSE
-        p->CompletePending = true;
-        #endif
-    } else {
-        completeQueue = &mCompletePresentEvents;
-        mPresentEventMutex.lock();
+    auto threadEventIter = mPresentByThreadId.find(present->ThreadId);
+    if (threadEventIter != mPresentByThreadId.end() && threadEventIter->second == present) {
+        mPresentByThreadId.erase(threadEventIter);
     }
 
-    while (!presentDeque.empty() && presentDeque.front()->Completed) {
-        auto p2 = presentDeque.front();
-        presentDeque.pop_front();
+    DebugModifyPresent(*present);
+    present->IsCompleted = true;
 
-        mAllPresents[p2->mAllPresentsTrackingIndex] = nullptr;
-        completeQueue->push_back(p2);
-    }
-
-    if (!deferCompletion) {
-        mPresentEventMutex.unlock();
+    {
+        std::lock_guard<std::mutex> lock(mPresentEventMutex);
+        mCompletePresentEvents.emplace_back(present);
     }
 }
 
@@ -2090,17 +2096,16 @@ std::shared_ptr<PresentEvent> PMTraceConsumer::FindOrCreatePresent(EVENT_HEADER 
     // presents created on a different thread, which are batched and then
     // handled later during a DXGK/Win32K event.  If found, we add it to
     // mPresentByThreadId to indicate what present this thread is working on.
-    auto& presentsByThisProcess = mPresentsByProcess[hdr.ProcessId];
-    auto processIter = std::find_if(presentsByThisProcess.begin(), presentsByThisProcess.end(), [](auto processIter) {
-        return processIter.second->PresentMode == PresentMode::Unknown;
-    });
-    if (processIter != presentsByThisProcess.end()) {
-        auto presentEvent = processIter->second;
-        assert(presentEvent->DriverBatchThreadId == 0);
-        DebugModifyPresent(*presentEvent);
-        presentEvent->DriverBatchThreadId = hdr.ThreadId;
-        mPresentByThreadId.emplace(hdr.ThreadId, presentEvent);
-        return presentEvent;
+    auto presentsByThisProcess = &mPresentsByProcess[hdr.ProcessId];
+    for (auto const& tuple : *presentsByThisProcess) {
+        auto presentEvent = tuple.second;
+        if (presentEvent->PresentMode == PresentMode::Unknown) {
+            assert(presentEvent->DriverBatchThreadId == 0);
+            DebugModifyPresent(*presentEvent);
+            presentEvent->DriverBatchThreadId = hdr.ThreadId;
+            mPresentByThreadId.emplace(hdr.ThreadId, presentEvent);
+            return presentEvent;
+        }
     }
 
     // Because we couldn't find a present above, the calling event is for an
@@ -2116,22 +2121,20 @@ std::shared_ptr<PresentEvent> PMTraceConsumer::FindOrCreatePresent(EVENT_HEADER 
 
 void PMTraceConsumer::TrackPresent(
     std::shared_ptr<PresentEvent> present,
-    OrderedPresents& presentsByThisProcess)
+    OrderedPresents* presentsByThisProcess)
 {
-    DebugCreatePresent(*present);
-
     // If there is an existing present that hasn't completed by the time the
     // circular buffer has come around, consider it lost.
     if (mAllPresents[mAllPresentsNextIndex] != nullptr) {
         RemoveLostPresent(mAllPresents[mAllPresentsNextIndex]);
     }
 
+    DebugCreatePresent(*present);
     present->mAllPresentsTrackingIndex = mAllPresentsNextIndex;
     mAllPresents[mAllPresentsNextIndex] = present;
     mAllPresentsNextIndex = (mAllPresentsNextIndex + 1) % PRESENTEVENT_CIRCULAR_BUFFER_SIZE;
 
-    presentsByThisProcess.emplace(present->QpcTime, present);
-    mPresentsByProcessAndSwapChain[std::make_tuple(present->ProcessId, present->SwapChainAddress)].emplace_back(present);
+    presentsByThisProcess->emplace(present->QpcTime, present);
     mPresentByThreadId.emplace(present->ThreadId, present);
 }
 
@@ -2144,17 +2147,7 @@ void PMTraceConsumer::TrackPresentOnThread(std::shared_ptr<PresentEvent> present
         RemoveLostPresent(iter->second);
     }
 
-    TrackPresent(present, mPresentsByProcess[present->ProcessId]);
-
-    // If this process has pending completions, note how many were pending at
-    // the beginning of the Present() call.  These will be flushed at the end
-    // of the NUM_PRESENTS_TO_WAIT_FOR'th subsequent Present() call.
-    auto ii = mPendingCompletions.find(present->ProcessId);
-    if (ii != mPendingCompletions.end()) {
-        auto pendingCompletions = &ii->second;
-        pendingCompletions->mCountAtPresentStart[pendingCompletions->mCountIndex] = (uint32_t) pendingCompletions->mPresents.size();
-        pendingCompletions->mCountIndex = (pendingCompletions->mCountIndex + 1) % PendingCompletions::NUM_PRESENTS_TO_WAIT_FOR;
-    }
+    TrackPresent(present, &mPresentsByProcess[present->ProcessId]);
 }
 
 // No TRACK_PRESENT instrumentation here because each runtime Present::Start
@@ -2162,11 +2155,11 @@ void PMTraceConsumer::TrackPresentOnThread(std::shared_ptr<PresentEvent> present
 // for any completed present.
 void PMTraceConsumer::RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPresentBatching, Runtime runtime)
 {
-    // Lookup the present most-recently operated on in the same thread.  If
-    // there isn't one, ignore this event.
+    // Lookup the PresentEvent most-recently operated on by the same thread.
+    // If there isn't one, ignore this event.
     auto eventIter = mPresentByThreadId.find(hdr.ThreadId);
     if (eventIter != mPresentByThreadId.end()) {
-        auto& present = eventIter->second;
+        auto present = eventIter->second;
 
         DebugModifyPresent(*present);
         present->Runtime   = runtime;
@@ -2183,36 +2176,26 @@ void PMTraceConsumer::RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPres
         }
     }
 
-    // Flush any presents whose NUM_PRESENTS_TO_WAIT_FOR have now expired.
-    auto ii = mPendingCompletions.find(hdr.ProcessId);
-    if (ii != mPendingCompletions.end()) {
-        auto pendingCompletions = &ii->second;
-        auto expiredCount = pendingCompletions->mCountAtPresentStart[pendingCompletions->mCountIndex];
-        if (expiredCount > 0) {
-            auto pb = pendingCompletions->mPresents.begin();
-            auto pe = pb + expiredCount;
-
-            #if DEBUG_VERBOSE
-            for (auto pi = pb; pi != pe; ++pi) {
-                DebugModifyPresent(**pi);
-                (**pi).CompletePending = false;
-            }
-            #endif
-
-            {
-                std::lock_guard<std::mutex> lock(mPresentEventMutex);
-                mCompletePresentEvents.insert(mCompletePresentEvents.end(), pb, pe);
-            }
-
-            pendingCompletions->mPresents.erase(pb, pe);
-            for (uint32_t i = 0; i < PendingCompletions::NUM_PRESENTS_TO_WAIT_FOR; ++i) {
-                pendingCompletions->mCountAtPresentStart[i] -= expiredCount;
+    // Complete any deferred completions whose present wait count has now
+    // expired.  All tracking has already been removed, so we only need to add
+    // these to the completed list.
+    //
+    // Even if deferredCompletions->mPresents becomes empty, we leave the
+    // mDeferredCompletions entry because we're likely to keep using it for
+    // this process.
+    auto deferredIter = mDeferredCompletions.find(hdr.ProcessId);
+    if (deferredIter != mDeferredCompletions.end()) {
+        auto deferredCompletions = &deferredIter->second;
+        for (auto ii = deferredCompletions->begin(); ii != deferredCompletions->end(); ) {
+            auto waitCount = &ii->second;
+            if (*waitCount == 1) {
+                CompleteDeferredCompletion(ii->first);
+                ii = deferredCompletions->erase(ii);
+            } else {
+                --*waitCount;
+                ++ii;
             }
         }
-
-        // Even if pendingCompletions->mPresents is empty, we leave the
-        // mPresentsToCompleteAfterNextPresent entry because we're likely to
-        // keep using it for this process.
     }
 }
 

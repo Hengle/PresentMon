@@ -1,24 +1,5 @@
-/*
-Copyright 2017-2020 Intel Corporation
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
+// Copyright (C) 2017,2019-2021 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #include <generated/version.h>
 
@@ -97,31 +78,32 @@ static KeyNameCode const HOTKEY_KEYS[] = {
     { "7", 0x37 },
     { "8", 0x38 },
     { "9", 0x39 },
-    { "A", 0x42 },
-    { "B", 0x43 },
-    { "C", 0x44 },
-    { "D", 0x45 },
-    { "E", 0x46 },
-    { "F", 0x47 },
-    { "G", 0x48 },
-    { "H", 0x49 },
-    { "I", 0x4A },
-    { "J", 0x4B },
-    { "K", 0x4C },
-    { "L", 0x4D },
-    { "M", 0x4E },
-    { "N", 0x4F },
-    { "O", 0x50 },
-    { "P", 0x51 },
-    { "Q", 0x52 },
-    { "R", 0x53 },
-    { "S", 0x54 },
-    { "T", 0x55 },
-    { "U", 0x56 },
-    { "V", 0x57 },
-    { "W", 0x58 },
-    { "X", 0x59 },
-    { "Y", 0x5A },
+    { "A", 0x41 },
+    { "B", 0x42 },
+    { "C", 0x43 },
+    { "D", 0x44 },
+    { "E", 0x45 },
+    { "F", 0x46 },
+    { "G", 0x47 },
+    { "H", 0x48 },
+    { "I", 0x49 },
+    { "J", 0x4A },
+    { "K", 0x4B },
+    { "L", 0x4C },
+    { "M", 0x4D },
+    { "N", 0x4E },
+    { "O", 0x4F },
+    { "P", 0x50 },
+    { "Q", 0x51 },
+    { "R", 0x52 },
+    { "S", 0x53 },
+    { "T", 0x54 },
+    { "U", 0x55 },
+    { "V", 0x56 },
+    { "W", 0x57 },
+    { "X", 0x58 },
+    { "Y", 0x59 },
+    { "Z", 0x5A },
     { "F1", VK_F1 },
     { "F2", VK_F2 },
     { "F3", VK_F3 },
@@ -297,6 +279,7 @@ static void PrintHelp()
         "-no_csv",                  "Do not create any output file.",
         "-no_top",                  "Don't display active swap chains in the console window.",
         "-qpc_time",                "Output present time as a performance counter value.",
+        "-qpc_time_s",              "Output present time as a performance counter value converted to seconds.",
 
         "Recording options", nullptr,
         "-hotkey key",              "Use provided key to start and stop recording, writing to a"
@@ -318,6 +301,8 @@ static void PrintHelp()
                                     " existing sessions with the same name.",
         "-stop_existing_session",   "If a trace session with the same name is already running, stop"
                                     " the existing session (to allow this one to proceed).",
+        "-terminate_existing",      "Terminate any existing PresentMon realtime trace sessions, then exit."
+                                    " Use with -session_name to target particular sessions.",
         "-restart_as_admin",        "If not running with elevated privilege, restart as administrator."
                                     " Elevated privilege isn't required to trace a process you started,"
                                     " but it is in order to query processes started on another account."
@@ -327,9 +312,7 @@ static void PrintHelp()
         "-terminate_after_timed",   "When using -timed, terminate PresentMon after the timed capture completes.",
 
         "Beta options", nullptr,
-        "-qpc_time_s",              "Output present time as a performance counter value converted to seconds.",
-        "-terminate_existing",      "Terminate any existing PresentMon realtime trace sessions, then exit."
-                                    " Use with -session_name to target particular sessions.",
+        "-date_time",               "Output present time as a date and time with nanosecond precision.",
         "-track_gpu",               "Tracks the duration of each process' GPU work performed between presents."
                                     " Not supported on Win7.",
         "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
@@ -404,6 +387,7 @@ bool ParseCommandLine(int argc, char** argv)
     args->mOutputCsvToStdout = false;
     args->mOutputQpcTime = false;
     args->mOutputQpcTimeInSeconds = false;
+    args->mOutputDateTime = false;
     args->mScrollLockIndicator = false;
     args->mExcludeDropped = false;
     args->mConsoleOutputType = ConsoleOutput::Full;
@@ -430,11 +414,12 @@ bool ParseCommandLine(int argc, char** argv)
 
         // Output options:
         else if (ParseArg(argv[i], "output_file"))   { if (ParseValue(argv, argc, &i, &args->mOutputCsvFileName)) continue; }
-        else if (ParseArg(argv[i], "output_stdout")) { args->mOutputCsvToStdout = true;                  continue; }
-        else if (ParseArg(argv[i], "multi_csv"))     { args->mMultiCsv          = true;                  continue; }
-        else if (ParseArg(argv[i], "no_csv"))        { args->mOutputCsvToFile   = false;                 continue; }
-        else if (ParseArg(argv[i], "no_top"))        { args->mConsoleOutputType = ConsoleOutput::Simple; continue; }
-        else if (ParseArg(argv[i], "qpc_time"))      { args->mOutputQpcTime     = true;                  continue; }
+        else if (ParseArg(argv[i], "output_stdout")) { args->mOutputCsvToStdout      = true;                  continue; }
+        else if (ParseArg(argv[i], "multi_csv"))     { args->mMultiCsv               = true;                  continue; }
+        else if (ParseArg(argv[i], "no_csv"))        { args->mOutputCsvToFile        = false;                 continue; }
+        else if (ParseArg(argv[i], "no_top"))        { args->mConsoleOutputType      = ConsoleOutput::Simple; continue; }
+        else if (ParseArg(argv[i], "qpc_time"))      { args->mOutputQpcTime          = true;                  continue; }
+        else if (ParseArg(argv[i], "qpc_time_s"))    { args->mOutputQpcTimeInSeconds = true;                  continue; }
 
         // Recording options:
         else if (ParseArg(argv[i], "hotkey"))           { if (ParseValue(argv, argc, &i) && AssignHotkey(argv[i], args)) continue; }
@@ -450,17 +435,17 @@ bool ParseCommandLine(int argc, char** argv)
         // Execution options:
         else if (ParseArg(argv[i], "session_name"))           { if (ParseValue(argv, argc, &i, &args->mSessionName)) continue; }
         else if (ParseArg(argv[i], "stop_existing_session"))  { args->mStopExistingSession = true; continue; }
+        else if (ParseArg(argv[i], "terminate_existing"))     { args->mTerminateExisting   = true; continue; }
         else if (ParseArg(argv[i], "dont_restart_as_admin"))  { DEPRECATED_dontRestart     = true; continue; }
         else if (ParseArg(argv[i], "restart_as_admin"))       { args->mTryToElevate        = true; continue; }
         else if (ParseArg(argv[i], "terminate_on_proc_exit")) { args->mTerminateOnProcExit = true; continue; }
         else if (ParseArg(argv[i], "terminate_after_timed"))  { args->mTerminateAfterTimer = true; continue; }
 
         // Beta options:
-        else if (ParseArg(argv[i], "qpc_time_s"))            { args->mOutputQpcTimeInSeconds     = true; continue; }
-        else if (ParseArg(argv[i], "terminate_existing"))    { args->mTerminateExisting          = true; continue; }
-        else if (ParseArg(argv[i], "track_gpu"))             { args->mTrackGPU                   = true; continue; }
-        else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR                   = true; continue; }
-        else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr                    = true; continue; }
+        else if (ParseArg(argv[i], "date_time"))             { args->mOutputDateTime = true; continue; }
+        else if (ParseArg(argv[i], "track_gpu"))             { args->mTrackGPU       = true; continue; }
+        else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR       = true; continue; }
+        else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr        = true; continue; }
 
         // Provided argument wasn't recognized
         else if (!(ParseArg(argv[i], "?") || ParseArg(argv[i], "h") || ParseArg(argv[i], "help"))) {
@@ -504,6 +489,13 @@ bool ParseCommandLine(int argc, char** argv)
         args->mOutputQpcTime = true;
     }
 
+    // -date_time is mutually exclusive to -qpc_time and -qpc_time_s
+    if (args->mOutputDateTime && (args->mOutputQpcTime || args->mOutputQpcTimeInSeconds)) {
+        fprintf(stderr, "error: -date_time and -qpc_time or -qpc_time_s cannot be used at the same time.\n");
+        PrintHelp();
+        return false;
+    }
+
     // Disallow hotkey of CTRL+C, CTRL+SCROLL, and F12
     if (args->mHotkeySupport) {
         if ((args->mHotkeyModifiers & MOD_CONTROL) != 0 && (
@@ -521,13 +513,17 @@ bool ParseCommandLine(int argc, char** argv)
         }
     }
 
-    // If -no_csv is used, ignore -qpc_time, -qpc_time_s, -multi_csv,
+    // If -no_csv is used, ignore -date_time, -qpc_time, -qpc_time_s, -multi_csv,
     // -output_file, or -output_stdout if they are also used.
     if (!args->mOutputCsvToFile) {
         if (args->mOutputQpcTime) {
             fprintf(stderr, "warning: -qpc_time and -qpc_time_s are only relevant for CSV output; ignoring due to -no_csv.\n");
             args->mOutputQpcTime = false;
             args->mOutputQpcTimeInSeconds = false;
+        }
+        if (args->mOutputDateTime) {
+            fprintf(stderr, "warning: -date_time is only relevant for CSV output; ignoring due to -no_csv.\n");
+            args->mOutputDateTime = false;
         }
         if (args->mMultiCsv) {
             fprintf(stderr, "warning: -multi_csv and -no_csv arguments are not compatible; ignoring -multi_csv.\n");
@@ -596,6 +592,7 @@ bool ParseCommandLine(int argc, char** argv)
         args->mConsoleOutputType == ConsoleOutput::Simple ||
         args->mOutputQpcTime ||
         args->mOutputQpcTimeInSeconds ||
+        args->mOutputDateTime ||
         args->mHotkeySupport ||
         args->mDelay != 0 ||
         args->mTimer != 0 ||
@@ -603,6 +600,7 @@ bool ParseCommandLine(int argc, char** argv)
         args->mExcludeDropped ||
         args->mScrollLockIndicator ||
         !args->mTrackDisplay ||
+        args->mTrackGPU ||
         args->mTrackDebug ||
         args->mTrackWMR ||
         args->mTerminateOnProcExit ||
