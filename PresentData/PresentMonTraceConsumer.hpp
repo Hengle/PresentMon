@@ -197,10 +197,10 @@ struct PMTraceConsumer
     bool mTrackDisplay = true;          // Whether the analysis should track presents to display
     bool mTrackGPU = false;             // Whether the analysis should track GPU work
 
-    // Whether we've seen Dxgk complete a present.  This is used to indicate
-    // that the Dxgk provider has started and it's safe to start tracking
+    // Whether we've completed any presents yet.  This is used to indicate that
+    // all the necessary providers have started and it's safe to start tracking
     // presents.
-    bool mSeenDxgkPresentInfo = false;
+    bool mHasCompletedAPresent = false;
 
     // Store completed and lost presents until the consumer thread removes them
     // using Dequeue*PresentEvents().
