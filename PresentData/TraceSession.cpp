@@ -1,24 +1,5 @@
-/*
-Copyright 2017-2020 Intel Corporation
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
+// Copyright (C) 2020-2021 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
@@ -407,13 +388,23 @@ ULONG TraceSession::Start(
     }
 
     // -------------------------------------------------------------------------
-    // Save the initial tame to base capture off of.  ETL captures use the 
+    // Save the initial time to base capture off of.  ETL captures use the
     // time of the first event, which matches GPUVIEW usage, and realtime
     // captures are based off the timestamp here.
 
-    mQpcFrequency = traceProps.LogfileHeader.PerfFreq;
+    switch (traceProps.LogfileHeader.ReservedFlags) {
+    case 2: // System time
+        mQpcFrequency.QuadPart = 10000000ull;
+        break;
+    case 3: // CPU cycle counter
+        mQpcFrequency.QuadPart = 1000000ull * traceProps.LogfileHeader.CpuSpeedInMHz;
+        break;
+    default: // 1 == QPC
+        mQpcFrequency = traceProps.LogfileHeader.PerfFreq;
+        break;
+    }
 
-    if (etlPath != nullptr) {
+    if (saveFirstTimestamp) {
         SYSTEMTIME ust = {};
         SYSTEMTIME lst = {};
         FileTimeToSystemTime((FILETIME const*) &traceProps.LogfileHeader.StartTime, &ust);

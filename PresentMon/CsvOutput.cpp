@@ -1,24 +1,5 @@
-/*
-Copyright 2017-2020 Intel Corporation
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
+// Copyright (C) 2019-2021 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #include "PresentMon.hpp"
 
@@ -77,7 +58,8 @@ static void WriteCsvHeader(FILE* fp)
         ",Dropped"
         ",%s"
         ",msInPresentAPI"
-        ",msBetweenPresents", args.mOutputDateTime ? "PresentTime" : "TimeInSeconds");
+        ",msBetweenPresents",
+        args.mOutputDateTime ? "PresentTime" : "TimeInSeconds");
     if (args.mTrackDisplay) {
         fprintf(fp,
             ",AllowsTearing"
@@ -93,7 +75,7 @@ static void WriteCsvHeader(FILE* fp)
     }
     if (args.mTrackGPU) {
         fprintf(fp,
-            ",msUntilRenderStarts"
+            ",msUntilRenderStart"
             ",msGPUActive");
     }
     if (args.mOutputQpcTime) {
@@ -184,18 +166,18 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             st.wSecond,
             ns);
     } else {
-        fprintf(fp, "%lf", QpcToSeconds(p.QpcTime));
+        fprintf(fp, "%.*lf", DBL_DIG - 1, QpcToSeconds(p.QpcTime));
     }
-    fprintf(fp, ",%lf,%lf",
-        msInPresentApi,
-        msBetweenPresents);
+    fprintf(fp, ",%.*lf,%.*lf",
+        DBL_DIG - 1, msInPresentApi,
+        DBL_DIG - 1, msBetweenPresents);
     if (args.mTrackDisplay) {
-        fprintf(fp, ",%d,%s,%lf,%lf,%lf",
+        fprintf(fp, ",%d,%s,%.*lf,%.*lf,%.*lf",
             p.SupportsTearing,
             PresentModeToString(p.PresentMode),
-            msUntilRenderComplete,
-            msUntilDisplayed,
-            msBetweenDisplayChange);
+            DBL_DIG - 1, msUntilRenderComplete,
+            DBL_DIG - 1, msUntilDisplayed,
+            DBL_DIG - 1, msBetweenDisplayChange);
     }
     if (args.mTrackDebug) {
         fprintf(fp, ",%d,%d",
@@ -203,13 +185,13 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             p.DwmNotified);
     }
     if (args.mTrackGPU) {
-        fprintf(fp, ",%lf,%lf",
-            msUntilRenderStart,
-            1000.0 * QpcDeltaToSeconds(p.GPUDuration));
+        fprintf(fp, ",%.*lf,%.*lf",
+            DBL_DIG - 1, msUntilRenderStart,
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.GPUDuration));
     }
     if (args.mOutputQpcTime) {
         if (args.mOutputQpcTimeInSeconds) {
-            fprintf(fp, ",%lf", QpcDeltaToSeconds(p.QpcTime));
+            fprintf(fp, ",%.*lf", DBL_DIG - 1, QpcDeltaToSeconds(p.QpcTime));
         } else {
             fprintf(fp, ",%llu", p.QpcTime);
         }
@@ -288,7 +270,7 @@ static OutputCsv CreateOutputCsv(char const* processName)
         char path[MAX_PATH];
         GenerateFilename(processName, path);
 
-        fopen_s(&outputCsv.mFile, path, "wb");
+        fopen_s(&outputCsv.mFile, path, "w");
 
         if (args.mTrackWMR) {
             outputCsv.mWmrFile = CreateLsrCsvFile(path);

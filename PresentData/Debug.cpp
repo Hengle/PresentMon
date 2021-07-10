@@ -1,24 +1,5 @@
-/*
-Copyright 2019-2021 Intel Corporation
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
+// Copyright (C) 2019-2021 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #include "PresentMonTraceConsumer.hpp"
 
@@ -244,7 +225,8 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintBool,          SeenDxgkPresent)
     FLUSH_MEMBER(PrintBool,          SeenWin32KEvents)
     FLUSH_MEMBER(PrintBool,          DwmNotified)
-    FLUSH_MEMBER(PrintBool,          Completed)
+    FLUSH_MEMBER(PrintBool,          CompletionIsDeferred)
+    FLUSH_MEMBER(PrintBool,          IsCompleted)
 #undef FLUSH_MEMBER
     if (changedCount > 0) {
         printf("\n");
@@ -353,7 +335,18 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
         case Microsoft_Windows_DxgKrnl::HSyncDPCMultiPlane_Info::Id:        PrintEventHeader(hdr, "DxgKrnl_HSyncDPCMultiPlane_Info"); break;
         case Microsoft_Windows_DxgKrnl::VSyncDPCMultiPlane_Info::Id:        PrintEventHeader(hdr, "DxgKrnl_VSyncDPCMultiPlane_Info"); break;
         case Microsoft_Windows_DxgKrnl::MMIOFlip_Info::Id:                  PrintEventHeader(hdr, "DxgKrnl_MMIOFlip_Info"); break;
-        case Microsoft_Windows_DxgKrnl::MMIOFlipMultiPlaneOverlay_Info::Id: PrintEventHeader(hdr, "DxgKrnl_MMIOFlipMultiPlaneOverlay_Info"); break;
+        case Microsoft_Windows_DxgKrnl::MMIOFlipMultiPlaneOverlay_Info::Id:
+            PrintEventHeader(hdr);
+            printf("DXGKrnl_MMIOFlipMultiPlaneOverlay_Info FlipSubmitSequence=%llx", metadata->GetEventData<uint64_t>(eventRecord, L"FlipSubmitSequence"));
+            if (hdr.EventDescriptor.Version >= 2) {
+                switch (metadata->GetEventData<uint32_t>(eventRecord, L"FlipEntryStatusAfterFlip")) {
+                case Microsoft_Windows_DxgKrnl::FlipEntryStatus::FlipWaitVSync:    printf(" FlipWaitVSync"); break;
+                case Microsoft_Windows_DxgKrnl::FlipEntryStatus::FlipWaitComplete: printf(" FlipWaitComplete"); break;
+                case Microsoft_Windows_DxgKrnl::FlipEntryStatus::FlipWaitHSync:    printf(" FlipWaitHSync"); break;
+                }
+            }
+            printf("\n");
+            break;
         case Microsoft_Windows_DxgKrnl::Present_Info::Id:                   PrintEventHeader(hdr, "DxgKrnl_Present_Info"); break;
         case Microsoft_Windows_DxgKrnl::PresentHistory_Start::Id:           PrintEventHeader(eventRecord, metadata, "PresentHistory_Start", {
                                                                                 L"Token", PrintU64x,

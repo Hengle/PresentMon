@@ -17,13 +17,13 @@ While PresentMon itself is focused on lightweight collection and analysis, there
 
 ## License
 
-Copyright 2017-2021 Intel Corporation
+Copyright (C) 2017-2021 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## Releases
 
@@ -60,14 +60,15 @@ If PresentMon is not run with administrator privilege, it will not have complete
 
 ### Output Options
 
-|                     |                                                       |
-| ------------------- | ----------------------------------------------------- |
-| `-output_file path` | Write CSV output to the provided path.                |
-| `-output_stdout`    | Write CSV output to STDOUT.                           |
-| `-multi_csv`        | Create a separate CSV file for each captured process. |
-| `-no_csv`           | Do not create any output file.                        |
-| `-no_top`           | Don't display active swap chains in the console       |
-| `-qpc_time`         | Output present time as a performance counter value.   |
+|                     |                                                                          |
+| ------------------- | ------------------------------------------------------------------------ |
+| `-output_file path` | Write CSV output to the provided path.                                   |
+| `-output_stdout`    | Write CSV output to STDOUT.                                              |
+| `-multi_csv`        | Create a separate CSV file for each captured process.                    |
+| `-no_csv`           | Do not create any output file.                                           |
+| `-no_top`           | Don't display active swap chains in the console                          |
+| `-qpc_time`         | Output present time as a performance counter value.                      |
+| `-qpc_time_s`       | Output present time as a performance counter value converted to seconds. |
 
 ### Recording Options
 
@@ -87,17 +88,16 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-session_name name`     | Use the provided name to start a new realtime ETW session, instead of the default "PresentMon". This can be used to start multiple realtime captures at the same time (using distinct, case-insensitive names). A realtime PresentMon capture cannot start if there are any existing sessions with the same name. |
 | `-stop_existing_session` | If a trace session with the same name is already running, stop the existing session (to allow this one to proceed).                                                                                                                                                                                               |
+| `-terminate_existing`    | Terminate any existing PresentMon realtime trace sessions, then exit. Use with `-session_name` to target particular sessions.                       |
 | `-restart_as_admin`      | If not running with elevated privilege, restart and request to be run as administrator. (See discussion above).                                                                                                                                                                                                   |
 | `-terminate_on_proc_exit | Terminate PresentMon when all the target processes have exited.                                                                                                                                                                                                                                                   |
-| `-terminate_after_timed` | When using -timed, terminate PresentMon after the timed capture completes.                                                                                                                                                                                                                                        |
+| `-terminate_after_timed` | When using `-timed`, terminate PresentMon after the timed capture completes.                                                                                                                                                                                                                                      |
 
 ### Beta Options
 
 |                        |                                                                                                                             |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `-qpc_time_s`          | Output present time as a performance counter value converted to seconds.                                                    |
 | `-date_time`           | Output present time as a date and time with nanosecond precision.                                                           |
-| `-terminate_existing`  | Terminate any existing PresentMon realtime trace sessions, then exit. Use with -session_name to target particular sessions. |
 | `-track_gpu`           | Tracks the duration of each process' GPU work performed between presents.  Not supported on Win7.                           |
 | `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                                        |
 
@@ -119,7 +119,7 @@ If `-hotkey` is used, then one CSV is created for each time recording is started
 | ProcessID              | The process ID of the process that called Present().                                                                                                                                                                                                                      |                              |
 | SwapChainAddress       | The address of the swap chain that was presented into.                                                                                                                                                                                                                    |                              |
 | Runtime                | The runtime used to present (e.g., D3D9 or DXGI).                                                                                                                                                                                                                         |                              |
-| SyncInterval           | The sync interval used in the Present() call.                                                                                                                                                                                                                             |                              |
+| SyncInterval           | The sync interval provided by the application in the Present() call. This value may be modified later by the driver, e.g., based on control panel overrides.                                                                                                              |                              |
 | PresentFlags           | Flags used in the Present() call.                                                                                                                                                                                                                                         |                              |
 | PresentMode            | The presentation mode used by the system for this Present().  See the table below for more details.                                                                                                                                                                       | not `-no_track_display`      |
 | AllowsTearing          | Whether tearing is possible (1) or not (0).                                                                                                                                                                                                                               | not `-no_track_display`      |

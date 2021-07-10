@@ -1,24 +1,6 @@
-/*
-Copyright 2017-2020 Intel Corporation
+// Copyright (C) 2017-2021 Intel Corporation
+// SPDX-License-Identifier: MIT
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
 #include "TraceConsumer.hpp"
 #include "ETW/Microsoft_Windows_EventMetadata.h"
 
@@ -160,29 +142,6 @@ uint32_t GetPropertyDataOffset(TRACE_EVENT_INFO const& tei, EVENT_RECORD const& 
     return offset;
 }
 
-TRACE_EVENT_INFO* GetTraceEventInfo(EventMetadata* metadata, EVENT_RECORD* eventRecord)
-{
-    // Look up stored metadata
-    EventMetadataKey key;
-    key.guid_ = eventRecord->EventHeader.ProviderId;
-    key.desc_ = eventRecord->EventHeader.EventDescriptor;
-    auto ii = metadata->metadata_.find(key);
-
-    // If not found, look up metadata using TDH
-    if (ii == metadata->metadata_.end()) {
-        ULONG bufferSize = 0;
-        auto status = TdhGetEventInformation(eventRecord, 0, nullptr, nullptr, &bufferSize);
-        assert(status == ERROR_INSUFFICIENT_BUFFER);
-
-        ii = metadata->metadata_.emplace(key, std::vector<uint8_t>(bufferSize, 0)).first;
-
-        status = TdhGetEventInformation(eventRecord, 0, nullptr, (TRACE_EVENT_INFO*) ii->second.data(), &bufferSize);
-        assert(status == ERROR_SUCCESS);
-    }
-
-    return (TRACE_EVENT_INFO*) ii->second.data();
-}
-
 }
 
 size_t EventMetadataKeyHash::operator()(EventMetadataKey const& key) const
@@ -224,8 +183,28 @@ void EventMetadata::AddMetadata(EVENT_RECORD* eventRecord)
 // property in the metadata to obtain it's data pointer and size.
 void EventMetadata::GetEventData(EVENT_RECORD* eventRecord, EventDataDesc* desc, uint32_t descCount, uint32_t optionalCount /*=0*/)
 {
-    // Look up metadata
-    auto tei = GetTraceEventInfo(this, eventRecord);
+    // Look up stored metadata.  If not found, look up metadata using TDH and
+    // cache it for future events.
+    EventMetadataKey key;
+    key.guid_ = eventRecord->EventHeader.ProviderId;
+    key.desc_ = eventRecord->EventHeader.EventDescriptor;
+    auto ii = metadata_.find(key);
+    if (ii == metadata_.end()) {
+        ULONG bufferSize = 0;
+        auto status = TdhGetEventInformation(eventRecord, 0, nullptr, nullptr, &bufferSize);
+        if (status == ERROR_INSUFFICIENT_BUFFER) {
+            ii = metadata_.emplace(key, std::vector<uint8_t>(bufferSize, 0)).first;
+
+            status = TdhGetEventInformation(eventRecord, 0, nullptr, (TRACE_EVENT_INFO*) ii->second.data(), &bufferSize);
+            assert(status == ERROR_SUCCESS);
+        } else {
+            // No schema registered with system, nor ETL-embedded metadata.
+            ii = metadata_.emplace(key, std::vector<uint8_t>(sizeof(TRACE_EVENT_INFO), 0)).first;
+            assert(false);
+        }
+    }
+
+    auto tei = (TRACE_EVENT_INFO*) ii->second.data();
 
     // Lookup properties in metadata
     uint32_t foundCount = 0;

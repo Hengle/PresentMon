@@ -1,22 +1,6 @@
-:: Copyright 2020 Intel Corporation
-:: 
-:: Permission is hereby granted, free of charge, to any person obtaining a copy
-:: of this software and associated documentation files (the "Software"), to
-:: deal in the Software without restriction, including without limitation the
-:: rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-:: sell copies of the Software, and to permit persons to whom the Software is
-:: furnished to do so, subject to the following conditions:
-:: 
-:: The above copyright notice and this permission notice shall be included in
-:: all copies or substantial portions of the Software.
-:: 
-:: THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-:: IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-:: FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-:: AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-:: LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-:: FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-:: IN THE SOFTWARE.
+:: Copyright (C) 2020-2021 Intel Corporation
+:: SPDX-License-Identifier: MIT
+
 @echo off
 setlocal enabledelayedexpansion
 set presentmon=%1
@@ -36,19 +20,21 @@ goto args_ok
     echo usage: create_gold_csvs.cmd PresentMonPath GoldEtlCsvRootDir [force]
     exit /b 1
 :args_ok
+set already_exists=0
 
 set pmargs=-no_top -stop_existing_session -qpc_time -track_debug -track_gpu
 for /f "tokens=*" %%a in ('dir /s /b /a-d "%rootdir%\*.etl"') do call :create_csv "%%a"
+
+if %already_exists% neq 0 echo Use 'force' command line argument to overwrite.
 exit /b 0
 
 :create_csv
     if exist "%~dpn1.csv" if %force% neq 1 (
-        echo Already exists: %~1
+        echo Already exists: %~dpn1.csv
+        set already_exists=1
         exit /b 0
     )
     echo %presentmon% %pmargs% -etl_file %1 -output_file "%~dpn1.csv"
     %presentmon% %pmargs% -etl_file %1 -output_file "%~dpn1.csv" >NUL
     echo.
-    where /q unix2dos
-    if %errorlevel% equ 0 unix2dos -q "%~dpn1.csv"
     exit /b 0
