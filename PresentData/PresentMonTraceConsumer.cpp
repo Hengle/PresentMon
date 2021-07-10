@@ -591,6 +591,7 @@ void PMTraceConsumer::HandleDxgkPresentHistory(
 
     TRACK_PRESENT_PATH_SAVE_GENERATED_ID(presentEvent);
 
+    DebugModifyPresent(*presentEvent);
     presentEvent->ReadyTime = 0;
     presentEvent->ScreenTime = 0;
     presentEvent->SupportsTearing = false;
@@ -832,32 +833,6 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             if (present->PresentMode == PresentMode::Hardware_Legacy_Copy_To_Front_Buffer &&
                 present->ScreenTime != 0) {
                 CompletePresent(present);
-            }
-        }
-
-        // We use the first observed event to indicate that Dxgk provider is
-        // running and able to successfully track/complete presents.
-        //
-        // There may be numerous presents that were previously started and
-        // queued.  However, it's possible that they actually completed but we
-        // never got their Dxgk events due to the trace startup process.  When
-        // that happens, QpcTime/TimeTaken and ReadyTime/ScreenTime times can
-        // become mis-matched, actually coming from different Present() calls.
-        //
-        // This is especially prevalent in ETLs that start runtime providers
-        // before backend providers and/or start capturing while an intensive
-        // graphics application is already running.
-        //
-        // We handle this by throwing away all queued presents up to this
-        // point.
-        if (mSeenDxgkPresentInfo == false) {
-            mSeenDxgkPresentInfo = true;
-
-            for (uint32_t i = 0; i < mAllPresentsNextIndex; ++i) {
-                auto& p = mAllPresents[i];
-                if (p != nullptr && !p->IsLost) {
-                    RemoveLostPresent(p);
-                }
             }
         }
         return;
@@ -1791,16 +1766,34 @@ uint32_t GetDeferredCompletionWaitCount(PresentEvent const& p)
 
 void PMTraceConsumer::CompletePresentHelper(std::shared_ptr<PresentEvent> const& p, OrderedPresents* completed)
 {
-    // Skip processing if compltion is already deferred.
-    if (p->CompletionIsDeferred) {
+    // We use the first completed present to indicate that all necessary
+    // providers are running and able to successfully track/complete presents.
+    //
+    // At the first completion, there may be numerous presents that have been
+    // created but not properly tracked due to missed events.  This is
+    // especially prevalent in ETLs that start runtime providers before backend
+    // providers and/or start capturing while an intensive graphics application
+    // is already running.  When that happens, QpcTime/TimeTaken and
+    // ReadyTime/ScreenTime times can become mis-matched, and that offset can
+    // persist for the full capture.
+    //
+    // We handle this by throwing away all queued presents up to this point.
+    if (!mHasCompletedAPresent) {
+        mHasCompletedAPresent = true;
+
+        for (auto const& pr : mPresentsByProcess) {
+            auto processPresents = &pr.second;
+            for (auto ii = processPresents->begin(), ie = processPresents->end(); ii != ie; ) {
+                auto p2 = ii->second;
+                ++ii; // Increment before calling RemoveLostPresent(), which removes from processPresents
+                RemoveLostPresent(p2);
+            }
+        }
         return;
     }
 
-    // Throw away initial PresentEvents until we've seen at least one Dxgk
-    // PresentInfo event (unless we're not tracking display in which case
-    // provider start order is not an issue).
-    if (mTrackDisplay && !mSeenDxgkPresentInfo) {
-        RemoveLostPresent(p);
+    // Skip processing if compltion is already deferred.
+    if (p->CompletionIsDeferred) {
         return;
     }
 
