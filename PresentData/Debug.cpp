@@ -97,42 +97,45 @@ void PrintPresentResult(PresentResult value)
 }
 void PrintPresentHistoryModel(uint32_t model)
 {
+    using namespace Microsoft_Windows_DxgKrnl;
     switch (model) {
-    case D3DKMT_PM_UNINITIALIZED:          printf("UNINITIALIZED");          break;
-    case D3DKMT_PM_REDIRECTED_GDI:         printf("REDIRECTED_GDI");         break;
-    case D3DKMT_PM_REDIRECTED_FLIP:        printf("REDIRECTED_FLIP");        break;
-    case D3DKMT_PM_REDIRECTED_BLT:         printf("REDIRECTED_BLT");         break;
-    case D3DKMT_PM_REDIRECTED_VISTABLT:    printf("REDIRECTED_VISTABLT");    break;
-    case D3DKMT_PM_SCREENCAPTUREFENCE:     printf("SCREENCAPTUREFENCE");     break;
-    case D3DKMT_PM_REDIRECTED_GDI_SYSMEM:  printf("REDIRECTED_GDI_SYSMEM");  break;
-    case D3DKMT_PM_REDIRECTED_COMPOSITION: printf("REDIRECTED_COMPOSITION"); break;
-    default:                               printf("Unknown (%u)", model); assert(false); break;
+    case PresentModel::D3DKMT_PM_UNINITIALIZED:          printf("UNINITIALIZED");          break;
+    case PresentModel::D3DKMT_PM_REDIRECTED_GDI:         printf("REDIRECTED_GDI");         break;
+    case PresentModel::D3DKMT_PM_REDIRECTED_FLIP:        printf("REDIRECTED_FLIP");        break;
+    case PresentModel::D3DKMT_PM_REDIRECTED_BLT:         printf("REDIRECTED_BLT");         break;
+    case PresentModel::D3DKMT_PM_REDIRECTED_VISTABLT:    printf("REDIRECTED_VISTABLT");    break;
+    case PresentModel::D3DKMT_PM_SCREENCAPTUREFENCE:     printf("SCREENCAPTUREFENCE");     break;
+    case PresentModel::D3DKMT_PM_REDIRECTED_GDI_SYSMEM:  printf("REDIRECTED_GDI_SYSMEM");  break;
+    case PresentModel::D3DKMT_PM_REDIRECTED_COMPOSITION: printf("REDIRECTED_COMPOSITION"); break;
+    default:                                             printf("Unknown (%u)", model); assert(false); break;
     }
 }
 void PrintTokenState(uint32_t state)
 {
+    using namespace Microsoft_Windows_Win32k;
     switch (state) {
-    case Microsoft_Windows_Win32k::TokenState::Completed: printf("Completed"); break;
-    case Microsoft_Windows_Win32k::TokenState::InFrame:   printf("InFrame");   break;
-    case Microsoft_Windows_Win32k::TokenState::Confirmed: printf("Confirmed"); break;
-    case Microsoft_Windows_Win32k::TokenState::Retired:   printf("Retired");   break;
-    case Microsoft_Windows_Win32k::TokenState::Discarded: printf("Discarded"); break;
-    default:                                              printf("Unknown (%u)", state); assert(false); break;
+    case TokenState::Completed: printf("Completed"); break;
+    case TokenState::InFrame:   printf("InFrame");   break;
+    case TokenState::Confirmed: printf("Confirmed"); break;
+    case TokenState::Retired:   printf("Retired");   break;
+    case TokenState::Discarded: printf("Discarded"); break;
+    default:                    printf("Unknown (%u)", state); assert(false); break;
     }
 }
 void PrintQueuePacketType(uint32_t type)
 {
+    using namespace Microsoft_Windows_DxgKrnl;
     switch (type) {
-    case DXGKETW_RENDER_COMMAND_BUFFER:   printf("RENDER"); break;
-    case DXGKETW_DEFERRED_COMMAND_BUFFER: printf("DEFERRED"); break;
-    case DXGKETW_SYSTEM_COMMAND_BUFFER:   printf("SYSTEM"); break;
-    case DXGKETW_MMIOFLIP_COMMAND_BUFFER: printf("MMIOFLIP"); break;
-    case DXGKETW_WAIT_COMMAND_BUFFER:     printf("WAIT"); break;
-    case DXGKETW_SIGNAL_COMMAND_BUFFER:   printf("SIGNAL"); break;
-    case DXGKETW_DEVICE_COMMAND_BUFFER:   printf("DEVICE"); break;
-    case DXGKETW_SOFTWARE_COMMAND_BUFFER: printf("SOFTWARE"); break;
-    case DXGKETW_PAGING_COMMAND_BUFFER:   printf("PAGING"); break;
-    default:                              printf("Unknown (%u)", type); assert(false); break;
+    case QueuePacketType::DXGKETW_RENDER_COMMAND_BUFFER:   printf("RENDER"); break;
+    case QueuePacketType::DXGKETW_DEFERRED_COMMAND_BUFFER: printf("DEFERRED"); break;
+    case QueuePacketType::DXGKETW_SYSTEM_COMMAND_BUFFER:   printf("SYSTEM"); break;
+    case QueuePacketType::DXGKETW_MMIOFLIP_COMMAND_BUFFER: printf("MMIOFLIP"); break;
+    case QueuePacketType::DXGKETW_WAIT_COMMAND_BUFFER:     printf("WAIT"); break;
+    case QueuePacketType::DXGKETW_SIGNAL_COMMAND_BUFFER:   printf("SIGNAL"); break;
+    case QueuePacketType::DXGKETW_DEVICE_COMMAND_BUFFER:   printf("DEVICE"); break;
+    case QueuePacketType::DXGKETW_SOFTWARE_COMMAND_BUFFER: printf("SOFTWARE"); break;
+    case QueuePacketType::DXGKETW_PAGING_COMMAND_BUFFER:   printf("PAGING"); break;
+    default:                                               printf("Unknown (%u)", type); assert(false); break;
     }
 }
 void PrintPresentFlags(uint32_t flags)

@@ -351,8 +351,8 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
 
     // This event is emitted after a flip/blt/PHT event, and may be the only way
     // to trace completion of the present.
-    if (packetType == DXGKETW_MMIOFLIP_COMMAND_BUFFER ||
-        packetType == DXGKETW_SOFTWARE_COMMAND_BUFFER ||
+    if (packetType == (uint32_t) Microsoft_Windows_DxgKrnl::QueuePacketType::DXGKETW_MMIOFLIP_COMMAND_BUFFER ||
+        packetType == (uint32_t) Microsoft_Windows_DxgKrnl::QueuePacketType::DXGKETW_SOFTWARE_COMMAND_BUFFER ||
         present) {
         auto eventIter = mPresentByThreadId.find(hdr.ThreadId);
         if (eventIter == mPresentByThreadId.end() || eventIter->second->QueueSubmitSequence != 0) {
@@ -424,7 +424,7 @@ void PMTraceConsumer::HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipS
         pEvent->PresentMode = PresentMode::Hardware_Independent_Flip;
     }
 
-    if (flags & (uint32_t) Microsoft_Windows_DxgKrnl::MMIOFlip::Immediate) {
+    if (flags & (uint32_t) Microsoft_Windows_DxgKrnl::SetVidPnSourceAddressFlags::FlipImmediate) {
         pEvent->FinalState = PresentResult::Presented;
         pEvent->ScreenTime = hdr.TimeStamp.QuadPart;
         pEvent->SupportsTearing = true;
@@ -799,16 +799,16 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         auto Model     = desc[1].GetData<uint32_t>();
         auto TokenData = desc[2].GetData<uint64_t>();
 
-        if (Model == D3DKMT_PM_REDIRECTED_GDI) {
+        if (Model == (uint32_t) Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_GDI) {
             break;
         }
 
         auto presentMode = PresentMode::Unknown;
         switch (Model) {
-        case D3DKMT_PM_REDIRECTED_BLT:         presentMode = PresentMode::Composed_Copy_GPU_GDI; break;
-        case D3DKMT_PM_REDIRECTED_VISTABLT:    presentMode = PresentMode::Composed_Copy_CPU_GDI; break;
-        case D3DKMT_PM_REDIRECTED_FLIP:        presentMode = PresentMode::Composed_Flip; break;
-        case D3DKMT_PM_REDIRECTED_COMPOSITION: presentMode = PresentMode::Composed_Composition_Atlas; break;
+        case Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_BLT:         presentMode = PresentMode::Composed_Copy_GPU_GDI; break;
+        case Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_VISTABLT:    presentMode = PresentMode::Composed_Copy_CPU_GDI; break;
+        case Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_FLIP:        presentMode = PresentMode::Composed_Flip; break;
+        case Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_COMPOSITION: presentMode = PresentMode::Composed_Composition_Atlas; break;
         }
 
         TRACK_PRESENT_PATH_GENERATE_ID();
@@ -875,7 +875,7 @@ typedef struct _DXGKETW_FLIPEVENT {
 typedef struct _DXGKETW_PRESENTHISTORYEVENT {
     ULONGLONG             hAdapter;
     ULONGLONG             Token;
-    D3DKMT_PRESENT_MODEL  Model;     // available only for _STOP event type.
+    ULONG                 Model;     // available only for _STOP event type.
     UINT                  TokenSize; // available only for _STOP event type.
 } DXGKETW_PRESENTHISTORYEVENT;
 
