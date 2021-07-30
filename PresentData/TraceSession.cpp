@@ -118,7 +118,7 @@ ULONG EnableProviders(
         eventIds.push_back(Microsoft_Windows_DxgKrnl::Device_DCStart::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::Device_Start::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::Device_Stop::Id);
-        eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Info_3::Id);
+        eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Info::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Start::Id);
     }
     status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_DxgKrnl::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
