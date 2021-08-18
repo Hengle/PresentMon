@@ -456,7 +456,10 @@ std::wstring CppCondition(std::wstring s)
             s[i] == L'-' ||
             s[i] == L'/' ||
             s[i] == L':' ||
-            s[i] == L'.') {
+            s[i] == L'.' ||
+            s[i] == L',' ||
+            s[i] == L'(' ||
+            s[i] == L')') {
             s[i] = L'_';
         }
     }
@@ -699,7 +702,7 @@ void PrintEnum(
         if (*str == L'_') str += 1;
 
         printf("    %ls = %lu,\n",
-            CppCondition(str).c_str(), // Some have spaces.
+            CppCondition(str).c_str(), // str can have spaces, parenthesis, etc..
             entry.Value);
     }
     printf("};\n");
