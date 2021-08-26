@@ -314,13 +314,13 @@ ULONG TraceSession::Start(
         (trackWMR           ? 1 : 0);
     switch (callbackFlags) {
     case 0: traceProps.EventRecordCallback = &EventRecordCallback<false, false, false>; break;
-    case 1: traceProps.EventRecordCallback = &EventRecordCallback<false, false, true>; break;
-    case 2: traceProps.EventRecordCallback = &EventRecordCallback<false, true, false>; break;
-    case 3: traceProps.EventRecordCallback = &EventRecordCallback<false, true, true>; break;
-    case 4: traceProps.EventRecordCallback = &EventRecordCallback<true, false, false>; break;
-    case 5: traceProps.EventRecordCallback = &EventRecordCallback<true, false, true>; break;
-    case 6: traceProps.EventRecordCallback = &EventRecordCallback<true, true, false>; break;
-    case 7: traceProps.EventRecordCallback = &EventRecordCallback<true, true, true>; break;
+    case 1: traceProps.EventRecordCallback = &EventRecordCallback<false, false,  true>; break;
+    case 2: traceProps.EventRecordCallback = &EventRecordCallback<false,  true, false>; break;
+    case 3: traceProps.EventRecordCallback = &EventRecordCallback<false,  true,  true>; break;
+    case 4: traceProps.EventRecordCallback = &EventRecordCallback< true, false, false>; break;
+    case 5: traceProps.EventRecordCallback = &EventRecordCallback< true, false,  true>; break;
+    case 6: traceProps.EventRecordCallback = &EventRecordCallback< true,  true, false>; break;
+    case 7: traceProps.EventRecordCallback = &EventRecordCallback< true,  true,  true>; break;
     }
 
     // When processing log files, we need to use the buffer callback in case

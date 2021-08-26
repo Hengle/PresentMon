@@ -144,9 +144,10 @@ exit /b 0
 :check_pm_version
     if not exist "%pmdir%\%~1" exit /b 0
     set appver=
-    for /f "tokens=1,2" %%a in ('"%pmdir%\%~1" --version 2^>^&1') do if "%%a"=="PresentMon" if not "%%b"=="requires" set appver=%%b
+    for /f "tokens=1,2" %%a in ('"%pmdir%\%~1" --version 2^>^&1') do if "%%a"=="PresentMon" set appver=%%b
     if "%appver%"=="development" set appver=dev
     echo [90m%~1 -^> "%appver%"[0m
+    if "%version%"=="dev" exit /b 0
     if "%version%" neq "%appver%" (
         echo [31merror: unexpected version reported: %~1 -^> "%appver%"[0m
         set /a errorcount=%errorcount%+1

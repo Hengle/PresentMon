@@ -12,7 +12,6 @@
     <OutDir>$(MsBuildThisFileDirectory)build\$(Configuration)\</OutDir>
     <IntDir>$(MsBuildThisFileDirectory)build\obj\$(ProjectName)-$(Platform)-$(Configuration)\</IntDir>
     <TargetName>$(ProjectName)-$(PresentMonVersion)-$(PresentMonPlatform)</TargetName>
-    <CustomBuildBeforeTargets>ClCompile</CustomBuildBeforeTargets>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -23,13 +22,6 @@
     <Link>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
     </Link>
-    <CustomBuildStep>
-      <Message>Generating version sources for $(PresentMonVersion)</Message>
-      <Command>$(MsBuildThisFileDirectory)Tools\generate_version_sources.cmd $(PresentMonVersion) $(MsBuildThisFileDirectory)build\obj\generated\version.h</Command>
-      <Outputs>$(MsBuildThisFileDirectory)build\obj\generated\version.h</Outputs>
-      <Inputs>$(MsBuildThisFileDirectory)PresentMon.props</Inputs>
-      <TreatOutputAsContent>false</TreatOutputAsContent>
-    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup />
 </Project>
