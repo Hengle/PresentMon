@@ -52,6 +52,7 @@ struct CommandLineArgs {
     bool mTrackGPU;
     bool mTrackDisplay;
     bool mTrackDebug;
+    bool mTrackPower;
     bool mTrackWMR;
     bool mOutputCsvToFile;
     bool mOutputCsvToStdout;

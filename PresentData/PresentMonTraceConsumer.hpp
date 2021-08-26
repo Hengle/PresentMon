@@ -196,6 +196,7 @@ struct PMTraceConsumer
     bool mFilteredProcessIds = false;   // Whether to filter presents to specific processes
     bool mTrackDisplay = true;          // Whether the analysis should track presents to display
     bool mTrackGPU = false;             // Whether the analysis should track GPU work
+    bool mTrackPCAT = false;            // Whether the analysis should track PCAT metrics
 
     // Whether we've completed any presents yet.  This is used to indicate that
     // all the necessary providers have started and it's safe to start tracking
@@ -415,6 +416,7 @@ struct PMTraceConsumer
     void RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPresentBatching, ::Runtime runtime);
 
     void HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord);
+    void HandleIntelPCATEvent(EVENT_RECORD* pEventRecord);
     void HandleNTProcessEvent(EVENT_RECORD* pEventRecord);
     void HandleDXGIEvent(EVENT_RECORD* pEventRecord);
     void HandleD3D9Event(EVENT_RECORD* pEventRecord);
@@ -434,4 +436,3 @@ struct PMTraceConsumer
     void RemoveTrackedProcessForFiltering(uint32_t processID);
     bool IsProcessTrackedForFiltering(uint32_t processID);
 };
-

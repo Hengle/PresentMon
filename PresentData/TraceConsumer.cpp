@@ -280,4 +280,3 @@ std::wstring EventDataDesc::GetData<std::wstring>() const
 {
     return GetEventString<std::wstring>(*this);
 }
-

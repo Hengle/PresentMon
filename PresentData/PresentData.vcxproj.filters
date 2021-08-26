@@ -30,6 +30,9 @@
     <ClInclude Include="ETW\Intel_Graphics_D3D10.h">
       <Filter>ETW</Filter>
     </ClInclude>
+    <ClInclude Include="ETW\Intel_PCAT_Metrics.h">
+      <Filter>ETW</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Debug.cpp" />

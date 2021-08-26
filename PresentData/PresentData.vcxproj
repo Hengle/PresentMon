@@ -298,6 +298,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="ETW\Intel_Graphics_D3D10.h" />
+    <ClInclude Include="ETW\Intel_PCAT_Metrics.h" />
     <ClInclude Include="ETW\Microsoft_Windows_D3D9.h" />
     <ClInclude Include="ETW\Microsoft_Windows_Dwm_Core.h" />
     <ClInclude Include="ETW\Microsoft_Windows_DXGI.h" />

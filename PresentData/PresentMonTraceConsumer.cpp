@@ -4,6 +4,7 @@
 #include "PresentMonTraceConsumer.hpp"
 
 #include "ETW/Intel_Graphics_D3D10.h"
+#include "ETW/Intel_PCAT_Metrics.h"
 #include "ETW/Microsoft_Windows_D3D9.h"
 #include "ETW/Microsoft_Windows_Dwm_Core.h"
 #include "ETW/Microsoft_Windows_DXGI.h"
@@ -242,6 +243,69 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         }
         break;
     }
+    default:
+        assert(!mFilteredEvents); // Assert that filtering is working if expected
+        break;
+    }
+}
+
+void PMTraceConsumer::HandleIntelPCATEvent(EVENT_RECORD* pEventRecord)
+{
+    DebugEvent(pEventRecord, &mMetadata);
+
+    auto const& hdr = pEventRecord->EventHeader;
+    switch (hdr.EventDescriptor.Id) {
+
+    case Intel_PCAT_Metrics::Task_0_Opcode_0::Id:
+    {
+        static FILE* powerCsv = nullptr;
+        if (powerCsv == nullptr) {
+            static bool powerCsvFailed = false;
+            if (powerCsvFailed) return;
+            if (fopen_s(&powerCsv, "presentmon_pcat.csv", "wb")) {
+                fprintf(stderr, "error: failed to create file: presentmon_pcat.csv\n");
+                powerCsvFailed = true;
+                return;
+            }
+
+            fprintf(powerCsv, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                "frequency",
+                "system_tick",
+                "timestamp",
+                "p1_12v_8p_v",
+                "p1_12v_8p_a",
+                "p2_12v_8p_v",
+                "p2_12v_8p_a",
+                "p3_12v_8p_v",
+                "p3_12v_8p_a",
+                "pcie_12v_v",
+                "pcie_12v_a",
+                "three_point_three_v",
+                "three_point_three_a",
+                "three_point_three_aux_v",
+                "three_point_three_aux_a");
+        }
+
+        auto p = (Intel_PCAT_Metrics::Task_0_Opcode_0_Struct*) pEventRecord->UserData;
+        fprintf(powerCsv, "%lld,%lld,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
+            p->frequency,
+            p->system_tick,
+            p->timestamp,
+            p->p1_12v_8p_v,
+            p->p1_12v_8p_a,
+            p->p2_12v_8p_v,
+            p->p2_12v_8p_a,
+            p->p3_12v_8p_v,
+            p->p3_12v_8p_a,
+            p->pcie_12v_v,
+            p->pcie_12v_a,
+            p->three_point_three_v,
+            p->three_point_three_a,
+            p->three_point_three_aux_v,
+            p->three_point_three_aux_a);
+        break;
+    }
+
     default:
         assert(!mFilteredEvents); // Assert that filtering is working if expected
         break;

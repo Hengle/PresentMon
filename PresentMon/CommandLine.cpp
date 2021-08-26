@@ -315,6 +315,7 @@ static void PrintHelp()
         "-date_time",               "Output present time as a date and time with nanosecond precision.",
         "-track_gpu",               "Tracks the duration of each process' GPU work performed between presents."
                                     " Not supported on Win7.",
+        "-track_power",             "Writes PCAT metrics to presentmon_pcat.csv in the working directory."
         "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
     };
 
@@ -382,6 +383,7 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTrackGPU = false;
     args->mTrackDisplay = true;
     args->mTrackDebug = false;
+    args->mTrackPower = false;
     args->mTrackWMR = false;
     args->mOutputCsvToFile = true;
     args->mOutputCsvToStdout = false;
@@ -444,6 +446,7 @@ bool ParseCommandLine(int argc, char** argv)
         // Beta options:
         else if (ParseArg(argv[i], "date_time"))             { args->mOutputDateTime = true; continue; }
         else if (ParseArg(argv[i], "track_gpu"))             { args->mTrackGPU       = true; continue; }
+        else if (ParseArg(argv[i], "track_power"))           { args->mTrackPower     = true; continue; }
         else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR       = true; continue; }
         else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr        = true; continue; }
 
@@ -602,6 +605,7 @@ bool ParseCommandLine(int argc, char** argv)
         !args->mTrackDisplay ||
         args->mTrackGPU ||
         args->mTrackDebug ||
+        args->mTrackPower ||
         args->mTrackWMR ||
         args->mTerminateOnProcExit ||
         args->mTerminateAfterTimer)) {

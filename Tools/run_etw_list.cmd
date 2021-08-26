@@ -27,6 +27,10 @@ set events=%events% --event=task_FramePacer::Info
 call :etw_list "Intel-Graphics-D3D10" "%out_dir%\Intel_Graphics_D3D10.h"
 
 set events=
+set events=%events% --event=Task_0::Opcode_0
+call :etw_list "Intel-PCAT-Metrics" "%out_dir%\Intel_PCAT_Metrics.h"
+
+set events=
 set events=%events% --event=Present::Start
 set events=%events% --event=Present::Stop
 call :etw_list "Microsoft-Windows-D3D9" "%out_dir%\Microsoft_Windows_D3D9.h"

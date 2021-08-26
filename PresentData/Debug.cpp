@@ -4,6 +4,7 @@
 #include "PresentMonTraceConsumer.hpp"
 
 #include "ETW/Intel_Graphics_D3D10.h"
+#include "ETW/Intel_PCAT_Metrics.h"
 #include "ETW/Microsoft_Windows_D3D9.h"
 #include "ETW/Microsoft_Windows_Dwm_Core.h"
 #include "ETW/Microsoft_Windows_DXGI.h"
@@ -56,6 +57,7 @@ char* AddCommas(uint64_t t)
     return buf;
 }
 
+void PrintFloat(float value) { printf("%g", value); }
 void PrintU32(uint32_t value) { printf("%u", value); }
 void PrintU64(uint64_t value) { printf("%llu", value); }
 void PrintU64x(uint64_t value) { printf("%llx", value); }
@@ -275,8 +277,6 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
     }
 
     if (hdr.ProviderId == Intel_Graphics_D3D10::GUID) {
-        auto ts = ConvertTimestampToNs(hdr.TimeStamp.QuadPart);
-        (void) ts;
         switch (id) {
         case Intel_Graphics_D3D10::task_DdiPresentDXGI_Info::Id:
             PrintEventHeader(eventRecord, metadata, "INTC_DdiPresentDXGI_Info", {
@@ -306,6 +306,13 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
             printf("\n");
 #endif
             break;
+        }
+        return;
+    }
+
+    if (hdr.ProviderId == Intel_PCAT_Metrics::GUID) {
+        switch (id) {
+        case Intel_PCAT_Metrics::Task_0_Opcode_0::Id: PrintEventHeader(hdr, "INTC_PCAT"); break;
         }
         return;
     }
