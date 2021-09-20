@@ -315,6 +315,7 @@ static void PrintHelp()
         "-date_time",               "Output present time as a date and time with nanosecond precision.",
         "-track_gpu",               "Tracks the duration of each process' GPU work performed between presents."
                                     " Not supported on Win7.",
+        "-track_input",             "Tracks the time of keyboard/mouse clicks that were used by each frame.",
         "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
     };
 
@@ -381,6 +382,7 @@ bool ParseCommandLine(int argc, char** argv)
     args->mHotkeyVirtualKeyCode = 0;
     args->mTrackGPU = false;
     args->mTrackDisplay = true;
+    args->mTrackInputs = false;
     args->mTrackDebug = false;
     args->mTrackWMR = false;
     args->mOutputCsvToFile = true;
@@ -444,6 +446,7 @@ bool ParseCommandLine(int argc, char** argv)
         // Beta options:
         else if (ParseArg(argv[i], "date_time"))             { args->mOutputDateTime = true; continue; }
         else if (ParseArg(argv[i], "track_gpu"))             { args->mTrackGPU       = true; continue; }
+        else if (ParseArg(argv[i], "track_input"))           { args->mTrackInputs    = true; continue; }
         else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR       = true; continue; }
         else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr        = true; continue; }
 

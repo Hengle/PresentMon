@@ -47,6 +47,16 @@ enum class Runtime
     DXGI, D3D9, Other
 };
 
+enum class InputDeviceType
+{
+    Mouse, Keyboard, Unknown
+};
+
+struct InputEvent {
+    uint64_t Time;
+    InputDeviceType Type;
+};
+
 // A ProcessEvent occurs whenever a Process starts or stops.
 struct ProcessEvent {
     std::string ImageFileName;
@@ -64,6 +74,7 @@ struct PresentEvent {
     uint64_t ReadyTime;     // QPC value when the frame's last DMA packet completed
     uint64_t GPUDuration;   // QPC duration during which a frame's DMA packet was running on any node
     uint64_t ScreenTime;    // QPC value when the present was displayed on screen
+    uint64_t InputTime;     // Earliest QPC value when the keyboard/mouse was clicked and used by this frame
 
     // Extra present parameters obtained through DXGI or D3D9 present
     uint64_t SwapChainAddress;
@@ -88,6 +99,7 @@ struct PresentEvent {
     Runtime Runtime;
     PresentMode PresentMode;
     PresentResult FinalState;
+    InputDeviceType InputType;
     bool SupportsTearing;
     bool MMIO;
     bool SeenDxgkPresent;
@@ -177,6 +189,7 @@ struct PMTraceConsumer
     bool mFilteredProcessIds = false;   // Whether to filter presents to specific processes
     bool mTrackDisplay = true;          // Whether the analysis should track presents to display
     bool mTrackGPU = false;             // Whether the analysis should track GPU work
+    bool mTrackInputs = false;          // Whether to track keyboard/mouse click times
 
     // Whether we've completed any presents yet.  This is used to indicate that
     // all the necessary providers have started and it's safe to start tracking
@@ -353,6 +366,12 @@ struct PMTraceConsumer
     std::unordered_map<uint64_t, uint64_t> mDevices;                          // hDevice -> pDxgAdapter
     std::unordered_map<uint64_t, Context> mContexts;                          // hContext -> Context
     std::unordered_map<uint32_t, FrameDmaPackets> mProcessFrameDmaPackets;    // ProcessID -> FrameDmaPackets
+
+    // State for tracking keyboard/mouse click times
+    uint64_t mLastInputDeviceReadTime;
+    InputDeviceType mLastInputDeviceType;
+
+    std::unordered_map<uint32_t, std::pair<uint64_t, InputDeviceType>> mRetrievedInput; // ProcessID -> <InputTime, InputType>
 
 
     void DequeueProcessEvents(std::vector<ProcessEvent>& outProcessEvents)

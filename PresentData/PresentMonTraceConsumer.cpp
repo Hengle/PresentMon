@@ -57,6 +57,7 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , ReadyTime(0)
     , GPUDuration(0)
     , ScreenTime(0)
+    , InputTime(0)
     , SwapChainAddress(0)
     , SyncInterval(-1)
     , PresentFlags(0)
@@ -70,6 +71,7 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , Runtime(runtime)
     , PresentMode(PresentMode::Unknown)
     , FinalState(PresentResult::Unknown)
+    , InputType(InputDeviceType::Unknown)
     , SupportsTearing(false)
     , MMIO(false)
     , SeenDxgkPresent(false)
@@ -99,6 +101,8 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
 
 PMTraceConsumer::PMTraceConsumer()
     : mAllPresents(PRESENTEVENT_CIRCULAR_BUFFER_SIZE)
+    , mLastInputDeviceReadTime(0)
+    , mLastInputDeviceType(InputDeviceType::Unknown)
 {
 }
 
@@ -1429,6 +1433,7 @@ void PMTraceConsumer::HandleWin32kEvent(EVENT_RECORD* pEventRecord)
         PresentEvent->Win32KBindId = BindId;
         break;
     }
+
     case Microsoft_Windows_Win32k::TokenStateChanged_Info::Id:
     {
         EventDataDesc desc[] = {
@@ -1517,6 +1522,41 @@ void PMTraceConsumer::HandleWin32kEvent(EVENT_RECORD* pEventRecord)
         }
         break;
     }
+
+    case Microsoft_Windows_Win32k::InputDeviceRead_Stop::Id:
+    {
+        EventDataDesc desc[] = {
+            { L"DeviceType" },
+        };
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        auto DeviceType = desc[0].GetData<uint32_t>();
+
+        switch (DeviceType) {
+        case 0: mLastInputDeviceType = InputDeviceType::Mouse; break;
+        case 1: mLastInputDeviceType = InputDeviceType::Keyboard; break;
+        default: mLastInputDeviceType = InputDeviceType::Unknown; break;
+        }
+
+        mLastInputDeviceReadTime = hdr.TimeStamp.QuadPart;
+        break;
+    }
+
+    case Microsoft_Windows_Win32k::RetrieveInputMessage_Info::Id:
+    {
+        auto ii = mRetrievedInput.find(hdr.ProcessId);
+        if (ii == mRetrievedInput.end()) {
+            mRetrievedInput.emplace(hdr.ProcessId, std::make_pair(
+                mLastInputDeviceReadTime,
+                mLastInputDeviceType));
+        } else {
+            if (ii->second.first == 0) {
+                ii->second.first = mLastInputDeviceReadTime;
+                ii->second.second = mLastInputDeviceType;
+            }
+        }
+        break;
+    }
+
     default:
         assert(!mFilteredEvents); // Assert that filtering is working if expected
         break;
@@ -1978,6 +2018,18 @@ void PMTraceConsumer::TrackPresent(
 
     presentsByThisProcess->emplace(present->QpcTime, present);
     mPresentByThreadId.emplace(present->ThreadId, present);
+
+    // Assign any pending retrieved input to this frame
+    if (mTrackInputs) {
+        auto ii = mRetrievedInput.find(present->ProcessId);
+        if (ii != mRetrievedInput.end() && ii->second.first != 0) {
+            DebugModifyPresent(*present);
+            present->InputTime = ii->second.first;
+            present->InputType = ii->second.second;
+            ii->second.first = 0;
+            ii->second.second = InputDeviceType::Unknown;
+        }
+    }
 }
 
 void PMTraceConsumer::TrackPresentOnThread(std::shared_ptr<PresentEvent> present)

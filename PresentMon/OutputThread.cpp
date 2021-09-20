@@ -523,6 +523,7 @@ void Output()
         switch (args.mConsoleOutputType) {
         case ConsoleOutput::None:
             break;
+
         case ConsoleOutput::Simple:
 #if _DEBUG
             if (realtimeRecording) {

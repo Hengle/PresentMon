@@ -81,6 +81,9 @@ static void WriteCsvHeader(FILE* fp)
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
     }
+    if (args.mTrackInputs) {
+        fprintf(fp, ",msSinceInput");
+    }
     fprintf(fp, "\n");
 }
 
@@ -115,6 +118,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double msUntilRenderComplete  = 0.0;
     double msUntilDisplayed       = 0.0;
     double msBetweenDisplayChange = 0.0;
+    double msSinceInput           = 0.0;
 
     if (args.mTrackDisplay) {
         if (p.ReadyTime != 0) {
@@ -141,6 +145,12 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             } else {
                 msUntilRenderStart = 1000.0 * QpcDeltaToSeconds(p.GPUStartTime - p.QpcTime);
             }
+        }
+    }
+
+    if (args.mTrackInputs) {
+        if (p.InputTime != 0) {
+            msSinceInput = 1000.0 * QpcDeltaToSeconds(p.QpcTime - p.InputTime);
         }
     }
 
@@ -195,6 +205,9 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
         } else {
             fprintf(fp, ",%llu", p.QpcTime);
         }
+    }
+    if (args.mTrackInputs) {
+        fprintf(fp, ",%.*lf", DBL_DIG - 1, msSinceInput);
     }
     fprintf(fp, "\n");
 }

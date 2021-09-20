@@ -100,6 +100,7 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | `-date_time`           | Output present time as a date and time with nanosecond precision.                                                           |
 | `-track_gpu`           | Tracks the duration of each process' GPU work performed between presents.  Not supported on Win7.                           |
 | `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                                        |
+ | `-track_input`        | Tracks the time of keyboard/mouse clicks that were used by each frame. |
 
 ## Comma-separated value (CSV) file output
 
@@ -127,6 +128,7 @@ If `-hotkey` is used, then one CSV is created for each time recording is started
 | PresentTime            | The time of the Present() call, with date and time of day, relative to when the PresentMon started recording.                                                                                                                                                             | `-date_time`                 |
 | QPCTime                | The time of the Present() call, as a [performance counter value](https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter).  If `-qpc_time_s` is used, the value is converted to seconds by dividing by the counter frequency. | `-qpc_time` or `-qpc_time_s` |
 | msInPresentAPI         | The time spent inside the Present() call, in milliseconds.                                                                                                                                                                                                                |                              |
+| msSinceInput | The time from the earliest keyboard/mouse click impacting this frame, and the Present() call.  Is zero if no input was used for this frame. | `-track_input` |
 | msUntilRenderStart     | The time between the Present() call and when the GPU work started, in milliseconds.                                                                                                                                                                                       | `-track_gpu`                 |
 | msUntilRenderComplete  | The time between the Present() call and when the GPU work completed, in milliseconds. Note that the value recorded will be slightly different if `-track_gpu` is or isn't used.  The value with `-track_gpu` is more accurate, but its collection has higher overhead.    | not `-no_track_display`      |
 | msUntilDisplayed       | The time between the Present() call and when the frame was displayed, in milliseconds.                                                                                                                                                                                    | not `-no_track_display`      |
@@ -210,11 +212,10 @@ Applications that do not use D3D9 or DXGI APIs for presenting frames (e.g., as i
 
 In this case, PresentTime/TimeInSeconds will represent the first time the present is observed in the kernel, as opposed to the runtime, and therefore will be sometime after the application presented the frame (typically ~0.5ms).  Since msUntilRenderComplete and msUntilDisplayed are deltas from PresentTime/TimeInSeconds, they will be correspondingly smaller then they would have been if measured from application present.  msBetweenDisplayChange will still be correct, and msBetweenPresents should be correct on average.
 
-### Measuring application latency
+### Measuring input latency
 
-PresentMon doesn't directly measure the latency from a user's input to the display of that frame because it doesn't have insight into when the application collects and applies user input.  A potential approximation is to assume that the application collects user input immediately after presenting the previous frame.  To compute this, search for the previous row that uses the same swap chain and then:
+When using `-track_input`, PresentMon will track when keyboard/mouse events are read by the OS and the target application.  Then, for frames where `msSinceInput` is non-zero, `msSinceInput + msUntilDisplayed` can be used to better-understand the latency between user input and the display of the resulting rendered frame.  Note, however, that this is just the OS-visible subset of the full  latency: it does not include any latency incurred within the input/display hardware and drivers.
 
-```LatencyMs =~ msBetweenPresents + msUntilDisplayed - previous(msInPresentAPI)```
 
 ### Shutting down PresentMon on Windows 7
 
