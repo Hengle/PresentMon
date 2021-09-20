@@ -414,4 +414,3 @@ struct PMTraceConsumer
     void RemoveTrackedProcessForFiltering(uint32_t processID);
     bool IsProcessTrackedForFiltering(uint32_t processID);
 };
-
