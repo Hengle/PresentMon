@@ -339,7 +339,10 @@ struct PMTraceConsumer
 
     // Tracking for GPU work contributing to each frame.  We need to track DMA
     // packet queuing to know how when each DMA packet actually ran.
-    struct FrameDmaPackets {
+
+    // FrameDmaInfo is the execution information for each process frame, and
+    // may accumlate execution across many parallel nodes.
+    struct FrameDmaInfo {
         uint64_t mFirstDmaTime;         // QPC when the first DMA packet started for the current frame
         uint64_t mLastDmaTime;          // QPC when the last DMA packet completed for the current frame
         uint64_t mAccumulatedDmaTime;   // QPC duration while at least one DMA packet was running during the current frame
@@ -347,25 +350,27 @@ struct PMTraceConsumer
         uint32_t mRunningDmaCount;      // Number of currently-running DMA packets
     };
 
-    // A queue of up to 10 scheduled dma packets.  Using 10 to fill 2
-    // cachelines.  10 should be more than we need, but 4 (fills 1 cacheline)
-    // is not enough.
+    // Node is information about a particular GPU node, including any DMA
+    // packets currently running/queued to it.
     struct Node {
-        FrameDmaPackets* mFrameDmaPackets[10];  // Frame state for enqueued packets
-        uint32_t mSequenceId[10];               // Sequence IDs for enqueued packets
-        uint32_t mQueueIndex;                   // Index into mFrameDmaPackets and mSequenceId for currently-running packet
-        uint32_t mQueueCount;                   // Number of enqueued packets
+        enum { MAX_QUEUE_SIZE = 10 };                   // MAX_QUEUE_SIZE=10 for 2 full cachelines (one is not enough).
+        FrameDmaInfo* mFrameDmaInfo[MAX_QUEUE_SIZE];    // Frame state for enqueued packets
+        uint32_t mSequenceId[MAX_QUEUE_SIZE];           // Sequence IDs for enqueued packets
+        uint32_t mQueueIndex;                           // Index into mFrameDmaInfo and mSequenceId for currently-running packet
+        uint32_t mQueueCount;                           // Number of enqueued packets
     };
 
+    // Context is a process gpu context, mapping a FrameDmaInfo to a particular
+    // Node.
     struct Context {
-        FrameDmaPackets* mFrameDmaPackets;
+        FrameDmaInfo* mFrameDmaInfo;
         Node* mNode;
     };
 
-    std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes; // pDxgAdapter -> NodeOrdinal -> Node
-    std::unordered_map<uint64_t, uint64_t> mDevices;                          // hDevice -> pDxgAdapter
-    std::unordered_map<uint64_t, Context> mContexts;                          // hContext -> Context
-    std::unordered_map<uint32_t, FrameDmaPackets> mProcessFrameDmaPackets;    // ProcessID -> FrameDmaPackets
+    std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes;   // pDxgAdapter -> NodeOrdinal -> Node
+    std::unordered_map<uint64_t, uint64_t> mDevices;                            // hDevice -> pDxgAdapter
+    std::unordered_map<uint64_t, Context> mContexts;                            // hContext -> Context
+    std::unordered_map<uint32_t, FrameDmaInfo> mProcessFrameDmaInfo;            // ProcessID -> FrameDmaInfo
 
     // State for tracking keyboard/mouse click times
     uint64_t mLastInputDeviceReadTime;
