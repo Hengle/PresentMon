@@ -1,28 +1,9 @@
-/*
-Copyright 2017-2020 Intel Corporation
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
-
-#include <algorithm>
+// Copyright (C) 2019-2021 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #include "PresentMon.hpp"
+
+#include <algorithm>
 
 enum {
     MAX_HISTORY_TIME = 3000,
@@ -228,21 +209,21 @@ FILE* CreateLsrCsvFile(char const* path)
     }
     fprintf(fp, ",TimeInSeconds");
     if (args.mTrackDisplay) {
-        fprintf(fp, ",MsBetweenAppPresents,MsAppPresentToLsr");
+        fprintf(fp, ",msBetweenAppPresents,msAppPresentToLsr");
     }
-    fprintf(fp, ",MsBetweenLsrs,AppMissed,LsrMissed");
+    fprintf(fp, ",msBetweenLsrs,AppMissed,LsrMissed");
     if (args.mTrackDebug) {
-        fprintf(fp, ",MsSourceReleaseFromRenderingToLsrAcquire,MsAppCpuRenderFrame");
+        fprintf(fp, ",msSourceReleaseFromRenderingToLsrAcquire,msAppCpuRenderFrame");
     }
-    fprintf(fp, ",MsAppPoseLatency");
+    fprintf(fp, ",msAppPoseLatency");
     if (args.mTrackDebug) {
-        fprintf(fp, ",MsAppMisprediction,MsLsrCpuRenderFrame");
+        fprintf(fp, ",msAppMisprediction,msLsrCpuRenderFrame");
     }
-    fprintf(fp, ",MsLsrPoseLatency,MsActualLsrPoseLatency,MsTimeUntilVsync,MsLsrThreadWakeupToGpuEnd,MsLsrThreadWakeupError");
+    fprintf(fp, ",msLsrPoseLatency,msActualLsrPoseLatency,msTimeUntilVsync,msLsrThreadWakeupToGpuEnd,msLsrThreadWakeupError");
     if (args.mTrackDebug) {
-        fprintf(fp, ",MsLsrThreadWakeupToCpuRenderFrameStart,MsCpuRenderFrameStartToHeadPoseCallbackStart,MsGetHeadPose,MsHeadPoseCallbackStopToInputLatch,MsInputLatchToGpuSubmission");
+        fprintf(fp, ",msLsrThreadWakeupToCpuRenderFrameStart,msCpuRenderFrameStartToHeadPoseCallbackStart,msGetHeadPose,msHeadPoseCallbackStopToInputLatch,msInputLatchToGpuSubmission");
     }
-    fprintf(fp, ",MsLsrPreemption,MsLsrExecution,MsCopyPreemption,MsCopyExecution,MsGpuEndToVsync");
+    fprintf(fp, ",msLsrPreemption,msLsrExecution,msCopyPreemption,msCopyExecution,msGpuEndToVsync");
     fprintf(fp, "\n");
 
     return fp;

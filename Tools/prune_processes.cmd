@@ -1,3 +1,6 @@
+:: Copyright (C) 2020-2021 Intel Corporation
+:: SPDX-License-Identifier: MIT
+
 @echo off
 setlocal
 set csvpath=%~1

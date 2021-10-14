@@ -17,13 +17,13 @@ While PresentMon itself is focused on lightweight collection and analysis, there
 
 ## License
 
-Copyright 2017-2021 Intel Corporation
+Copyright (C) 2017-2021 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## Releases
 
@@ -60,14 +60,15 @@ If PresentMon is not run with administrator privilege, it will not have complete
 
 ### Output Options
 
-|                     |                                                       |
-| ------------------- | ----------------------------------------------------- |
-| `-output_file path` | Write CSV output to the provided path.                |
-| `-output_stdout`    | Write CSV output to STDOUT.                           |
-| `-multi_csv`        | Create a separate CSV file for each captured process. |
-| `-no_csv`           | Do not create any output file.                        |
-| `-no_top`           | Don't display active swap chains in the console       |
-| `-qpc_time`         | Output present time as a performance counter value.   |
+|                     |                                                                          |
+| ------------------- | ------------------------------------------------------------------------ |
+| `-output_file path` | Write CSV output to the provided path.                                   |
+| `-output_stdout`    | Write CSV output to STDOUT.                                              |
+| `-multi_csv`        | Create a separate CSV file for each captured process.                    |
+| `-no_csv`           | Do not create any output file.                                           |
+| `-no_top`           | Don't display active swap chains in the console                          |
+| `-qpc_time`         | Output present time as a performance counter value.                      |
+| `-qpc_time_s`       | Output present time as a performance counter value converted to seconds. |
 
 ### Recording Options
 
@@ -87,20 +88,20 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-session_name name`     | Use the provided name to start a new realtime ETW session, instead of the default "PresentMon". This can be used to start multiple realtime captures at the same time (using distinct, case-insensitive names). A realtime PresentMon capture cannot start if there are any existing sessions with the same name. |
 | `-stop_existing_session` | If a trace session with the same name is already running, stop the existing session (to allow this one to proceed).                                                                                                                                                                                               |
+| `-terminate_existing`    | Terminate any existing PresentMon realtime trace sessions, then exit. Use with `-session_name` to target particular sessions.                       |
 | `-restart_as_admin`      | If not running with elevated privilege, restart and request to be run as administrator. (See discussion above).                                                                                                                                                                                                   |
 | `-terminate_on_proc_exit | Terminate PresentMon when all the target processes have exited.                                                                                                                                                                                                                                                   |
-| `-terminate_after_timed` | When using -timed, terminate PresentMon after the timed capture completes.                                                                                                                                                                                                                                        |
+| `-terminate_after_timed` | When using `-timed`, terminate PresentMon after the timed capture completes.                                                                                                                                                                                                                                      |
 
 ### Beta Options
 
 |                        |                                                                                                                             |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `-qpc_time_s`          | Output present time as a performance counter value converted to seconds.                                                    |
 | `-date_time`           | Output present time as a date and time with nanosecond precision.                                                           |
-| `-terminate_existing`  | Terminate any existing PresentMon realtime trace sessions, then exit. Use with -session_name to target particular sessions. |
 | `-track_gpu`           | Tracks the duration of each process' GPU work performed between presents.  Not supported on Win7.                           |
 | `-track_gpu_video`     | Track the video encode/decode portion of GPU work separately from other engines. Not supported on Win7.                     |
 | `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                                        |
+ | `-track_input`        | Tracks the time of keyboard/mouse clicks that were used by each frame. |
 
 ## Comma-separated value (CSV) file output
 
@@ -120,21 +121,23 @@ If `-hotkey` is used, then one CSV is created for each time recording is started
 | ProcessID              | The process ID of the process that called Present().                                                                                                                                                                                                                      |                              |
 | SwapChainAddress       | The address of the swap chain that was presented into.                                                                                                                                                                                                                    |                              |
 | Runtime                | The runtime used to present (e.g., D3D9 or DXGI).                                                                                                                                                                                                                         |                              |
-| SyncInterval           | The sync interval used in the Present() call.                                                                                                                                                                                                                             |                              |
+| SyncInterval           | The sync interval provided by the application in the Present() call. This value may be modified later by the driver, e.g., based on control panel overrides.                                                                                                              |                              |
 | PresentFlags           | Flags used in the Present() call.                                                                                                                                                                                                                                         |                              |
 | PresentMode            | The presentation mode used by the system for this Present().  See the table below for more details.                                                                                                                                                                       | not `-no_track_display`      |
 | AllowsTearing          | Whether tearing is possible (1) or not (0).                                                                                                                                                                                                                               | not `-no_track_display`      |
 | TimeInSeconds          | The time of the Present() call, in seconds, relative to when the PresentMon started recording.                                                                                                                                                                            | not `-date_time`             |
 | PresentTime            | The time of the Present() call, with date and time of day, relative to when the PresentMon started recording.                                                                                                                                                             | `-date_time`                 |
 | QPCTime                | The time of the Present() call, as a [performance counter value](https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter).  If `-qpc_time_s` is used, the value is converted to seconds by dividing by the counter frequency. | `-qpc_time` or `-qpc_time_s` |
-| MsInPresentAPI         | The time spent inside the Present() call, in milliseconds.                                                                                                                                                                                                                |                              |
-| MsUntilRenderComplete  | The time between the Present() call and when the GPU work completed, in milliseconds.                                                                                                                                                                                     | not `-no_track_display`      |
-| MsUntilDisplayed       | The time between the Present() call and when the frame was displayed, in milliseconds.                                                                                                                                                                                    | not `-no_track_display`      |
-| Dropped                | Whether the frame was dropped (1) or displayed (0).  Note, if dropped, MsUntilDisplayed will be 0.                                                                                                                                                                        |                              |
-| MsBetweenPresents      | The time between this Present() call and the previous one, in milliseconds.                                                                                                                                                                                               |                              |
-| MsBetweenDisplayChange | How long the previous frame was displayed before this Present() was displayed, in milliseconds.                                                                                                                                                                           | not `-no_track_display`      |
-| GPUDuration            | The time the GPU spent rendering this frame, in milliseconds.                                                                                                                                                                                                             | `-track_gpu`                 |
-| VideoDuration          | The time the GPU spent encoding/decoding video during this frame, in milliseconds.                                                                                                                                                                                        | `-track_gpu_video`           |
+| msInPresentAPI         | The time spent inside the Present() call, in milliseconds.                                                                                                                                                                                                                |                              |
+| msSinceInput | The time from the earliest keyboard/mouse click impacting this frame, and the Present() call.  Is zero if no input was used for this frame. | `-track_input` |
+| msUntilRenderStart     | The time between the Present() call and when the GPU work started, in milliseconds.                                                                                                                                                                                       | `-track_gpu`                 |
+| msUntilRenderComplete  | The time between the Present() call and when the GPU work completed, in milliseconds. Note that the value recorded will be slightly different if `-track_gpu` is or isn't used.  The value with `-track_gpu` is more accurate, but its collection has higher overhead.    | not `-no_track_display`      |
+| msUntilDisplayed       | The time between the Present() call and when the frame was displayed, in milliseconds.                                                                                                                                                                                    | not `-no_track_display`      |
+| Dropped                | Whether the frame was dropped (1) or displayed (0).  Note, if dropped, msUntilDisplayed will be 0.                                                                                                                                                                        |                              |
+| msBetweenPresents      | The time between this Present() call and the previous one, in milliseconds.                                                                                                                                                                                               |                              |
+| msBetweenDisplayChange | How long the previous frame was displayed before this Present() was displayed, in milliseconds.                                                                                                                                                                           | not `-no_track_display`      |
+| msGPUActive            | The time that any GPU engine was active working on this frame, in milliseconds. If `--track_gpu_video` this only includes non-video engines.                                                                                                                              | `-track_gpu`                 |
+| msGPUVideoActive       | The time the GPU spent encoding/decoding video during this frame, in milliseconds.                                                                                                                                                                                        | `-track_gpu_video`           |
 | WasBatched             | Whether the frame was submitted by the driver on a different thread than the app (1) or not (0).                                                                                                                                                                          | `-track_debug`               |
 | DwmNotified            | Whether the desktop compositor was notified about the frame (1) or not (0).                                                                                                                                                                                               | `-track_debug`               |
 
@@ -168,32 +171,32 @@ If `-track_mixed_reality` is used, a second CSV file will be generated with `_WM
 | ProcessID                                    | Process ID                                                                                                      | `-track_mixed_reality`                             |
 | DwmProcessID                                 | Compositor Process ID                                                                                           | `-track_mixed_reality`                             |
 | TimeInSeconds                                | Time since PresentMon recording started                                                                         | `-track_mixed_reality`                             |
-| MsBetweenLsrs                                | Time between this Lsr CPU start and the previous one                                                            | `-track_mixed_reality`                             |
+| msBetweenLsrs                                | Time between this Lsr CPU start and the previous one                                                            | `-track_mixed_reality`                             |
 | AppMissed                                    | Whether Lsr is reprojecting a new (0) or old (1) App frame (App GPU work must complete before Lsr CPU start)    | `-track_mixed_reality`                             |
 | LsrMissed                                    | Whether Lsr displayed a new frame (0) or not (1+) at the intended V-Sync (Count V-Syncs with no display change) | `-track_mixed_reality`                             |
-| MsAppPoseLatency                             | Time between App's pose sample and the intended mid-photon frame display                                        | `-track_mixed_reality`                             |
-| MsLsrPoseLatency                             | Time between Lsr's pose sample and the intended mid-photon frame display                                        | `-track_mixed_reality`                             |
-| MsActualLsrPoseLatency                       | Time between Lsr's pose sample and mid-photon frame display                                                     | `-track_mixed_reality`                             |
-| MsTimeUntilVsync                             | Time between Lsr CPU start and the intended V-Sync                                                              | `-track_mixed_reality`                             |
-| MsLsrThreadWakeupToGpuEnd                    | Time between Lsr CPU start and GPU work completion                                                              | `-track_mixed_reality`                             |
-| MsLsrThreadWakeupError                       | Time between intended Lsr CPU start and Lsr CPU start                                                           | `-track_mixed_reality`                             |
-| MsLsrPreemption                              | Time spent preempting the GPU with Lsr GPU work                                                                 | `-track_mixed_reality`                             |
-| MsLsrExecution                               | Time spent executing the Lsr GPU work                                                                           | `-track_mixed_reality`                             |
-| MsCopyPreemption                             | Time spent preempting the GPU with Lsr GPU cross-adapter copy work (if required)                                | `-track_mixed_reality`                             |
-| MsCopyExecution                              | Time spent executing the Lsr GPU cross-adapter copy work (if required)                                          | `-track_mixed_reality`                             |
-| MsGpuEndToVsync                              | Time between Lsr GPU work completion and V-Sync                                                                 | `-track_mixed_reality`                             |
-| MsBetweenAppPresents                         | Time between App's present and the previous one                                                                 | `-track_mixed_reality` and not `-no_track_display` |
-| MsAppPresentToLsr                            | Time between App's present and Lsr CPU start                                                                    | `-track_mixed_reality` and not `-no_track_display` |
+| msAppPoseLatency                             | Time between App's pose sample and the intended mid-photon frame display                                        | `-track_mixed_reality`                             |
+| msLsrPoseLatency                             | Time between Lsr's pose sample and the intended mid-photon frame display                                        | `-track_mixed_reality`                             |
+| msActualLsrPoseLatency                       | Time between Lsr's pose sample and mid-photon frame display                                                     | `-track_mixed_reality`                             |
+| msTimeUntilVsync                             | Time between Lsr CPU start and the intended V-Sync                                                              | `-track_mixed_reality`                             |
+| msLsrThreadWakeupToGpuEnd                    | Time between Lsr CPU start and GPU work completion                                                              | `-track_mixed_reality`                             |
+| msLsrThreadWakeupError                       | Time between intended Lsr CPU start and Lsr CPU start                                                           | `-track_mixed_reality`                             |
+| msLsrPreemption                              | Time spent preempting the GPU with Lsr GPU work                                                                 | `-track_mixed_reality`                             |
+| msLsrExecution                               | Time spent executing the Lsr GPU work                                                                           | `-track_mixed_reality`                             |
+| msCopyPreemption                             | Time spent preempting the GPU with Lsr GPU cross-adapter copy work (if required)                                | `-track_mixed_reality`                             |
+| msCopyExecution                              | Time spent executing the Lsr GPU cross-adapter copy work (if required)                                          | `-track_mixed_reality`                             |
+| msGpuEndToVsync                              | Time between Lsr GPU work completion and V-Sync                                                                 | `-track_mixed_reality`                             |
+| msBetweenAppPresents                         | Time between App's present and the previous one                                                                 | `-track_mixed_reality` and not `-no_track_display` |
+| msAppPresentToLsr                            | Time between App's present and Lsr CPU start                                                                    | `-track_mixed_reality` and not `-no_track_display` |
 | HolographicFrameID                           | App's Holographic Frame ID                                                                                      | `-track_mixed_reality` `-track_debug`              |
-| MsSourceReleaseFromRenderingToLsrAcquire     | Time between composition end and Lsr acquire                                                                    | `-track_mixed_reality` `-track_debug`              |
-| MsAppCpuRenderFrame                          | Time between App's CreateNextFrame() API call and PresentWithCurrentPrediction() API call                       | `-track_mixed_reality` `-track_debug`              |
-| MsAppMisprediction                           | Time between App's intended pose time and the intended mid-photon frame display                                 | `-track_mixed_reality` `-track_debug`              |
-| MsLsrCpuRenderFrame                          | Time between Lsr CPU render start and GPU work submit                                                           | `-track_mixed_reality` `-track_debug`              |
-| MsLsrThreadWakeupToCpuRenderFrameStart       | Time between Lsr CPU start and CPU render start                                                                 | `-track_mixed_reality` `-track_debug`              |
-| MsCpuRenderFrameStartToHeadPoseCallbackStart | Time between Lsr CPU render start and pose sample                                                               | `-track_mixed_reality` `-track_debug`              |
-| MsGetHeadPose                                | Time between Lsr pose sample start and pose sample end                                                          | `-track_mixed_reality` `-track_debug`              |
-| MsHeadPoseCallbackStopToInputLatch           | Time between Lsr pose sample end and input latch                                                                | `-track_mixed_reality` `-track_debug`              |
-| MsInputLatchToGpuSubmission                  | Time between Lsr input latch and GPU work submit                                                                | `-track_mixed_reality` `-track_debug`              |
+| msSourceReleaseFromRenderingToLsrAcquire     | Time between composition end and Lsr acquire                                                                    | `-track_mixed_reality` `-track_debug`              |
+| msAppCpuRenderFrame                          | Time between App's CreateNextFrame() API call and PresentWithCurrentPrediction() API call                       | `-track_mixed_reality` `-track_debug`              |
+| msAppMisprediction                           | Time between App's intended pose time and the intended mid-photon frame display                                 | `-track_mixed_reality` `-track_debug`              |
+| msLsrCpuRenderFrame                          | Time between Lsr CPU render start and GPU work submit                                                           | `-track_mixed_reality` `-track_debug`              |
+| msLsrThreadWakeupToCpuRenderFrameStart       | Time between Lsr CPU start and CPU render start                                                                 | `-track_mixed_reality` `-track_debug`              |
+| msCpuRenderFrameStartToHeadPoseCallbackStart | Time between Lsr CPU render start and pose sample                                                               | `-track_mixed_reality` `-track_debug`              |
+| msGetHeadPose                                | Time between Lsr pose sample start and pose sample end                                                          | `-track_mixed_reality` `-track_debug`              |
+| msHeadPoseCallbackStopToInputLatch           | Time between Lsr pose sample end and input latch                                                                | `-track_mixed_reality` `-track_debug`              |
+| msInputLatchToGpuSubmission                  | Time between Lsr input latch and GPU work submit                                                                | `-track_mixed_reality` `-track_debug`              |
 
 ## Known issues
 
@@ -207,15 +210,14 @@ Applications that do not use D3D9 or DXGI APIs for presenting frames (e.g., as i
 - SwapChainAddress = 0
 - SyncInterval = -1
 - PresentFlags = 0
-- MsInPresentAPI = 0
+- msInPresentAPI = 0
 
-In this case, PresentTime/TimeInSeconds will represent the first time the present is observed in the kernel, as opposed to the runtime, and therefore will be sometime after the application presented the frame (typically ~0.5ms).  Since MsUntilRenderComplete and MsUntilDisplayed are deltas from PresentTime/TimeInSeconds, they will be correspondingly smaller then they would have been if measured from application present.  MsBetweenDisplayChange will still be correct, and MsBetweenPresents should be correct on average.
+In this case, PresentTime/TimeInSeconds will represent the first time the present is observed in the kernel, as opposed to the runtime, and therefore will be sometime after the application presented the frame (typically ~0.5ms).  Since msUntilRenderComplete and msUntilDisplayed are deltas from PresentTime/TimeInSeconds, they will be correspondingly smaller then they would have been if measured from application present.  msBetweenDisplayChange will still be correct, and msBetweenPresents should be correct on average.
 
-### Measuring application latency
+### Measuring input latency
 
-PresentMon doesn't directly measure the latency from a user's input to the display of that frame because it doesn't have insight into when the application collects and applies user input.  A potential approximation is to assume that the application collects user input immediately after presenting the previous frame.  To compute this, search for the previous row that uses the same swap chain and then:
+When using `-track_input`, PresentMon will track when keyboard/mouse events are read by the OS and the target application.  Then, for frames where `msSinceInput` is non-zero, `msSinceInput + msUntilDisplayed` can be used to better-understand the latency between user input and the display of the resulting rendered frame.  Note, however, that this is just the OS-visible subset of the full  latency: it does not include any latency incurred within the input/display hardware and drivers.
 
-```LatencyMs =~ MsBetweenPresents + MsUntilDisplayed - previous(MsInPresentAPI)```
 
 ### Shutting down PresentMon on Windows 7
 

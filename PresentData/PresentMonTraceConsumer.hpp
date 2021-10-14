@@ -1,24 +1,5 @@
-/*
-Copyright 2017-2020 Intel Corporation
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
+// Copyright (C) 2017-2021 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
@@ -66,6 +47,16 @@ enum class Runtime
     DXGI, D3D9, Other, CloudStreaming
 };
 
+enum class InputDeviceType
+{
+    Mouse, Keyboard, Unknown
+};
+
+struct InputEvent {
+    uint64_t Time;
+    InputDeviceType Type;
+};
+
 // A ProcessEvent occurs whenever a Process starts or stops.
 struct ProcessEvent {
     std::string ImageFileName;
@@ -75,70 +66,72 @@ struct ProcessEvent {
 };
 
 struct PresentEvent {
-    // Initial event information (might be a kernel event if not presented
-    // through DXGI or D3D9)
-    uint64_t QpcTime;
-    uint32_t ProcessId;
-    uint32_t ThreadId;
-
-    // Timestamps observed during present pipeline
-    uint64_t TimeTaken;     // QPC duration between runtime present start and end
-    uint64_t ReadyTime;     // QPC value when the last GPU commands completed prior to presentation
-    uint64_t ScreenTime;    // QPC value when the present was displayed on screen
+    uint64_t QpcTime;           // QPC value of the first event related to the Present (D3D9, DXGI, or DXGK Present_Start)
+    uint32_t ProcessId;         // ID of the process that presented
+    uint32_t ThreadId;          // ID of the thread that presented
+    uint64_t TimeTaken;         // QPC duration between runtime present start and end
+    uint64_t GPUStartTime;      // QPC value when the frame's first DMA packet started
+    uint64_t ReadyTime;         // QPC value when the frame's last DMA packet completed
+    uint64_t GPUDuration;       // QPC duration during which a frame's DMA packet was running on
+                                // ... any node (if mTrackGPUVideo==false) or non-video nodes (if mTrackGPUVideo==true)
+    uint64_t GPUVideoDuration;  // QPC duration during which a frame's DMA packet was running on a video node (if mTrackGPUVideo==true)
+    uint64_t ScreenTime;        // QPC value when the present was displayed on screen
+    uint64_t InputTime;         // Earliest QPC value when the keyboard/mouse was clicked and used by this frame
 
     // Extra present parameters obtained through DXGI or D3D9 present
     uint64_t SwapChainAddress;
     int32_t SyncInterval;
     uint32_t PresentFlags;
 
-    // Properties deduced by watching events through present pipeline
+    // Keys used to index into PMTraceConsumer's tracking data structures:
+    uint64_t DxgKrnlHContext;           // Key for mBltsByDxgContext
+    uint64_t Win32KPresentCount;        // Combine with CompositionSurfaceLuid and Win32KBindId as key into mWin32KPresentHistoryTokens
+    uint64_t Win32KBindId;              // Combine with CompositionSurfaceLuid and Win32KPresentCount as key into mWin32KPresentHistoryTokens
+    uint64_t LegacyBlitTokenData;       // Key for mPresentsByLegacyBlitToken
     uint64_t Hwnd;
     uint64_t TokenPtr;
     uint64_t CompositionSurfaceLuid;
-    uint64_t GPUDuration;            // Time during which DMA packet was running (0 if !mTrackGPU; not including video packets if mTrackGPUVideo)
-    uint64_t GPUVideoDuration;       // Sum of GPU Video DMA packet durations
-    uint32_t QueueSubmitSequence;    // Submit sequence for the Present packet
+    uint32_t mAllPresentsTrackingIndex; // Index in PMTraceConsumer's mAllPresents.
+    uint32_t QueueSubmitSequence;       // Submit sequence for the Present packet
+
+    // Properties deduced by watching events through present pipeline
     uint32_t DestWidth;
     uint32_t DestHeight;
     uint32_t DriverBatchThreadId;
     Runtime Runtime;
     PresentMode PresentMode;
     PresentResult FinalState;
+    InputDeviceType InputType;
     bool SupportsTearing;
     bool MMIO;
     bool SeenDxgkPresent;
     bool SeenWin32KEvents;
     bool DwmNotified;
-    bool Completed;
+    bool SeenInFrameEvent;      // This present has gotten a Win32k TokenStateChanged event into InFrame state
+    bool CompletionIsDeferred;  // A FinalState has been determined, but not all expected events have been observed yet
+    bool IsCompleted;           // All expected events have been observed
+    bool IsLost;                // This PresentEvent was found in an unexpected state or is too old
 
-    // Additional transient tracking state
-    bool IsLost;                        // Whether this present has been timed-out, unlikely to ever complete.
-    uint32_t mAllPresentsTrackingIndex; // Index in PMTraceConsumer's mAllPresents.
-    uint64_t DxgKrnlHContext;           // Key for mBltsByDxgContext
-    uint64_t Win32KPresentCount;        // Combine with CompositionSurfaceLuid and Win32KBindId as key into mWin32KPresentHistoryTokens
-    uint64_t Win32KBindId;              // Combine with CompositionSurfaceLuid and Win32KPresentCount as key into mWin32KPresentHistoryTokens
-    uint64_t LegacyBlitTokenData;       // Key for mPresentsByLegacyBlitToken
-    std::deque<std::shared_ptr<PresentEvent>> DependentPresents;
-    
     // We need a signal to prevent us from looking fruitlessly through the WaitingForDwm list
     bool PresentInDwmWaitingStruct;
 
+    // Additional transient tracking state
+    std::deque<std::shared_ptr<PresentEvent>> DependentPresents;
+
     // Track the path the present took through the PresentMon analysis.
-#ifdef TRACK_PRESENT_PATHS
+    #ifdef TRACK_PRESENT_PATHS
     uint64_t AnalysisPath;
-#endif
+    #endif
 
     // Give every present a unique id for debugging.
-#if DEBUG_VERBOSE
+    #if DEBUG_VERBOSE
     uint64_t Id;
-#endif
+    #endif
 
-    PresentEvent();
+    PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime);
 
-#if !DEBUG_VERBOSE
 private:
     PresentEvent(PresentEvent const& copy); // dne
-#endif
 };
 
 // A high-level description of the sequence of events for each present type,
@@ -151,7 +144,9 @@ private:
 // Composed Flip (FLIP_SEQUENTIAL, FLIP_DISCARD, FlipEx):
 //   Runtime PresentStart -> TokenCompositionSurfaceObject (by thread/process, for classification and token key) ->
 //   PresentHistoryDetailed (by thread, for token ptr) -> QueueSubmit (by thread, for submit sequence) ->
-//   DxgKrnl_PresentHistory (by token ptr, for ready time) and TokenStateChanged (by token key, for discard status and screen time)
+//   DxgKrnl_PresentHistory (by token ptr, for ready time) and TokenStateChanged (by token key, for discard status and intent to present) ->
+//   DWM Present (consumes most recent present per hWnd, marks DWM thread ID) ->
+//   A fullscreen present is issued by DWM, and when it completes, this present is on screen
 //
 // Hardware Direct Flip:
 //   N/A, not currently uniquely detectable (follows the same path as composed flip)
@@ -161,7 +156,7 @@ private:
 //   [-> VSyncDPC or HSyncDPC (by submit sequence, for screen time)]
 //
 // Hardware Composed Independent Flip:
-//   Identical to hardware independent flip, but MMIOFlipMPO is received instead of MMIOFlip
+//   Identical to hardware independent flip, but VSyncDPCMPO and HSyncDPCMPO contains more than one valid plane and SubmitSequence.
 //
 // Composed Copy with GPU GDI (a.k.a. Win7 Blit):
 //   Runtime PresentStart -> DxgKrnl_Blit (by thread/process, for classification) ->
@@ -197,21 +192,40 @@ struct PMTraceConsumer
     bool mTrackDisplay = true;          // Whether the analysis should track presents to display
     bool mTrackGPU = false;             // Whether the analysis should track GPU work
     bool mTrackGPUVideo = false;        // Whether the analysis should track GPU video work separately
+    bool mTrackInputs = false;          // Whether to track keyboard/mouse click times
 
-    // Whether we've seen Dxgk complete a present.  This is used to indicate
-    // that the Dxgk provider has started and it's safe to start tracking
+    // Whether we've completed any presents yet.  This is used to indicate that
+    // all the necessary providers have started and it's safe to start tracking
     // presents.
-    bool mSeenDxgkPresentInfo = false;
+    bool mHasCompletedAPresent = false;
 
-    // Store completed presents until the consumer thread removes them using
-    // DequeuePresentEvents().  Completed presents are those that have
-    // progressed as far as they can through the pipeline before being either
-    // discarded or hitting the screen.
+    // Store completed and lost presents until the consumer thread removes them
+    // using Dequeue*PresentEvents().
+    //
+    // Completed presents are those that have seen all their expected events,
+    // based on the presentation path used.
+    //
+    // Lost presents are not yet completed, but have been waiting for
+    // completion for a long time or were found in an unexpected state.  This
+    // was most likely caused by a missed ETW event.
+
     std::mutex mPresentEventMutex;
-    std::vector<std::shared_ptr<PresentEvent>> mPresentEvents;
+    std::vector<std::shared_ptr<PresentEvent>> mCompletePresentEvents;
 
     std::mutex mLostPresentEventMutex;
     std::vector<std::shared_ptr<PresentEvent>> mLostPresentEvents;
+
+    // If a present has been determined to be either discarded or displayed,
+    // but it has not yet seen all of its expected events, it is removed from
+    // the tracking structures and placed into the DeferredCompletions list
+    // with CompletionIsDeferred set.  These are not completed until a
+    // case-dependent number of Presents() have occurred from the same process.
+
+    // (PresentEvent, NumPresentStopsToWaitFor)
+    using DeferredCompletions = std::vector<std::pair<std::shared_ptr<PresentEvent>, uint32_t>>;
+
+    // [Process ID] => DeferredCompletions
+    std::unordered_map<uint32_t, DeferredCompletions> mDeferredCompletions;
 
     // Process events
     std::mutex mProcessEventMutex;
@@ -223,28 +237,18 @@ struct PMTraceConsumer
     //
     // mPresentByThreadId stores the in-progress present that was last operated
     // on by each thread for event sequences that are known to execute on the
-    // same thread. Its members' lifetime should track the lifetime of the 
+    // same thread. Its members' lifetime should track the lifetime of the
     // runtime present API as much as possible. Only one present will be going
     // through this sequence on any particular thread at a time.
     //
     // mPresentsByProcess stores each process' in-progress presents in the
-    // order that they were presented.  This is used to look up presents across
-    // systems running on different threads (DXGI/D3D/DXGK/Win32) and for
-    // batched present tracking, so we know to discard all older presents when
-    // one is completed.
+    // order that they were created by PresentMon.  This is used to look up
+    // presents across systems running on different threads
+    // (DXGI/D3D/DXGK/Win32) including batched presents, and so that we know to
+    // discard all older presents when a newer one is completed.
     //
-    // mPresentsByProcessAndSwapChain stores each swapchain's in-progress
-    // presents in the order that they were created by PresentMon.  This is
-    // primarily used to ensure that the consumer sees per-swapchain presents
-    // in the same order that they were submitted.
-    //
-    // TODO: shouldn't batching via mPresentsByProcess be per swapchain as
-    // well?  Is the create order used by mPresentsByProcessAndSwapChain really
-    // different than QpcTime order?  If no on these, should we combine
-    // mPresentsByProcess and mPresentsByProcessAndSwapChain?
-    //
-    // mPresentsBySubmitSequence is used to lookup the active present associated
-    // with a present queue packet.
+    // mPresentsBySubmitSequence is used to lookup the active present
+    // associated with a present queue packet.
     //
     // All flip model presents (windowed flip, dFlip, iFlip) are uniquely
     // identifyed by a Win32K present history token (composition surface,
@@ -263,10 +267,6 @@ struct PMTraceConsumer
     using OrderedPresents = std::map<uint64_t, std::shared_ptr<PresentEvent>>;
     std::map<uint32_t, OrderedPresents> mPresentsByProcess;
 
-    // [(process id, swapchain address)]
-    typedef std::tuple<uint32_t, uint64_t> ProcessAndSwapChainKey;
-    std::map<ProcessAndSwapChainKey, std::deque<std::shared_ptr<PresentEvent>>> mPresentsByProcessAndSwapChain;
-
     // Maps from queue packet submit sequence
     // Used for Flip -> MMIOFlip -> VSyncDPC for FS, for PresentHistoryToken -> MMIOFlip -> VSyncDPC for iFlip,
     // and for Blit Submission -> Blit completion for FS Blit
@@ -275,7 +275,7 @@ struct PMTraceConsumer
     std::map<uint32_t, std::shared_ptr<PresentEvent>> mPresentsBySubmitSequence;
 
     // [(composition surface pointer, present count, bind id)]
-    typedef std::tuple<uint64_t, uint64_t, uint64_t> Win32KPresentHistoryTokenKey;
+    using Win32KPresentHistoryTokenKey = std::tuple<uint64_t, uint64_t, uint64_t>;
     std::map<Win32KPresentHistoryTokenKey, std::shared_ptr<PresentEvent>> mWin32KPresentHistoryTokens;
 
 
@@ -339,46 +339,63 @@ struct PMTraceConsumer
     std::shared_mutex mTrackedProcessFilterMutex;
 
     // Storage for passing present path tracking id to Handle...() functions.
-#ifdef TRACK_PRESENT_PATHS
+    #ifdef TRACK_PRESENT_PATHS
     uint32_t mAnalysisPathID;
-#endif
+    #endif
 
     // Tracking for GPU work contributing to each frame.  We need to track DMA
     // packet queuing to know how when each DMA packet actually ran.
-    struct DmaDuration {
-        uint64_t mAccumulatedDmaTime;   // QPC duration that at least one DMA packet was running
-        uint64_t mDmaExecStartTime;     // QPC when the oldest running DMA packet started
-        uint32_t mDmaExecCount;         // Number of running DMA packets
+
+    // FrameDmaInfo is the execution information for each process frame, and
+    // may accumlate execution across many parallel nodes.
+    struct FrameDmaInfo {
+        uint64_t mFirstDmaTime;         // QPC when the first DMA packet started for the current frame
+        uint64_t mLastDmaTime;          // QPC when the last DMA packet completed for the current frame
+        uint64_t mAccumulatedDmaTime;   // QPC duration while at least one DMA packet was running during the current frame
+        uint64_t mRunningDmaStartTime;  // QPC when the oldest currently-running DMA packet started
+        uint32_t mRunningDmaCount;      // Number of currently-running DMA packets
     };
 
-    struct DmaDurations {
-        DmaDuration mVideoEngines;
-        DmaDuration mOtherEngines;
-    };
-
+    // Node is information about a particular GPU node, including any DMA
+    // packets currently running/queued to it.
     struct Node {
-        uint64_t mStartTime;            // QPC when the current packet started running
-        uint32_t mQueueIndex;           // Index into mDmaDurations and mSequenceId for current running packet
-        uint32_t mQueueCount;           // Number of enqueued packets
-
-        // 9 is to fit into two cache lines (one is not enough)
-        DmaDurations* mDmaDurations[9]; // Accumulated duration of enqueued packets
-        uint32_t mSequenceId[9];        // Sequence IDs for enqueued packets
-
+        enum { MAX_QUEUE_SIZE = 9 };                    // MAX_QUEUE_SIZE=9 for 2 full cachelines (one is not enough).
+        FrameDmaInfo* mFrameDmaInfo[MAX_QUEUE_SIZE];    // Frame state for enqueued packets
+        uint32_t mSequenceId[MAX_QUEUE_SIZE];           // Sequence IDs for enqueued packets
+        uint32_t mQueueIndex;                           // Index into mFrameDmaInfo and mSequenceId for currently-running packet
+        uint32_t mQueueCount;                           // Number of enqueued packets
         bool mIsVideo;
         bool mIsVideoDecode;
     };
 
+    // Context is a process gpu context, mapping a FrameDmaInfo to a particular
+    // Node.
     struct Context {
-        DmaDurations* mDmaDurations;
+        FrameDmaInfo* mFrameDmaInfo;
         Node* mNode;
-        bool mIsCloudStreamingVideoEncoder;
+        bool mIsVideoEncoderForCloudStreamingApp;
     };
 
-    std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes; // pDxgAdapter -> NodeOrdinal -> Node
-    std::unordered_map<uint64_t, uint64_t> mDevices;                          // hDevice -> pDxgAdapter
-    std::unordered_map<uint64_t, Context> mContexts;                          // hContext -> Context
-    std::unordered_map<uint32_t, DmaDurations> mDmaDurations;                 // ProcessID -> DmaDurations
+    // Depending on mTrackGPUVideo, we may track video engines separately
+    struct FrameDmaInfos {
+        FrameDmaInfo mVideoEngines;
+        FrameDmaInfo mOtherEngines;
+    };
+
+    std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes;   // pDxgAdapter -> NodeOrdinal -> Node
+    std::unordered_map<uint64_t, uint64_t> mDevices;                            // hDevice -> pDxgAdapter
+    std::unordered_map<uint64_t, Context> mContexts;                            // hContext -> Context
+    std::unordered_map<uint32_t, FrameDmaInfos> mProcessFrameDmaInfo;           // ProcessID -> FrameDmaInfo
+
+    void CreateFrameDmaInfo(uint32_t processId, Context* context);
+    void AssignFrameDmaInfo(PresentEvent* pEvent, LONGLONG timestamp);
+
+    // State for tracking keyboard/mouse click times
+    uint64_t mLastInputDeviceReadTime;
+    InputDeviceType mLastInputDeviceType;
+
+    std::unordered_map<uint32_t, std::pair<uint64_t, InputDeviceType>> mRetrievedInput; // ProcessID -> <InputTime, InputType>
+
 
     void DequeueProcessEvents(std::vector<ProcessEvent>& outProcessEvents)
     {
@@ -389,7 +406,7 @@ struct PMTraceConsumer
     void DequeuePresentEvents(std::vector<std::shared_ptr<PresentEvent>>& outPresentEvents)
     {
         std::lock_guard<std::mutex> lock(mPresentEventMutex);
-        outPresentEvents.swap(mPresentEvents);
+        outPresentEvents.swap(mCompletePresentEvents);
     }
 
     void DequeueLostPresentEvents(std::vector<std::shared_ptr<PresentEvent>>& outPresentEvents)
@@ -405,17 +422,19 @@ struct PMTraceConsumer
     void HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t submitSequence);
     void HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flags);
     void HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid);
-    void HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence);
+    void HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, bool isMultiplane);
     void HandleDxgkPresentHistory(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, PresentMode knownPresentMode);
     void HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint64_t token);
 
-    void CompletePresent(std::shared_ptr<PresentEvent> p);
+    void CompletePresent(std::shared_ptr<PresentEvent> const& p);
+    void CompletePresentHelper(std::shared_ptr<PresentEvent> const& p, OrderedPresents* completed);
+    void CompleteDeferredCompletion(std::shared_ptr<PresentEvent> const& present);
     std::shared_ptr<PresentEvent> FindBySubmitSequence(uint32_t submitSequence);
     std::shared_ptr<PresentEvent> FindOrCreatePresent(EVENT_HEADER const& hdr);
     void TrackPresentOnThread(std::shared_ptr<PresentEvent> present);
-    void TrackPresent(std::shared_ptr<PresentEvent> present, OrderedPresents& presentsByThisProcess);
+    void TrackPresent(std::shared_ptr<PresentEvent> present, OrderedPresents* presentsByThisProcess);
     void RemoveLostPresent(std::shared_ptr<PresentEvent> present);
-    void RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> present);
+    void RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> present, bool waitForPresentStop);
     void RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPresentBatching, ::Runtime runtime);
 
     void HandleNTProcessEvent(EVENT_RECORD* pEventRecord);
@@ -436,7 +455,4 @@ struct PMTraceConsumer
     void AddTrackedProcessForFiltering(uint32_t processID);
     void RemoveTrackedProcessForFiltering(uint32_t processID);
     bool IsProcessTrackedForFiltering(uint32_t processID);
-
-    void AssignAccumulatedGPUWork(EVENT_HEADER const& hdr, PresentEvent* present);
 };
-
