@@ -1,4 +1,4 @@
-// Copyright (C) 2017,2019-2021 Intel Corporation
+// Copyright (C) 2017,2019-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #include "PresentMon.hpp"
@@ -77,7 +77,7 @@ bool StartTraceSession()
         case ERROR_BAD_PATHNAME:      fprintf(stderr, " (invalid --session_name)"); break;
         case ERROR_ACCESS_DENIED:     fprintf(stderr, " (access denied)"); break;
         case ERROR_FILE_CORRUPT:      fprintf(stderr, " (invalid --etl_file)"); break;
-        default:                      fprintf(stderr, " (error=%u)", status); break;
+        default:                      fprintf(stderr, " (error=%lu)", status); break;
         }
         fprintf(stderr, ".\n");
 

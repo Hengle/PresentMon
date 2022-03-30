@@ -17,7 +17,7 @@ While PresentMon itself is focused on lightweight collection and analysis, there
 
 ## License
 
-Copyright (C) 2017-2021 Intel Corporation
+Copyright (C) 2017-2022 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -84,14 +84,14 @@ If PresentMon is not run with administrator privilege, it will not have complete
 
 ### Execution Options
 
-|                          |                                                                                                                                                                                                                                                                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-session_name name`     | Use the provided name to start a new realtime ETW session, instead of the default "PresentMon". This can be used to start multiple realtime captures at the same time (using distinct, case-insensitive names). A realtime PresentMon capture cannot start if there are any existing sessions with the same name. |
-| `-stop_existing_session` | If a trace session with the same name is already running, stop the existing session (to allow this one to proceed).                                                                                                                                                                                               |
-| `-terminate_existing`    | Terminate any existing PresentMon realtime trace sessions, then exit. Use with `-session_name` to target particular sessions.                       |
-| `-restart_as_admin`      | If not running with elevated privilege, restart and request to be run as administrator. (See discussion above).                                                                                                                                                                                                   |
-| `-terminate_on_proc_exit | Terminate PresentMon when all the target processes have exited.                                                                                                                                                                                                                                                   |
-| `-terminate_after_timed` | When using `-timed`, terminate PresentMon after the timed capture completes.                                                                                                                                                                                                                                      |
+|                           |                                                                                                                                                                                                                                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-session_name name`      | Use the provided name to start a new realtime ETW session, instead of the default "PresentMon". This can be used to start multiple realtime captures at the same time (using distinct, case-insensitive names). A realtime PresentMon capture cannot start if there are any existing sessions with the same name. |
+| `-stop_existing_session`  | If a trace session with the same name is already running, stop the existing session (to allow this one to proceed).                                                                                                                                                                                               |
+| `-terminate_existing`     | Terminate any existing PresentMon realtime trace sessions, then exit. Use with `-session_name` to target particular sessions.                                                                                                                                                                                     |
+| `-restart_as_admin`       | If not running with elevated privilege, restart and request to be run as administrator. (See discussion above).                                                                                                                                                                                                   |
+| `-terminate_on_proc_exit` | Terminate PresentMon when all the target processes have exited.                                                                                                                                                                                                                                                   |
+| `-terminate_after_timed`  | When using `-timed`, terminate PresentMon after the timed capture completes.                                                                                                                                                                                                                                      |
 
 ### Beta Options
 

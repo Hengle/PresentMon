@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Intel Corporation
+// Copyright (C) 2019-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #include "PresentMon.hpp"
@@ -523,6 +523,7 @@ void Output()
         switch (args.mConsoleOutputType) {
         case ConsoleOutput::None:
             break;
+
         case ConsoleOutput::Simple:
 #if _DEBUG
             if (realtimeRecording) {

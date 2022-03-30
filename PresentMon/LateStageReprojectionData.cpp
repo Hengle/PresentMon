@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Intel Corporation
+// Copyright (C) 2019-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #include "PresentMon.hpp"
@@ -320,8 +320,10 @@ void UpdateConsole(std::unordered_map<uint32_t, ProcessInfo> const& activeProces
             const size_t historySize = lsr.ComputeHistorySize();
 
             if (args.mTrackDisplay) {
-                auto const& appProcess = activeProcesses.find(runtimeStats.mAppProcessId)->second;
-                ConsolePrintLn("    App - %s[%d]:", appProcess.mModuleName.c_str(), runtimeStats.mAppProcessId);
+                auto processIter = activeProcesses.find(runtimeStats.mAppProcessId);
+                ConsolePrintLn("    App - %s[%d]:",
+                    processIter == activeProcesses.end() ? "<error>" : processIter->second.mModuleName.c_str(),
+                    runtimeStats.mAppProcessId);
                 ConsolePrint("        %.2lf ms/frame (%.1lf fps, %.2lf ms CPU", 1000.0 / fps, fps, runtimeStats.mAppSourceCpuRenderTimeInMs);
             } else {
                 ConsolePrintLn("    App:");
@@ -342,9 +344,11 @@ void UpdateConsole(std::unordered_map<uint32_t, ProcessInfo> const& activeProces
         {
             // LSR
             const double fps = lsr.ComputeFps();
-            auto const& lsrProcess = activeProcesses.find(runtimeStats.mLsrProcessId)->second;
+            auto processIter = activeProcesses.find(runtimeStats.mLsrProcessId);
 
-            ConsolePrintLn("    Compositor - %s[%d]:", lsrProcess.mModuleName.c_str(), runtimeStats.mLsrProcessId);
+            ConsolePrintLn("    Compositor - %s[%d]:",
+                processIter == activeProcesses.end() ? "<error>" : processIter->second.mModuleName.c_str(),
+                runtimeStats.mLsrProcessId);
             ConsolePrintLn("        %.2lf ms/frame (%.1lf fps, %.1lf displayed fps, %.2lf ms CPU)",
                 1000.0 / fps,
                 fps,

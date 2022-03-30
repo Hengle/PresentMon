@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2021 Intel Corporation
+// Copyright (C) 2020-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #include "PresentMonTests.h"
@@ -29,11 +29,10 @@ public:
         }
 
         // Make sure output directory exists.
-        {
-            auto i = testCsv_.find_last_of(L"/\\");
-            if (i != std::wstring::npos) {
-                ASSERT_TRUE(EnsureDirectoryCreated(testCsv_.substr(0, i)));
-            }
+        for (auto i = testCsv_.find_last_of(L"/\\"); i == std::wstring::npos || !EnsureDirectoryCreated(testCsv_.substr(0, i)); ) {
+            AddTestFailure(__FILE__, __LINE__, "Output directory does not exist!");
+            goldCsv.Close();
+            return;
         }
 
         // Generate command line, querying gold CSV to try and match expected

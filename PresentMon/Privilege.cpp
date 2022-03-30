@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Intel Corporation
+// Copyright (C) 2017-2021 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #define WIN32_LEAN_AND_MEAN
@@ -28,7 +28,7 @@ bool InPerfLogUsersGroup()
 
 bool EnableDebugPrivilege()
 {
-    auto hmodule = LoadLibraryA("advapi32.dll");
+    auto hmodule = LoadLibraryExA("advapi32.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
     auto pOpenProcessToken      = (decltype(&OpenProcessToken))      GetProcAddress(hmodule, "OpenProcessToken");
     auto pGetTokenInformation   = (decltype(&GetTokenInformation))   GetProcAddress(hmodule, "GetTokenInformation");
     auto pLookupPrivilegeValue  = (decltype(&LookupPrivilegeValueA)) GetProcAddress(hmodule, "LookupPrivilegeValueA");

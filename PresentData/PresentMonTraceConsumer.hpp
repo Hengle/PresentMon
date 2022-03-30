@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Intel Corporation
+// Copyright (C) 2017-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -414,4 +414,3 @@ struct PMTraceConsumer
     void RemoveTrackedProcessForFiltering(uint32_t processID);
     bool IsProcessTrackedForFiltering(uint32_t processID);
 };
-

@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2021 Intel Corporation
+// Copyright (C) 2020-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #define WIN32_LEAN_AND_MEAN
@@ -118,7 +118,7 @@ ULONG EnableProviders(
         eventIds.push_back(Microsoft_Windows_DxgKrnl::Device_DCStart::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::Device_Start::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::Device_Stop::Id);
-        eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Info_3::Id);
+        eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Info::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Start::Id);
     }
     status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_DxgKrnl::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
@@ -231,14 +231,14 @@ void DisableProviders(TRACEHANDLE sessionHandle)
 template<
     bool SAVE_FIRST_TIMESTAMP,
     bool TRACK_DISPLAY,
-    bool WMR>
+    bool TRACK_WMR>
 void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
 {
     auto session = (TraceSession*) pEventRecord->UserContext;
     auto const& hdr = pEventRecord->EventHeader;
 
-#pragma warning(push)
-#pragma warning(disable: 4127) // constant conditional expressions
+    #pragma warning(push)
+    #pragma warning(disable: 4127) // constant conditional expressions
 
     if (SAVE_FIRST_TIMESTAMP && session->mStartQpc.QuadPart == 0) {
         session->mStartQpc = hdr.TimeStamp;
@@ -260,10 +260,10 @@ void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
     else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::VSYNCDPC_GUID)       session->mPMConsumer->HandleWin7DxgkVSyncDPC       (pEventRecord);
     else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::MMIOFLIP_GUID)       session->mPMConsumer->HandleWin7DxgkMMIOFlip       (pEventRecord);
     else if (                 hdr.ProviderId == Microsoft_Windows_EventMetadata::GUID)                session->mPMConsumer->HandleMetadataEvent          (pEventRecord);
-    else if (                 WMR && hdr.ProviderId == DHD_PROVIDER_GUID)                             session->mMRConsumer->HandleDHDEvent               (pEventRecord);
-    else if (TRACK_DISPLAY && WMR && hdr.ProviderId == SPECTRUMCONTINUOUS_PROVIDER_GUID)              session->mMRConsumer->HandleSpectrumContinuousEvent(pEventRecord);
+    else if (                 TRACK_WMR && hdr.ProviderId == DHD_PROVIDER_GUID)                       session->mMRConsumer->HandleDHDEvent               (pEventRecord);
+    else if (TRACK_DISPLAY && TRACK_WMR && hdr.ProviderId == SPECTRUMCONTINUOUS_PROVIDER_GUID)        session->mMRConsumer->HandleSpectrumContinuousEvent(pEventRecord);
 
-#pragma warning(pop)
+    #pragma warning(pop)
 }
 
 ULONG CALLBACK BufferCallback(EVENT_TRACE_LOGFILEA* pLogFile)
@@ -303,7 +303,7 @@ ULONG TraceSession::Start(
     traceProps.IsKernelTrace
     */
 
-    // Redirect to a specialized event handler: <SAVE_FIRST_TIMESTAMP, FULL, WMR>
+    // Redirect to a specialized event handler: <SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_WMR>
     auto saveFirstTimestamp = etlPath != nullptr;
     auto trackDisplay       = pmConsumer->mTrackDisplay;
     auto trackWMR           = mrConsumer != nullptr;
@@ -314,13 +314,13 @@ ULONG TraceSession::Start(
         (trackWMR           ? 1 : 0);
     switch (callbackFlags) {
     case 0: traceProps.EventRecordCallback = &EventRecordCallback<false, false, false>; break;
-    case 1: traceProps.EventRecordCallback = &EventRecordCallback<false, false, true>; break;
-    case 2: traceProps.EventRecordCallback = &EventRecordCallback<false, true, false>; break;
-    case 3: traceProps.EventRecordCallback = &EventRecordCallback<false, true, true>; break;
-    case 4: traceProps.EventRecordCallback = &EventRecordCallback<true, false, false>; break;
-    case 5: traceProps.EventRecordCallback = &EventRecordCallback<true, false, true>; break;
-    case 6: traceProps.EventRecordCallback = &EventRecordCallback<true, true, false>; break;
-    case 7: traceProps.EventRecordCallback = &EventRecordCallback<true, true, true>; break;
+    case 1: traceProps.EventRecordCallback = &EventRecordCallback<false, false,  true>; break;
+    case 2: traceProps.EventRecordCallback = &EventRecordCallback<false,  true, false>; break;
+    case 3: traceProps.EventRecordCallback = &EventRecordCallback<false,  true,  true>; break;
+    case 4: traceProps.EventRecordCallback = &EventRecordCallback< true, false, false>; break;
+    case 5: traceProps.EventRecordCallback = &EventRecordCallback< true, false,  true>; break;
+    case 6: traceProps.EventRecordCallback = &EventRecordCallback< true,  true, false>; break;
+    case 7: traceProps.EventRecordCallback = &EventRecordCallback< true,  true,  true>; break;
     }
 
     // When processing log files, we need to use the buffer callback in case
@@ -475,4 +475,3 @@ ULONG TraceSession::CheckLostReports(ULONG* eventsLost, ULONG* buffersLost) cons
     *buffersLost = sessionProps.RealTimeBuffersLost;
     return status;
 }
-

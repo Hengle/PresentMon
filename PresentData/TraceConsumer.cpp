@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Intel Corporation
+// Copyright (C) 2017-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #include "TraceConsumer.hpp"
@@ -223,17 +223,19 @@ void EventMetadata::GetEventData(EVENT_RECORD* eventRecord, EventDataDesc* desc,
         GetPropertySize(*tei, *eventRecord, i, offset, &size, &count, &status);
 
         auto propName = TEI_PROPERTY_NAME(tei, &tei->EventPropertyInfoArray[i]);
-        for (uint32_t j = 0; j < descCount; ++j) {
-            if (desc[j].status_ == PROP_STATUS_NOT_FOUND && wcscmp(propName, desc[j].name_) == 0) {
-                assert(desc[j].arrayIndex_ < count);
+        if (propName != nullptr) {
+            for (uint32_t j = 0; j < descCount; ++j) {
+                if (desc[j].status_ == PROP_STATUS_NOT_FOUND && wcscmp(propName, desc[j].name_) == 0) {
+                    assert(desc[j].arrayIndex_ < count);
 
-                desc[j].data_   = (void*) ((uintptr_t) eventRecord->UserData + (offset + desc[j].arrayIndex_ * size));
-                desc[j].size_   = size;
-                desc[j].status_ = status;
+                    desc[j].data_   = (void*) ((uintptr_t) eventRecord->UserData + (offset + desc[j].arrayIndex_ * size));
+                    desc[j].size_   = size;
+                    desc[j].status_ = status;
 
-                foundCount += 1;
-                if (foundCount == descCount) {
-                    return;
+                    foundCount += 1;
+                    if (foundCount == descCount) {
+                        return;
+                    }
                 }
             }
         }
@@ -280,4 +282,3 @@ std::wstring EventDataDesc::GetData<std::wstring>() const
 {
     return GetEventString<std::wstring>(*this);
 }
-

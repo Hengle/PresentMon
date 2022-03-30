@@ -2,34 +2,22 @@
 
 ## Requesting Features and Reporting Issues
 
-We track feature requests and issues using GitHub Issues
-[here](https://github.com/GameTechDev/PresentMon/issues).
-
-Clearly describe the issue/request, as well as the impact and priority from
-your perspective.
+We track feature requests and issues using GitHub Issues [here](https://github.com/GameTechDev/PresentMon/issues).  Clearly describe the issue/request, as well as the impact and priority from your perspective.
 
 Provide an ETL trace with your issue report if possible:
+
 1. Obtain gpuview by installing the [Windows Performance Toolkit](https://www.google.com/search?q=windows+performance+toolkit+download&btnI)
-1. Start a capture by running gpuview's log.cmd (e.g., C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\gpuview\log.cmd) as administrator, and end the capture by running log.cmd again. The capture will be output to Merged.etl.  Try to capture for as short as possible to limit .etl size, while still capturing the problem.
-1. Test that the .etl capture exhibits the issue you are reporting, by running PresentMon with "-etl_file Merged.etl" (to read from the capture instead of the system).
-1. Provide the resulting Merged.etl file.
+2. Start a capture by running gpuview's log.cmd (e.g., C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\gpuview\log.cmd) as administrator, and end the capture by running log.cmd again. The capture will be output to Merged.etl.  Try to capture for as short as possible to limit .etl size, while still capturing the problem.
+3. Test that the .etl capture exhibits the issue you are reporting, by running PresentMon with "-etl_file Merged.etl" (to read from the capture instead of the system).
+4. Provide the resulting Merged.etl file.
 
 ## Contributing Source Code
 
-We accept contributions as pull requests on GitHub
-[here](https://github.com/GameTechDev/PresentMon/pulls).
+We accept contributions as pull requests on GitHub [here](https://github.com/GameTechDev/PresentMon/pulls). Clearly describe the pull request, as well as the impact and priority from your perspective.  Also, clearly describe each commit and limit the length of the commit message's first line to less than ~80 characters.
 
-Clearly describe the pull request, as well as the impact and priority from your
-perspective.  Also, clearly describe each commit and limit the length of the
-commit message's first line to less than ~80 characters.
+PresentMon is licensed under the terms in [LICENSE](https://github.com/GameTechDev/PresentMon/blob/main/LICENSE.txt). By contributing to the project, you agree to the license and copyright terms therein and release your contribution under these terms.
 
-PresentMon is licensed under the terms in
-[LICENSE](https://github.com/GameTechDev/PresentMon/blob/main/LICENSE.txt).
-By contributing to the project, you agree to the license and copyright terms
-therein and release your contribution under these terms.
-
-You must also certify that the contributions adhere to the requirements
-outlined in the following Developer Certificate of Origin:
+You must also certify that the contributions adhere to the requirements outlined in the following Developer Certificate of Origin:
 
 ```
 Developer Certificate of Origin
@@ -69,10 +57,8 @@ By making a contribution to this project, I certify that:
     this project or the open source license(s) involved.
 ```
 
-To do so, each commit must be signed off by including a line like the following
-in your commit message (using your full legal name, and email address):
+To do so, each commit must be signed off by including a line like the following in your commit message (using your full legal name, and email address):
 
     Signed-off-by: Joe Smith <joe.smith@email.com>
 
-If you set your `user.name` and `user.email` git config accordingly, this line
-will be added if you use `git commit -s`.
+If you set your `user.name` and `user.email` git config accordingly, this line will be added if you use `git commit -s`.

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Intel Corporation
+// Copyright (C) 2019-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #include "PresentMon.hpp"
@@ -178,6 +178,13 @@ void ExitMainThread()
 
 int main(int argc, char** argv)
 {
+    // Load system DLLs
+    LoadLibraryExA("advapi32.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    LoadLibraryExA("shell32.dll",  NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    LoadLibraryExA("shlwapi.dll",  NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    LoadLibraryExA("tdh.dll",      NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    LoadLibraryExA("user32.dll",   NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+
     // Parse command line arguments.
     if (!ParseCommandLine(argc, argv)) {
         return 1;
@@ -191,7 +198,7 @@ int main(int argc, char** argv)
         switch (status) {
         case ERROR_SUCCESS: return 0;
         case ERROR_WMI_INSTANCE_NOT_FOUND: fprintf(stderr, "error: no existing sessions found: %s\n", args.mSessionName); break;
-        default: fprintf(stderr, "error: failed to terminate existing session (%s): %u\n", args.mSessionName, status); break;
+        default: fprintf(stderr, "error: failed to terminate existing session (%s): %lu\n", args.mSessionName, status); break;
         }
         return 7;
     }

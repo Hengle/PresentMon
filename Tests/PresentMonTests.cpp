@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2021 Intel Corporation
+// Copyright (C) 2020-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #include <generated/version.h>
@@ -95,7 +95,7 @@ bool CheckPath(
     }
 
     // Update the string with the full path and end directories with separator.
-    *str = fullPath;
+    str->assign(fullPath);
     if (directory) {
         *str += L'\\';
     }
@@ -140,7 +140,7 @@ int wmain(
     {
         wchar_t path[MAX_PATH];
         GetTempPath(_countof(path), path);
-        outDir_ = path;
+        outDir_.assign(path);
         outDir_ += L"PresentMonTestOutput";
     }
 

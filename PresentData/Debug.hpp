@@ -15,9 +15,10 @@
 struct PresentEvent; // Can't include PresentMonTraceConsumer.hpp because it includes Debug.hpp (before defining PresentEvent)
 struct EventMetadata;
 struct _EVENT_RECORD;
+union _LARGE_INTEGER;
 
 // Initialize debug system
-void DebugInitialize(LARGE_INTEGER* firstTimestamp, LARGE_INTEGER timestampFrequency);
+void DebugInitialize(_LARGE_INTEGER* firstTimestamp, _LARGE_INTEGER const& timestampFrequency);
 
 // Check if debug is complete
 bool DebugDone();
