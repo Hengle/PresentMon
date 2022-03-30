@@ -44,6 +44,8 @@ public:
         if (!goldCsv.trackDisplay_) pm.Add(L"-no_track_display");
         if (goldCsv.trackDebug_) pm.Add(L"-track_debug");
         if (goldCsv.trackGPU_) pm.Add(L"-track_gpu");
+        if (goldCsv.trackQueueTimers_) pm.Add(L"-track_queue_timers");
+        if (goldCsv.trackCpuGpuSync_) pm.Add(L"-track_cpu_gpu_sync");
         if (goldCsv.GetColumnIndex("QPCTime") != SIZE_MAX) pm.Add(L"-qpc_time"); // TODO: check if %ull or %.9lf to see if -qpc_time_s
         pm.PMSTART();
         pm.PMEXITED();
@@ -111,7 +113,7 @@ public:
                         printf("    COLUMN                    TEST VALUE                            GOLD VALUE\n");
                     }
 
-                    auto r = printf("    %s", testCsv.GetHeader(h));
+                    auto r = printf("    %s", testCsv.GetHeaderString((PresentMonCsv::Header) h));
                     printf("%*s", r < 29 ? 29 - r : 0, "");
                     r = printf(" %s", a);
                     printf("%*s", r < 38 ? 38 - r : 0, "");
@@ -191,4 +193,3 @@ void AddGoldEtlCsvTests(
 
     FindClose(h);
 }
-

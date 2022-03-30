@@ -233,6 +233,16 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintBool,          DwmNotified)
     FLUSH_MEMBER(PrintBool,          CompletionIsDeferred)
     FLUSH_MEMBER(PrintBool,          IsCompleted)
+    FLUSH_MEMBER(PrintTime,          INTC_ProducerPresentTime)
+    FLUSH_MEMBER(PrintTime,          INTC_ConsumerPresentTime)
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_QueueTimers[INTC_QUEUE_WAIT_IF_FULL_TIMER])
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_QueueTimers[INTC_QUEUE_WAIT_IF_EMPTY_TIMER])
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_QueueTimers[INTC_QUEUE_WAIT_UNTIL_EMPTY_SYNC_TIMER])
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_QueueTimers[INTC_QUEUE_WAIT_UNTIL_EMPTY_DRAIN_TIMER])
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_QueueTimers[INTC_QUEUE_WAIT_FOR_FENCE])
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_QueueTimers[INTC_QUEUE_WAIT_UNTIL_FENCE_SUBMITTED])
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_QueueTimers[INTC_QUEUE_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU])
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_QueueTimers[INTC_QUEUE_SYNC_TYPE_POLL_ON_QUERY_GET_DATA])
 #undef FLUSH_MEMBER
     if (changedCount > 0) {
         printf("\n");
@@ -404,6 +414,18 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
         case TokenStateChanged_Info::Id:             PrintEventHeader(eventRecord, metadata, "Win32K_TokenStateChanged", {
                                                          L"NewState", PrintTokenState,
                                                      }); break;
+        }
+        return;
+    }
+
+    if (hdr.ProviderId == Intel_Graphics_D3D10::GUID) {
+        using namespace Intel_Graphics_D3D10;
+        switch (hdr.EventDescriptor.Id) {
+        case QueueTimers_Info::Id:  PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Info",  { L"value", PrintU32 }); break;
+        case QueueTimers_Start::Id: PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Start", { L"value", PrintU32 }); break;
+        case QueueTimers_Stop::Id:  PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Stop",  { L"value", PrintU32 }); break;
+        case CpuGpuSync_Start::Id:  PrintEventHeader(eventRecord, metadata, "INTC_CpuGpuSync_Start",  { L"value", PrintU32 }); break;
+        case CpuGpuSync_Stop::Id:   PrintEventHeader(eventRecord, metadata, "INTC_CpuGpuSync_Stop",   { L"value", PrintU32 }); break;
         }
         return;
     }

@@ -9,6 +9,7 @@
 #include "ETW/Microsoft_Windows_DxgKrnl.h"
 #include "ETW/Microsoft_Windows_EventMetadata.h"
 #include "ETW/Microsoft_Windows_Win32k.h"
+#include "ETW/Intel_Graphics_D3D10.h"
 
 #include <algorithm>
 #include <assert.h>
@@ -95,6 +96,10 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     presentCount += 1;
     Id = presentCount;
 #endif
+
+    INTC_ProducerPresentTime = 0;
+    INTC_ConsumerPresentTime = 0;
+    memset(INTC_QueueTimers, 0, sizeof(INTC_QueueTimers));
 }
 
 PMTraceConsumer::PMTraceConsumer()
@@ -414,6 +419,22 @@ void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t 
         frameDmaPackets->mFirstDmaTime = 0;
         frameDmaPackets->mLastDmaTime = 0;
         frameDmaPackets->mAccumulatedDmaTime = 0;
+
+        if (mTrackINTCQueueTimers || mTrackINTCCpuGpuSync) {
+            pEvent->INTC_ProducerPresentTime = frameDmaPackets->mINTCProducerPresentTime;
+            pEvent->INTC_ConsumerPresentTime = frameDmaPackets->mINTCConsumerPresentTime;
+            frameDmaPackets->mINTCProducerPresentTime = 0;
+            frameDmaPackets->mINTCConsumerPresentTime = 0;
+
+            for (uint32_t i = 0; i < INTC_QUEUE_TIMER_COUNT; ++i) {
+                if (frameDmaPackets->mINTCQueueTimers[i].mStartTime != 0) {
+                    frameDmaPackets->mINTCQueueTimers[i].mAccumulatedTime += hdr.TimeStamp.QuadPart - frameDmaPackets->mINTCQueueTimers[i].mStartTime;
+                    frameDmaPackets->mINTCQueueTimers[i].mStartTime = hdr.TimeStamp.QuadPart;
+                }
+                pEvent->INTC_QueueTimers[i] = frameDmaPackets->mINTCQueueTimers[i].mAccumulatedTime;
+                frameDmaPackets->mINTCQueueTimers[i].mAccumulatedTime = 0;
+            }
+        }
 
         // There are some cases where the QueuePacket_Stop timestamp is before
         // the previous dma packet completes.  e.g., this seems to be typical
@@ -887,7 +908,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         return;
     }
 
-    if (mTrackGPU) {
+    if (mTrackGPU || mTrackINTCQueueTimers) {
         switch (hdr.EventDescriptor.Id) {
 
         // We need a mapping from hContext to GPU node.
@@ -2062,6 +2083,82 @@ void PMTraceConsumer::HandleNTProcessEvent(EVENT_RECORD* pEventRecord)
         std::lock_guard<std::mutex> lock(mProcessEventMutex);
         mProcessEvents.emplace_back(event);
         return;
+    }
+}
+
+void PMTraceConsumer::HandleINTCEvent(EVENT_RECORD* pEventRecord)
+{
+    DebugEvent(pEventRecord, &mMetadata);
+
+    auto const& hdr = pEventRecord->EventHeader;
+
+    auto dmaPackets = &mProcessFrameDmaPackets.emplace(hdr.ProcessId, PMTraceConsumer::FrameDmaPackets{}).first->second;
+    uint32_t timerIndex = 0;
+
+    // Figure out what timer this is
+    switch (hdr.EventDescriptor.Id) {
+    case Intel_Graphics_D3D10::QueueTimers_Info::Id: {
+        assert(mTrackINTCQueueTimers);
+        auto Type = mMetadata.GetEventData<uint32_t>(pEventRecord, L"value");
+        switch (Type) {
+        case Intel_Graphics_D3D10::FRAME_TIME_APP:    dmaPackets->mINTCProducerPresentTime = hdr.TimeStamp.QuadPart; break;
+        case Intel_Graphics_D3D10::FRAME_TIME_DRIVER: dmaPackets->mINTCConsumerPresentTime = hdr.TimeStamp.QuadPart; break;
+        default: assert(false); break;
+        }
+        return;
+    }
+
+    case Intel_Graphics_D3D10::QueueTimers_Start::Id:
+    case Intel_Graphics_D3D10::QueueTimers_Stop::Id: {
+        assert(mTrackINTCQueueTimers);
+        auto Type = mMetadata.GetEventData<uint32_t>(pEventRecord, L"value");
+        switch (Type) {
+        case Intel_Graphics_D3D10::WAIT_IF_FULL_TIMER:           timerIndex = INTC_QUEUE_WAIT_IF_FULL_TIMER; break;
+        case Intel_Graphics_D3D10::WAIT_IF_EMPTY_TIMER:          timerIndex = INTC_QUEUE_WAIT_IF_EMPTY_TIMER; break;
+        case Intel_Graphics_D3D10::WAIT_UNTIL_EMPTY_SYNC_TIMER:  timerIndex = INTC_QUEUE_WAIT_UNTIL_EMPTY_SYNC_TIMER; break;
+        case Intel_Graphics_D3D10::WAIT_UNTIL_EMPTY_DRAIN_TIMER: timerIndex = INTC_QUEUE_WAIT_UNTIL_EMPTY_DRAIN_TIMER; break;
+        case Intel_Graphics_D3D10::WAIT_FOR_FENCE:               timerIndex = INTC_QUEUE_WAIT_FOR_FENCE; break;
+        case Intel_Graphics_D3D10::WAIT_UNTIL_FENCE_SUBMITTED:   timerIndex = INTC_QUEUE_WAIT_UNTIL_FENCE_SUBMITTED; break;
+        default: assert(false); break;
+        }
+        break;
+    }
+
+    case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
+    case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id: {
+        assert(mTrackINTCCpuGpuSync);
+        auto Type = mMetadata.GetEventData<uint32_t>(pEventRecord, L"value");
+        switch (Type) {
+        case Intel_Graphics_D3D10::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU:   timerIndex = INTC_QUEUE_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; break;
+        case Intel_Graphics_D3D10::SYNC_TYPE_POLL_ON_QUERY_GET_DATA: timerIndex = INTC_QUEUE_SYNC_TYPE_POLL_ON_QUERY_GET_DATA; break;
+        default: assert(false); break;
+        }
+        break;
+    }
+
+    default:
+        assert(!mFilteredEvents); // Assert that filtering is working if expected
+        return;
+    }
+
+    auto queueTimer = &dmaPackets->mINTCQueueTimers[timerIndex];
+
+    switch (hdr.EventDescriptor.Id) {
+    case Intel_Graphics_D3D10::QueueTimers_Start::Id:
+    case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
+        assert(queueTimer->mStartTime == 0);
+        if (queueTimer->mStartTime == 0) {
+            queueTimer->mStartTime = hdr.TimeStamp.QuadPart;
+        }
+        break;
+
+    case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
+    case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
+        if (queueTimer->mStartTime != 0) {
+            queueTimer->mAccumulatedTime += hdr.TimeStamp.QuadPart - queueTimer->mStartTime;
+            queueTimer->mStartTime = 0;
+        }
+        break;
     }
 }
 

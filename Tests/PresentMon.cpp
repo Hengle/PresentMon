@@ -17,44 +17,15 @@ void AddTestFailure(char const* file, int line, char const* fmt, ...)
 
 namespace {
 
-size_t FindHeader(
-    char const* header,
-    uint32_t* requiredCount,
-    uint32_t* trackDisplayCount,
-    uint32_t* trackDebugCount,
-    uint32_t* trackGPUCount)
+PresentMonCsv::Header FindHeader(char const* header)
 {
-    size_t idx = 0;
-    for (size_t i = 0; i < _countof(PresentMonCsv::REQUIRED_HEADER); ++i, ++idx) {
-        if (strcmp(header, PresentMonCsv::REQUIRED_HEADER[i]) == 0) {
-            *requiredCount += 1;
-            return idx;
+    for (uint32_t i = 0; i < PresentMonCsv::KnownHeaderCount; ++i) {
+        auto h = (PresentMonCsv::Header) i;
+        if (strcmp(header, PresentMonCsv::GetHeaderString(h)) == 0) {
+            return h;
         }
     }
-    for (size_t i = 0; i < _countof(PresentMonCsv::TRACK_DISPLAY_HEADER); ++i, ++idx) {
-        if (strcmp(header, PresentMonCsv::TRACK_DISPLAY_HEADER[i]) == 0) {
-            *trackDisplayCount += 1;
-            return idx;
-        }
-    }
-    for (size_t i = 0; i < _countof(PresentMonCsv::TRACK_DEBUG_HEADER); ++i, ++idx) {
-        if (strcmp(header, PresentMonCsv::TRACK_DEBUG_HEADER[i]) == 0) {
-            *trackDebugCount += 1;
-            return idx;
-        }
-    }
-    for (size_t i = 0; i < _countof(PresentMonCsv::TRACK_GPU_HEADER); ++i, ++idx) {
-        if (strcmp(header, PresentMonCsv::TRACK_GPU_HEADER[i]) == 0) {
-            *trackGPUCount += 1;
-            return idx;
-        }
-    }
-    for (size_t i = 0; i < _countof(PresentMonCsv::OPT_HEADER); ++i, ++idx) {
-        if (strcmp(header, PresentMonCsv::OPT_HEADER[i]) == 0) {
-            return idx;
-        }
-    }
-    return SIZE_MAX;
+    return PresentMonCsv::UnknownHeader;
 }
 
 }
@@ -65,12 +36,16 @@ PresentMonCsv::PresentMonCsv()
     , trackDisplay_(false)
     , trackDebug_(false)
     , trackGPU_(false)
+    , trackQueueTimers_(false)
+    , trackCpuGpuSync_(false)
 {
 }
 
 bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
 {
-    memset(headerColumnIndex_, 0xff, sizeof(headerColumnIndex_));
+    for (uint32_t i = 0; i < _countof(headerColumnIndex_); ++i) {
+        headerColumnIndex_[i] = SIZE_MAX;
+    }
     cols_.clear();
     path_ = path;
     line_ = 0;
@@ -97,25 +72,83 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
     uint32_t trackDisplayCount = 0;
     uint32_t trackDebugCount = 0;
     uint32_t trackGPUCount = 0;
-    for (uint32_t i = 0, n = (uint32_t) cols_.size(); i < n; ++i) {
-        auto idx = FindHeader(cols_[i], &requiredCount, &trackDisplayCount, &trackDebugCount, &trackGPUCount);
-        if (idx == SIZE_MAX) {
+    uint32_t trackQueueTimersCount = 0;
+    uint32_t trackCpuGpuSyncCount = 0;
+    for (size_t i = 0, n = cols_.size(); i < n; ++i) {
+        auto h = FindHeader(cols_[i]);
+        if (h == PresentMonCsv::UnknownHeader) {
             AddTestFailure(Convert(path_).c_str(), (int) line_, "Unrecognised column: %s", cols_[i]);
-        } else if (headerColumnIndex_[idx] != SIZE_MAX) {
+        } else if (headerColumnIndex_[(size_t) h] != SIZE_MAX) {
             AddTestFailure(Convert(path_).c_str(), (int) line_, "Duplicate column: %s", cols_[i]);
         } else {
-            headerColumnIndex_[idx] = i;
+            headerColumnIndex_[(size_t) h] = i;
+
+            switch (h) {
+            case PresentMonCsv::Header_Application:
+            case PresentMonCsv::Header_ProcessID:
+            case PresentMonCsv::Header_SwapChainAddress:
+            case PresentMonCsv::Header_Runtime:
+            case PresentMonCsv::Header_SyncInterval:
+            case PresentMonCsv::Header_PresentFlags:
+            case PresentMonCsv::Header_Dropped:
+            case PresentMonCsv::Header_TimeInSeconds:
+            case PresentMonCsv::Header_msBetweenPresents:
+            case PresentMonCsv::Header_msInPresentAPI:
+                requiredCount += 1;
+                break;
+
+            case PresentMonCsv::Header_AllowsTearing:
+            case PresentMonCsv::Header_PresentMode:
+            case PresentMonCsv::Header_msBetweenDisplayChange:
+            case PresentMonCsv::Header_msUntilRenderComplete:
+            case PresentMonCsv::Header_msUntilDisplayed:
+                trackDisplayCount += 1;
+                break;
+
+            case PresentMonCsv::Header_WasBatched:
+            case PresentMonCsv::Header_DwmNotified:
+                trackDebugCount += 1;
+                break;
+
+            case PresentMonCsv::Header_msUntilRenderStart:
+            case PresentMonCsv::Header_msGPUActive:
+                trackGPUCount += 1;
+                break;
+
+            case PresentMonCsv::Header_WaitIfFullTime:
+            case PresentMonCsv::Header_WaitUntilEmptySyncTime:
+            case PresentMonCsv::Header_WaitUntilEmptySyncAsincTime:
+            case PresentMonCsv::Header_WaitUntilEmptyDrainTime:
+            case PresentMonCsv::Header_WaitUntilEmptyDrainAsyncTime:
+            case PresentMonCsv::Header_WaitForFence:
+            case PresentMonCsv::Header_WaitUntilFenceSubmitted:
+            case PresentMonCsv::Header_WaitIfEmptyTime:
+            case PresentMonCsv::Header_FrameTimeApp:
+            case PresentMonCsv::Header_FrameTimeDrv:
+                trackQueueTimersCount += 1;
+                break;
+
+            case PresentMonCsv::Header_WaitSyncObjFromCpu:
+            case PresentMonCsv::Header_WaitSyncObjFromGpu:
+            case PresentMonCsv::Header_PollOnQueryGetData:
+                trackCpuGpuSyncCount += 1;
+                break;
+            }
         }
     }
 
     trackDisplay_ = trackDisplayCount > 0;
     trackDebug_   = trackDebugCount > 0;
     trackGPU_     = trackGPUCount > 0;
+    trackQueueTimers_ = trackQueueTimersCount > 0;
+    trackCpuGpuSync_  = trackCpuGpuSyncCount > 0;
 
-    if (requiredCount != _countof(REQUIRED_HEADER) ||
-        (trackDisplay_ && trackDisplayCount != _countof(TRACK_DISPLAY_HEADER)) ||
-        (trackDebug_   && trackDebugCount   != _countof(TRACK_DEBUG_HEADER)) ||
-        (trackGPU_     && trackGPUCount     != _countof(TRACK_GPU_HEADER))) {
+    if (                  requiredCount     != (uint32_t) PresentMonCsv::RequiredHeaderCount ||
+        (trackDisplay_ && trackDisplayCount != (uint32_t) PresentMonCsv::DisplayHeaderCount) ||
+        (trackDebug_   && trackDebugCount   != (uint32_t) PresentMonCsv::DebugHeaderCount) ||
+        (trackGPU_     && trackGPUCount     != (uint32_t) PresentMonCsv::GPUHeaderCount) ||
+        (trackQueueTimers_ && trackQueueTimersCount != (uint32_t) PresentMonCsv::QueueTimersHeaderCount) ||
+        (trackCpuGpuSync_  && trackCpuGpuSyncCount  != (uint32_t) PresentMonCsv::CpuGpuSyncHeaderCount)) {
         AddTestFailure(Convert(path_).c_str(), (int) line_, "Missing required columns.");
     }
 
@@ -162,11 +195,8 @@ bool PresentMonCsv::ReadRow()
 
 size_t PresentMonCsv::GetColumnIndex(char const* header) const
 {
-    uint32_t na = 0;
-    auto headerIdx = FindHeader(header, &na, &na, &na, &na);
-    return headerIdx == SIZE_MAX
-        ? SIZE_MAX
-        : headerColumnIndex_[headerIdx];
+    auto h = FindHeader(header);
+    return h == UnknownHeader ? SIZE_MAX : headerColumnIndex_[h];
 }
 
 PresentMon::PresentMon()

@@ -20,6 +20,7 @@
 
 #include "Debug.hpp"
 #include "TraceConsumer.hpp"
+#include "ETW/Intel_Graphics_D3D10.h"
 
 enum class PresentMode
 {
@@ -47,6 +48,18 @@ enum class Runtime
     DXGI, D3D9, Other
 };
 
+enum INTCQueueTimer {
+    INTC_QUEUE_WAIT_IF_FULL_TIMER,
+    INTC_QUEUE_WAIT_IF_EMPTY_TIMER,
+    INTC_QUEUE_WAIT_UNTIL_EMPTY_SYNC_TIMER,
+    INTC_QUEUE_WAIT_UNTIL_EMPTY_DRAIN_TIMER,
+    INTC_QUEUE_WAIT_FOR_FENCE,
+    INTC_QUEUE_WAIT_UNTIL_FENCE_SUBMITTED,
+    INTC_QUEUE_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU,
+    INTC_QUEUE_SYNC_TYPE_POLL_ON_QUERY_GET_DATA,
+    INTC_QUEUE_TIMER_COUNT
+};
+
 // A ProcessEvent occurs whenever a Process starts or stops.
 struct ProcessEvent {
     std::string ImageFileName;
@@ -64,6 +77,11 @@ struct PresentEvent {
     uint64_t ReadyTime;     // QPC value when the frame's last DMA packet completed
     uint64_t GPUDuration;   // QPC duration during which a frame's DMA packet was running on any node
     uint64_t ScreenTime;    // QPC value when the present was displayed on screen
+
+    // INTC metrics
+    uint64_t INTC_ProducerPresentTime;
+    uint64_t INTC_ConsumerPresentTime;
+    uint64_t INTC_QueueTimers[INTC_QUEUE_TIMER_COUNT];
 
     // Extra present parameters obtained through DXGI or D3D9 present
     uint64_t SwapChainAddress;
@@ -177,6 +195,8 @@ struct PMTraceConsumer
     bool mFilteredProcessIds = false;   // Whether to filter presents to specific processes
     bool mTrackDisplay = true;          // Whether the analysis should track presents to display
     bool mTrackGPU = false;             // Whether the analysis should track GPU work
+    bool mTrackINTCQueueTimers = false; // Whether the analysis should track Intel D3D11 driver producer/consumer queue timers
+    bool mTrackINTCCpuGpuSync = false;  // Whether the analysis should track Intel driver CPU/GPU synchronizations
 
     // Whether we've completed any presents yet.  This is used to indicate that
     // all the necessary providers have started and it's safe to start tracking
@@ -332,10 +352,18 @@ struct PMTraceConsumer
         uint64_t mAccumulatedDmaTime;   // QPC duration while at least one DMA packet was running during the current frame
         uint64_t mRunningDmaStartTime;  // QPC when the oldest currently-running DMA packet started
         uint32_t mRunningDmaCount;      // Number of currently-running DMA packets
+
+        // Internal timers:
+        uint64_t mINTCProducerPresentTime;  // QPC of the present operation on the producer thread
+        uint64_t mINTCConsumerPresentTime;  // QPC of the present operation on the consumer thread
+        struct {
+            uint64_t mStartTime;            // QPC of the start event for this timer, or 0 if no start event
+            uint64_t mAccumulatedTime;      // QPC duration of all processed timer durations
+        } mINTCQueueTimers[INTC_QUEUE_TIMER_COUNT];
     };
 
     // A queue of up to 10 scheduled dma packets.  Using 10 to fill 2
-    // cachelines.  10 should be more than we need, but 4 (fills 1 cacheline)
+    // cachelines (when mINTCQueueTimers isn't included).  10 should be more than we need, but 4 (fills 1 cacheline)
     // is not enough.
     struct Node {
         FrameDmaPackets* mFrameDmaPackets[10];  // Frame state for enqueued packets
@@ -402,6 +430,8 @@ struct PMTraceConsumer
     void HandleWin32kEvent(EVENT_RECORD* pEventRecord);
     void HandleDWMEvent(EVENT_RECORD* pEventRecord);
     void HandleMetadataEvent(EVENT_RECORD* pEventRecord);
+
+    void HandleINTCEvent(EVENT_RECORD* pEventRecord);
 
     void HandleWin7DxgkBlt(EVENT_RECORD* pEventRecord);
     void HandleWin7DxgkFlip(EVENT_RECORD* pEventRecord);

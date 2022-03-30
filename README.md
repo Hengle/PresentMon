@@ -95,11 +95,18 @@ If PresentMon is not run with administrator privilege, it will not have complete
 
 ### Beta Options
 
-|                        |                                                                                                                             |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `-date_time`           | Output present time as a date and time with nanosecond precision.                                                           |
-| `-track_gpu`           | Tracks the duration of each process' GPU work performed between presents.  Not supported on Win7.                           |
-| `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                                        |
+|                        |                                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------------- |
+| `-date_time`           | Output present time as a date and time with nanosecond precision.                                 |
+| `-track_gpu`           | Tracks the duration of each process' GPU work performed between presents.  Not supported on Win7. |
+| `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                              |
+
+### Internal Options
+
+|                       |                                                           |
+| --------------------- | --------------------------------------------------------- |
+| `-track_queue_timers` | Capture Intel D3D11 driver producer/consumer queue timers |
+| `-track_cpu_gpu_sync` | Capture Intel D3D11 driver CPU/GPU syncs                  |
 
 ## Comma-separated value (CSV) file output
 
@@ -136,6 +143,16 @@ If `-hotkey` is used, then one CSV is created for each time recording is started
 | msGPUActive            | The time that any GPU engine was active working on this frame, in milliseconds.                                                                                                                                                                                           | `-track_gpu`                 |
 | WasBatched             | Whether the frame was submitted by the driver on a different thread than the app (1) or not (0).                                                                                                                                                                          | `-track_debug`               |
 | DwmNotified            | Whether the desktop compositor was notified about the frame (1) or not (0).                                                                                                                                                                                               | `-track_debug`               |
+| WaitIfFullTime          | How long the producer thread was stalled on a full queue.                                                                                                                                                                                                                 | `-track_queue_timers`        |
+| WaitIfEmptyTime         | How long the consumer thread was stalled on an empty queue.                                                                                                                                                                                                               | `-track_queue_timers`        |
+| WaitUntilEmptySyncTime  | How long the driver waited for the queue to empty due to synchronization.                                                                                                                                                                                                 | `-track_queue_timers`        |
+| WaitUntilEmptyDrainTime | How long the driver waited for the queue to drain.                                                                                                                                                                                                                        | `-track_queue_timers`        |
+| WaitForFence            | How long the driver waited for consumer fences.                                                                                                                                                                                                                           | `-track_queue_timers`        |
+| WaitUntilFenceSubmitted | How long the driver waited for fences submitted to the GPU.                                                                                                                                                                                                               | `-track_queue_timers`        |
+| FrameTimeApp            | The time between present operations on the producer thread.                                                                                                                                                                                                               | `-track_queue_timers`        |
+| FrameTimeDrv            | The time between present operations on the consumer thread.                                                                                                                                                                                                               | `-track_queue_timers`        |
+| WaitSyncObjFromCpu      | How much time was spent waiting for a sync object from the CPU.                                                                                                                                                                                                           | `-track_cpu_gpu_sync`        |
+| PollOnQueryGetData      | How much time the driver spent polling for query data.                                                                                                                                                                                                                    | `-track_cpu_gpu_sync`        |
 
 The following values are used in the PresentMode column:
 

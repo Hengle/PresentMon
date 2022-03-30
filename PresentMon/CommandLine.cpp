@@ -5,6 +5,8 @@
 
 #define NOMINMAX
 #include "PresentMon.hpp"
+#include "../PresentData/ETW/Intel_Graphics_D3D10.h"
+
 #include <algorithm>
 
 enum {
@@ -316,6 +318,10 @@ static void PrintHelp()
         "-track_gpu",               "Tracks the duration of each process' GPU work performed between presents."
                                     " Not supported on Win7.",
         "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
+
+        "Internal options", nullptr,
+        "-track_queue_timers",      "Capture Intel D3D11 driver producer/consumer queue timers",
+        "-track_cpu_gpu_sync",      "Capture Intel D3D11 driver CPU/GPU syncs",
     };
 
     fprintf(stderr, "PresentMon %s\n", PRESENT_MON_VERSION);
@@ -360,6 +366,19 @@ static void PrintHelp()
     }
 }
 
+static bool RequireINTCRegDWORD(char const* name, DWORD value)
+{
+    DWORD set = 0;
+    DWORD size = sizeof(set);
+    auto status = RegGetValueA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Intel\\IGFX\\D3D10", name, RRF_RT_REG_DWORD, nullptr, &set, &size);
+    if (status == ERROR_SUCCESS && set == value) {
+        return true;
+    }
+
+    fprintf(stderr, "error: requested features require HKLM\\SOFTWARE\\Intel\\IGFX\\D3D10\\%s = %u\n", name, value);
+    return false;
+}
+
 CommandLineArgs const& GetCommandLineArgs()
 {
     return gCommandLineArgs;
@@ -383,6 +402,8 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTrackDisplay = true;
     args->mTrackDebug = false;
     args->mTrackWMR = false;
+    args->mTrackINTCQueueTimers = false;
+    args->mTrackINTCCpuGpuSync = false;
     args->mOutputCsvToFile = true;
     args->mOutputCsvToStdout = false;
     args->mOutputQpcTime = false;
@@ -446,6 +467,10 @@ bool ParseCommandLine(int argc, char** argv)
         else if (ParseArg(argv[i], "track_gpu"))             { args->mTrackGPU       = true; continue; }
         else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR       = true; continue; }
         else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr        = true; continue; }
+
+        // Internal options:
+        else if (ParseArg(argv[i], "track_queue_timers" )) { args->mTrackINTCQueueTimers = true; continue; }
+        else if (ParseArg(argv[i], "track_cpu_gpu_sync" )) { args->mTrackINTCCpuGpuSync  = true; continue; }
 
         // Provided argument wasn't recognized
         else if (!(ParseArg(argv[i], "?") || ParseArg(argv[i], "h") || ParseArg(argv[i], "help"))) {
@@ -603,12 +628,30 @@ bool ParseCommandLine(int argc, char** argv)
         args->mTrackGPU ||
         args->mTrackDebug ||
         args->mTrackWMR ||
+        args->mTrackINTCQueueTimers ||
+        args->mTrackINTCCpuGpuSync ||
         args->mTerminateOnProcExit ||
         args->mTerminateAfterTimer)) {
         fprintf(stderr, "warning: -terminate_existing exits without capturing anything; ignoring all capture,\n");
         fprintf(stderr, "         output, and recording arguments.\n");
     }
 
+    // If the INTC provider is required, check that the manifest is installed.
+    if (args->mEtlFileName == nullptr && (args->mTrackINTCQueueTimers || args->mTrackINTCCpuGpuSync)) {
+        ULONG bufferSize = 0;
+        auto status = TdhEnumerateManifestProviderEvents((LPGUID) &Intel_Graphics_D3D10::GUID, nullptr, &bufferSize);
+        if (status == ERROR_NOT_FOUND) {
+            fprintf(stderr, "error: Intel graphics events not found on this PC. In order to use Intel internal\n"
+                            "       features, you must run GfxEvents\\Install.bat from the driver's TestTools\n"
+                            "       package as administrator.\n");
+            return false;
+        }
+
+        if (!RequireINTCRegDWORD("EnableETW",   1) ||
+            !RequireINTCRegDWORD("QueueTimers", 1)) {
+            return false;
+        }
+    }
+
     return true;
 }
-
