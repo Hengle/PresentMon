@@ -36,6 +36,8 @@ PresentMonCsv::PresentMonCsv()
     , trackDisplay_(false)
     , trackDebug_(false)
     , trackGPU_(false)
+    , trackGPUVideo_(false)
+    , trackInput_(false)
     , trackQueueTimers_(false)
     , trackCpuGpuSync_(false)
 {
@@ -72,11 +74,13 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
     uint32_t trackDisplayCount = 0;
     uint32_t trackDebugCount = 0;
     uint32_t trackGPUCount = 0;
+    uint32_t trackGPUVideoCount = 0;
+    uint32_t trackInputCount = 0;
     uint32_t trackQueueTimersCount = 0;
     uint32_t trackCpuGpuSyncCount = 0;
     for (size_t i = 0, n = cols_.size(); i < n; ++i) {
         auto h = FindHeader(cols_[i]);
-        if (h == PresentMonCsv::UnknownHeader) {
+        if (h == UnknownHeader) {
             AddTestFailure(Convert(path_).c_str(), (int) line_, "Unrecognised column: %s", cols_[i]);
         } else if (headerColumnIndex_[(size_t) h] != SIZE_MAX) {
             AddTestFailure(Convert(path_).c_str(), (int) line_, "Duplicate column: %s", cols_[i]);
@@ -84,71 +88,83 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
             headerColumnIndex_[(size_t) h] = i;
 
             switch (h) {
-            case PresentMonCsv::Header_Application:
-            case PresentMonCsv::Header_ProcessID:
-            case PresentMonCsv::Header_SwapChainAddress:
-            case PresentMonCsv::Header_Runtime:
-            case PresentMonCsv::Header_SyncInterval:
-            case PresentMonCsv::Header_PresentFlags:
-            case PresentMonCsv::Header_Dropped:
-            case PresentMonCsv::Header_TimeInSeconds:
-            case PresentMonCsv::Header_msBetweenPresents:
-            case PresentMonCsv::Header_msInPresentAPI:
+            case Header_Application:
+            case Header_ProcessID:
+            case Header_SwapChainAddress:
+            case Header_Runtime:
+            case Header_SyncInterval:
+            case Header_PresentFlags:
+            case Header_Dropped:
+            case Header_TimeInSeconds:
+            case Header_msBetweenPresents:
+            case Header_msInPresentAPI:
                 requiredCount += 1;
                 break;
 
-            case PresentMonCsv::Header_AllowsTearing:
-            case PresentMonCsv::Header_PresentMode:
-            case PresentMonCsv::Header_msBetweenDisplayChange:
-            case PresentMonCsv::Header_msUntilRenderComplete:
-            case PresentMonCsv::Header_msUntilDisplayed:
+            case Header_AllowsTearing:
+            case Header_PresentMode:
+            case Header_msBetweenDisplayChange:
+            case Header_msUntilRenderComplete:
+            case Header_msUntilDisplayed:
                 trackDisplayCount += 1;
                 break;
 
-            case PresentMonCsv::Header_WasBatched:
-            case PresentMonCsv::Header_DwmNotified:
+            case Header_WasBatched:
+            case Header_DwmNotified:
                 trackDebugCount += 1;
                 break;
 
-            case PresentMonCsv::Header_msUntilRenderStart:
-            case PresentMonCsv::Header_msGPUActive:
+            case Header_msUntilRenderStart:
+            case Header_msGPUActive:
                 trackGPUCount += 1;
                 break;
 
-            case PresentMonCsv::Header_WaitIfFullTime:
-            case PresentMonCsv::Header_WaitUntilEmptySyncTime:
-            case PresentMonCsv::Header_WaitUntilEmptySyncAsincTime:
-            case PresentMonCsv::Header_WaitUntilEmptyDrainTime:
-            case PresentMonCsv::Header_WaitUntilEmptyDrainAsyncTime:
-            case PresentMonCsv::Header_WaitForFence:
-            case PresentMonCsv::Header_WaitUntilFenceSubmitted:
-            case PresentMonCsv::Header_WaitIfEmptyTime:
-            case PresentMonCsv::Header_FrameTimeApp:
-            case PresentMonCsv::Header_FrameTimeDrv:
+            case Header_msGPUVideoActive:
+                trackGPUVideoCount += 1;
+                break;
+
+            case Header_msSinceInput:
+                trackInputCount += 1;
+                break;
+
+            case Header_WaitIfFullTime:
+            case Header_WaitUntilEmptySyncTime:
+            case Header_WaitUntilEmptySyncAsincTime:
+            case Header_WaitUntilEmptyDrainTime:
+            case Header_WaitUntilEmptyDrainAsyncTime:
+            case Header_WaitForFence:
+            case Header_WaitUntilFenceSubmitted:
+            case Header_WaitIfEmptyTime:
+            case Header_FrameTimeApp:
+            case Header_FrameTimeDrv:
                 trackQueueTimersCount += 1;
                 break;
 
-            case PresentMonCsv::Header_WaitSyncObjFromCpu:
-            case PresentMonCsv::Header_WaitSyncObjFromGpu:
-            case PresentMonCsv::Header_PollOnQueryGetData:
+            case Header_WaitSyncObjFromCpu:
+            case Header_WaitSyncObjFromGpu:
+            case Header_PollOnQueryGetData:
                 trackCpuGpuSyncCount += 1;
                 break;
             }
         }
     }
 
-    trackDisplay_ = trackDisplayCount > 0;
-    trackDebug_   = trackDebugCount > 0;
-    trackGPU_     = trackGPUCount > 0;
+    trackDisplay_  = trackDisplayCount > 0;
+    trackDebug_    = trackDebugCount > 0;
+    trackGPU_      = trackGPUCount > 0;
+    trackGPUVideo_ = trackGPUVideoCount > 0;
+    trackInput_    = trackInputCount > 0;
     trackQueueTimers_ = trackQueueTimersCount > 0;
     trackCpuGpuSync_  = trackCpuGpuSyncCount > 0;
 
-    if (                  requiredCount     != (uint32_t) PresentMonCsv::RequiredHeaderCount ||
-        (trackDisplay_ && trackDisplayCount != (uint32_t) PresentMonCsv::DisplayHeaderCount) ||
-        (trackDebug_   && trackDebugCount   != (uint32_t) PresentMonCsv::DebugHeaderCount) ||
-        (trackGPU_     && trackGPUCount     != (uint32_t) PresentMonCsv::GPUHeaderCount) ||
-        (trackQueueTimers_ && trackQueueTimersCount != (uint32_t) PresentMonCsv::QueueTimersHeaderCount) ||
-        (trackCpuGpuSync_  && trackCpuGpuSyncCount  != (uint32_t) PresentMonCsv::CpuGpuSyncHeaderCount)) {
+    if (                   requiredCount      != RequiredHeaderCount ||
+        (trackDisplay_  && trackDisplayCount  != DisplayHeaderCount) ||
+        (trackDebug_    && trackDebugCount    != DebugHeaderCount) ||
+        (trackGPU_      && trackGPUCount      != GPUHeaderCount) ||
+        (trackGPUVideo_ && trackGPUVideoCount != GPUVideoHeaderCount) ||
+        (trackInput_    && trackInputCount    != InputHeaderCount) ||
+        (trackQueueTimers_ && trackQueueTimersCount != QueueTimersHeaderCount) ||
+        (trackCpuGpuSync_  && trackCpuGpuSyncCount  != CpuGpuSyncHeaderCount)) {
         AddTestFailure(Convert(path_).c_str(), (int) line_, "Missing required columns.");
     }
 

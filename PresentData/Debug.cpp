@@ -216,12 +216,14 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintTime,          GPUStartTime)
     FLUSH_MEMBER(PrintTime,          ReadyTime)
     FLUSH_MEMBER(PrintTime,          ScreenTime)
+    FLUSH_MEMBER(PrintTime,          InputTime)
     FLUSH_MEMBER(PrintU64x,          SwapChainAddress)
     FLUSH_MEMBER(PrintU32,           SyncInterval)
     FLUSH_MEMBER(PrintU32,           PresentFlags)
     FLUSH_MEMBER(PrintU64x,          Hwnd)
     FLUSH_MEMBER(PrintU64x,          TokenPtr)
     FLUSH_MEMBER(PrintTimeDelta,     GPUDuration)
+    FLUSH_MEMBER(PrintTimeDelta,     GPUVideoDuration)
     FLUSH_MEMBER(PrintU32,           QueueSubmitSequence)
     FLUSH_MEMBER(PrintU32,           DriverBatchThreadId)
     FLUSH_MEMBER(PrintPresentMode,   PresentMode)
@@ -410,6 +412,12 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
     if (hdr.ProviderId == Microsoft_Windows_Win32k::GUID) {
         using namespace Microsoft_Windows_Win32k;
         switch (id) {
+        case InputDeviceRead_Stop::Id:               PrintEventHeader(eventRecord, metadata, "Win32k_InputDeviceRead_Stop", {
+                                                         L"DeviceType", PrintU32,
+                                                     }); break;
+        case RetrieveInputMessage_Info::Id:          PrintEventHeader(eventRecord, metadata, "Win32k_RetrieveInputMessage", {
+                                                         L"flags", PrintU32,
+                                                     }); break;
         case TokenCompositionSurfaceObject_Info::Id: PrintEventHeader(hdr, "Win32k_TokenCompositionSurfaceObject"); break;
         case TokenStateChanged_Info::Id:             PrintEventHeader(eventRecord, metadata, "Win32K_TokenStateChanged", {
                                                          L"NewState", PrintTokenState,

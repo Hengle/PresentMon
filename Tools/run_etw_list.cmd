@@ -40,6 +40,9 @@ set events=%events% --event=PresentMultiplaneOverlay::Stop
 call :etw_list "Microsoft-Windows-DXGI" "%out_dir%\Microsoft_Windows_DXGI.h"
 
 set events=
+set events=%events% --event=AdapterAllocation::Start
+set events=%events% --event=AdapterAllocation::Stop
+set events=%events% --event=AdapterAllocation::DCStart
 set events=%events% --event=Blit::Info
 set events=%events% --event=Flip::Info
 set events=%events% --event=FlipMultiPlaneOverlay::Info
@@ -57,6 +60,7 @@ set events=%events% --event=VSyncDPC::Info
 set events=%events% --event=Context::DCStart
 set events=%events% --event=Context::Start
 set events=%events% --event=Context::Stop
+set events=%events% --event=NodeMetadata::Info
 set events=%events% --event=Device::DCStart
 set events=%events% --event=Device::Start
 set events=%events% --event=Device::Stop
@@ -67,6 +71,8 @@ call :etw_list "Microsoft-Windows-DxgKrnl" "%out_dir%\Microsoft_Windows_DxgKrnl.
 set events=
 set events=%events% --event=TokenCompositionSurfaceObject::Info
 set events=%events% --event=TokenStateChanged::Info
+set events=%events% --event=InputDeviceRead::Stop
+set events=%events% --event=RetrieveInputMessage::Info
 call :etw_list "Microsoft-Windows-Win32k" "%out_dir%\Microsoft_Windows_Win32k.h"
 
 set events=

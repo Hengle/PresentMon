@@ -40,6 +40,12 @@ struct PresentMonCsv
         Header_msUntilRenderStart,
         Header_msGPUActive,
 
+        // Required headers when -track_gpu_video is used:
+        Header_msGPUVideoActive,
+
+        // Required headers when -track_input is used:
+        Header_msSinceInput,
+
         // Required headers when -track_queue_timers is used:
         Header_WaitIfFullTime,
         Header_WaitUntilEmptySyncTime,
@@ -66,6 +72,8 @@ struct PresentMonCsv
         DisplayHeaderCount  = 5,
         DebugHeaderCount    = 2,
         GPUHeaderCount      = 2,
+        GPUVideoHeaderCount = 1,
+        InputHeaderCount    = 1,
         QueueTimersHeaderCount = 10,
         CpuGpuSyncHeaderCount  = 3,
     };
@@ -93,6 +101,8 @@ struct PresentMonCsv
         case Header_DwmNotified:            return "DwmNotified";
         case Header_msUntilRenderStart:     return "msUntilRenderStart";
         case Header_msGPUActive:            return "msGPUActive";
+        case Header_msGPUVideoActive:       return "msGPUVideoActive";
+        case Header_msSinceInput:           return "msSinceInput";
         case Header_WaitIfFullTime:               return "WaitIfFullTime";
         case Header_WaitUntilEmptySyncTime:       return "WaitUntilEmptySyncTime";
         case Header_WaitUntilEmptySyncAsincTime:  return "WaitUntilEmptySyncAsincTime";
@@ -123,6 +133,8 @@ struct PresentMonCsv
     bool trackDisplay_;
     bool trackDebug_;
     bool trackGPU_;
+    bool trackGPUVideo_;
+    bool trackInput_;
     bool trackQueueTimers_;
     bool trackCpuGpuSync_;
 

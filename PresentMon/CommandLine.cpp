@@ -317,6 +317,9 @@ static void PrintHelp()
         "-date_time",               "Output present time as a date and time with nanosecond precision.",
         "-track_gpu",               "Tracks the duration of each process' GPU work performed between presents."
                                     " Not supported on Win7.",
+        "-track_gpu_video",         "Track the video encode/decode portion of GPU work separately."
+                                    " Not supported on Win7.",
+        "-track_input",             "Tracks the time of keyboard/mouse clicks that were used by each frame.",
         "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
 
         "Internal options", nullptr,
@@ -399,7 +402,9 @@ bool ParseCommandLine(int argc, char** argv)
     args->mHotkeyModifiers = MOD_NOREPEAT;
     args->mHotkeyVirtualKeyCode = 0;
     args->mTrackGPU = false;
+    args->mTrackGPUVideo = false;
     args->mTrackDisplay = true;
+    args->mTrackInput = false;
     args->mTrackDebug = false;
     args->mTrackWMR = false;
     args->mTrackINTCQueueTimers = false;
@@ -465,6 +470,8 @@ bool ParseCommandLine(int argc, char** argv)
         // Beta options:
         else if (ParseArg(argv[i], "date_time"))             { args->mOutputDateTime = true; continue; }
         else if (ParseArg(argv[i], "track_gpu"))             { args->mTrackGPU       = true; continue; }
+        else if (ParseArg(argv[i], "track_gpu_video"))       { args->mTrackGPUVideo  = true; continue; }
+        else if (ParseArg(argv[i], "track_input"))           { args->mTrackInput     = true; continue; }
         else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR       = true; continue; }
         else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr        = true; continue; }
 
@@ -505,6 +512,10 @@ bool ParseCommandLine(int argc, char** argv)
     }
     if (args->mTrackGPU && !args->mTrackDisplay) {
         fprintf(stderr, "warning: -track_gpu requires display tracking; ignoring -no_track_display.\n");
+        args->mTrackDisplay = true;
+    }
+    if (args->mTrackGPUVideo && !args->mTrackDisplay) {
+        fprintf(stderr, "warning: -track_gpu_video requires display tracking; ignoring -no_track_display.\n");
         args->mTrackDisplay = true;
     }
 

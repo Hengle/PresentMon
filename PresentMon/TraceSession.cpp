@@ -28,6 +28,8 @@ bool StartTraceSession()
     gPMConsumer->mFilteredProcessIds = filterProcessIds;
     gPMConsumer->mTrackDisplay = args.mTrackDisplay;
     gPMConsumer->mTrackGPU = args.mTrackGPU;
+    gPMConsumer->mTrackGPUVideo = args.mTrackGPUVideo;
+    gPMConsumer->mTrackInput = args.mTrackInput;
     gPMConsumer->mTrackINTCQueueTimers = args.mTrackINTCQueueTimers;
     gPMConsumer->mTrackINTCCpuGpuSync = args.mTrackINTCCpuGpuSync;
 

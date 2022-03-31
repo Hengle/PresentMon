@@ -451,16 +451,27 @@ wchar_t const* OutTypeToString(USHORT outtype) {
 
 std::wstring CppCondition(std::wstring s)
 {
-    for (size_t i = 0, n = s.length(); i < n; ++i) {
-        if (s[i] == L' ' ||
-            s[i] == L'-' ||
-            s[i] == L'/' ||
-            s[i] == L':' ||
-            s[i] == L'.' ||
-            s[i] == L',' ||
-            s[i] == L'(' ||
-            s[i] == L')') {
-            s[i] = L'_';
+    auto n = s.length();
+    if (n > 0) {
+        // Add _ if first character is a number
+        size_t i = 0;
+        if (isdigit(s[i])) {
+            s.insert(s.begin(), '_');
+            i += 1;
+        }
+
+        // Convert bad characters into _
+        for ( ; i < n; ++i) {
+            if (s[i] == L' ' ||
+                s[i] == L'-' ||
+                s[i] == L'/' ||
+                s[i] == L':' ||
+                s[i] == L'.' ||
+                s[i] == L',' ||
+                s[i] == L'(' ||
+                s[i] == L')') {
+                s[i] = L'_';
+            }
         }
     }
     return s;

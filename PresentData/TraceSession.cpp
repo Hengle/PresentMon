@@ -122,6 +122,9 @@ ULONG EnableProviders(
         eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Info::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::DmaPacket_Start::Id);
     }
+    if (pmConsumer->mTrackGPUVideo) {
+        eventIds.push_back(Microsoft_Windows_DxgKrnl::NodeMetadata_Info::Id);
+    }
     status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_DxgKrnl::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
     if (status != ERROR_SUCCESS) return status;
 
@@ -150,6 +153,18 @@ ULONG EnableProviders(
             Microsoft_Windows_Win32k::TokenCompositionSurfaceObject_Info::Id,
             Microsoft_Windows_Win32k::TokenStateChanged_Info::Id,
         };
+
+        if (pmConsumer->mTrackInput) {
+            anyKeywordMask = anyKeywordMask | (uint64_t) Microsoft_Windows_Win32k::Keyword::Microsoft_Windows_Win32k_Messages
+                                            | (uint64_t) Microsoft_Windows_Win32k::Keyword::MessagePump
+                                            | (uint64_t) Microsoft_Windows_Win32k::Keyword::MessagePumpInternalAndInput
+                                            | (uint64_t) Microsoft_Windows_Win32k::Keyword::ComponentHosting;
+            allKeywordMask = 0;
+
+            eventIds.push_back(Microsoft_Windows_Win32k::InputDeviceRead_Stop::Id);
+            eventIds.push_back(Microsoft_Windows_Win32k::RetrieveInputMessage_Info::Id);
+        }
+
         status = EnableFilteredProvider(sessionHandle, sessionGuid, Microsoft_Windows_Win32k::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
         if (status != ERROR_SUCCESS) return status;
 
@@ -253,6 +268,7 @@ void DisableProviders(TRACEHANDLE sessionHandle)
 template<
     bool SAVE_FIRST_TIMESTAMP,
     bool TRACK_DISPLAY,
+    bool TRACK_INPUT,
     bool TRACK_WMR,
     bool TRACK_INTC>
 void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
@@ -261,60 +277,133 @@ void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
     auto const& hdr = pEventRecord->EventHeader;
 
     #pragma warning(push)
-    #pragma warning(disable: 4127) // constant conditional expressions
+    #pragma warning(disable: 4984) // c++17 extension
 
-    if (SAVE_FIRST_TIMESTAMP && session->mStartQpc.QuadPart == 0) {
-        session->mStartQpc = hdr.TimeStamp;
+    if constexpr (SAVE_FIRST_TIMESTAMP) {
+        if (session->mStartQpc.QuadPart == 0) {
+            session->mStartQpc = hdr.TimeStamp;
+        }
     }
 
-    // TODO: specialize realtime callback to exclude NT_Process?
+    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::GUID) {
+        session->mPMConsumer->HandleDXGKEvent(pEventRecord);
+        return;
+    }
+    if (hdr.ProviderId == Microsoft_Windows_DXGI::GUID) {
+        session->mPMConsumer->HandleDXGIEvent(pEventRecord);
+        return;
+    }
+    if (hdr.ProviderId == Microsoft_Windows_D3D9::GUID) {
+        session->mPMConsumer->HandleD3D9Event(pEventRecord);
+        return;
+    }
+    if (hdr.ProviderId == NT_Process::GUID) {
+        session->mPMConsumer->HandleNTProcessEvent(pEventRecord);
+        return;
+    }
+    if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::PRESENTHISTORY_GUID) {
+        session->mPMConsumer->HandleWin7DxgkPresentHistory(pEventRecord);
+        return;
+    }
+    if (hdr.ProviderId == Microsoft_Windows_EventMetadata::GUID) {
+        session->mPMConsumer->HandleMetadataEvent(pEventRecord);
+        return;
+    }
 
-         if (                 hdr.ProviderId == Microsoft_Windows_DxgKrnl::GUID)                      session->mPMConsumer->HandleDXGKEvent              (pEventRecord);
-    else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_Win32k::GUID)                       session->mPMConsumer->HandleWin32kEvent            (pEventRecord);
-    else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_Dwm_Core::GUID)                     session->mPMConsumer->HandleDWMEvent               (pEventRecord);
-    else if (                 hdr.ProviderId == Microsoft_Windows_DXGI::GUID)                         session->mPMConsumer->HandleDXGIEvent              (pEventRecord);
-    else if (                 hdr.ProviderId == Microsoft_Windows_D3D9::GUID)                         session->mPMConsumer->HandleD3D9Event              (pEventRecord);
-    else if (TRACK_INTC    && hdr.ProviderId == Intel_Graphics_D3D10::GUID)                           session->mPMConsumer->HandleINTCEvent              (pEventRecord);
-    else if (                 hdr.ProviderId == NT_Process::GUID)                                     session->mPMConsumer->HandleNTProcessEvent         (pEventRecord);
-    else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_Dwm_Core::Win7::GUID)               session->mPMConsumer->HandleDWMEvent               (pEventRecord);
-    else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::BLT_GUID)            session->mPMConsumer->HandleWin7DxgkBlt            (pEventRecord);
-    else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::FLIP_GUID)           session->mPMConsumer->HandleWin7DxgkFlip           (pEventRecord);
-    else if (                 hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::PRESENTHISTORY_GUID) session->mPMConsumer->HandleWin7DxgkPresentHistory (pEventRecord);
-    else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::QUEUEPACKET_GUID)    session->mPMConsumer->HandleWin7DxgkQueuePacket    (pEventRecord);
-    else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::VSYNCDPC_GUID)       session->mPMConsumer->HandleWin7DxgkVSyncDPC       (pEventRecord);
-    else if (TRACK_DISPLAY && hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::MMIOFLIP_GUID)       session->mPMConsumer->HandleWin7DxgkMMIOFlip       (pEventRecord);
-    else if (                 hdr.ProviderId == Microsoft_Windows_EventMetadata::GUID)                session->mPMConsumer->HandleMetadataEvent          (pEventRecord);
-    else if (                 TRACK_WMR && hdr.ProviderId == DHD_PROVIDER_GUID)                       session->mMRConsumer->HandleDHDEvent               (pEventRecord);
-    else if (TRACK_DISPLAY && TRACK_WMR && hdr.ProviderId == SPECTRUMCONTINUOUS_PROVIDER_GUID)        session->mMRConsumer->HandleSpectrumContinuousEvent(pEventRecord);
+    if constexpr (TRACK_DISPLAY || TRACK_INPUT) {
+        if (hdr.ProviderId == Microsoft_Windows_Win32k::GUID) {
+            session->mPMConsumer->HandleWin32kEvent(pEventRecord);
+            return;
+        }
+    }
+
+    if constexpr (TRACK_DISPLAY) {
+        if (hdr.ProviderId == Microsoft_Windows_Dwm_Core::GUID) {
+            session->mPMConsumer->HandleDWMEvent(pEventRecord);
+            return;
+        }
+        if (hdr.ProviderId == Microsoft_Windows_Dwm_Core::Win7::GUID) {
+            session->mPMConsumer->HandleDWMEvent(pEventRecord);
+            return;
+        }
+        if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::BLT_GUID) {
+            session->mPMConsumer->HandleWin7DxgkBlt(pEventRecord);
+            return;
+        }
+        if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::FLIP_GUID) {
+            session->mPMConsumer->HandleWin7DxgkFlip(pEventRecord);
+            return;
+        }
+        if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::QUEUEPACKET_GUID) {
+            session->mPMConsumer->HandleWin7DxgkQueuePacket(pEventRecord);
+            return;
+        }
+        if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::VSYNCDPC_GUID) {
+            session->mPMConsumer->HandleWin7DxgkVSyncDPC(pEventRecord);
+            return;
+        }
+        if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::MMIOFLIP_GUID) {
+            session->mPMConsumer->HandleWin7DxgkMMIOFlip(pEventRecord);
+            return;
+        }
+
+        if constexpr (TRACK_WMR) {
+            if (hdr.ProviderId == SPECTRUMCONTINUOUS_PROVIDER_GUID) {
+                session->mMRConsumer->HandleSpectrumContinuousEvent(pEventRecord);
+                return;
+            }
+        }
+    }
+
+    if constexpr (TRACK_INTC) {
+        if (hdr.ProviderId == Intel_Graphics_D3D10::GUID) {
+            session->mPMConsumer->HandleINTCEvent(pEventRecord);
+            return;
+        }
+    }
+
+    if constexpr (TRACK_WMR) {
+        if (hdr.ProviderId == DHD_PROVIDER_GUID) {
+            session->mMRConsumer->HandleDHDEvent(pEventRecord);
+            return;
+        }
+    }
 
     #pragma warning(pop)
 }
 
-template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY, bool TRACK_WMR>
+template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY, bool TRACK_INPUT, bool TRACK_WMR>
 PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackINTC)
 {
-    return trackINTC ? &EventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_WMR, true>
-                     : &EventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_WMR, false>;
+    return trackINTC ? &EventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, true>
+                     : &EventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, false>;
+}
+
+template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY, bool TRACK_INPUT>
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackWMR, bool trackINTC)
+{
+    return trackWMR ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, true>(trackINTC)
+                    : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, false>(trackINTC);
 }
 
 template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY>
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackWMR, bool trackINTC)
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackInput, bool trackWMR, bool trackINTC)
 {
-    return trackWMR ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, true>(trackINTC)
-                    : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, false>(trackINTC);
+    return trackInput ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, true>(trackWMR, trackINTC)
+                      : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, false>(trackWMR, trackINTC);
 }
 
 template<bool SAVE_FIRST_TIMESTAMP>
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackDisplay, bool trackWMR, bool trackINTC)
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackDisplay, bool trackInput, bool trackWMR, bool trackINTC)
 {
-    return trackDisplay ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, true>(trackWMR, trackINTC)
-                        : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, false>(trackWMR, trackINTC);
+    return trackDisplay ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, true>(trackInput, trackWMR, trackINTC)
+                        : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, false>(trackInput, trackWMR, trackINTC);
 }
 
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool saveFirstTimestamp, bool trackDisplay, bool trackWMR, bool trackINTC)
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool saveFirstTimestamp, bool trackDisplay, bool trackInput, bool trackWMR, bool trackINTC)
 {
-    return saveFirstTimestamp ? GetEventRecordCallback<true>(trackDisplay, trackWMR, trackINTC)
-                              : GetEventRecordCallback<false>(trackDisplay, trackWMR, trackINTC);
+    return saveFirstTimestamp ? GetEventRecordCallback<true>(trackDisplay, trackInput, trackWMR, trackINTC)
+                              : GetEventRecordCallback<false>(trackDisplay, trackInput, trackWMR, trackINTC);
 }
 
 ULONG CALLBACK BufferCallback(EVENT_TRACE_LOGFILEA* pLogFile)
@@ -357,9 +446,10 @@ ULONG TraceSession::Start(
     // Redirect to a specialized event handler based on the tracking parameters.
     auto saveFirstTimestamp = etlPath != nullptr;
     auto trackDisplay       = pmConsumer->mTrackDisplay;
+    auto trackInput         = pmConsumer->mTrackInput;
     auto trackWMR           = mrConsumer != nullptr;
     auto trackINTC          = pmConsumer->mTrackINTCQueueTimers || pmConsumer->mTrackINTCCpuGpuSync;
-    traceProps.EventRecordCallback = GetEventRecordCallback(saveFirstTimestamp, trackDisplay, trackWMR, trackINTC);
+    traceProps.EventRecordCallback = GetEventRecordCallback(saveFirstTimestamp, trackDisplay, trackInput, trackWMR, trackINTC);
 
     // When processing log files, we need to use the buffer callback in case
     // the user wants to stop processing before the entire log has been parsed.

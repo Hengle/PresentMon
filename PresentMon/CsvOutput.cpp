@@ -32,6 +32,7 @@ const char* RuntimeToString(Runtime rt)
     switch (rt) {
     case Runtime::DXGI: return "DXGI";
     case Runtime::D3D9: return "D3D9";
+    case Runtime::CloudStreaming: return "CloudStreaming";
     default: return "Other";
     }
 }
@@ -78,6 +79,12 @@ static void WriteCsvHeader(FILE* fp)
         fprintf(fp,
             ",msUntilRenderStart"
             ",msGPUActive");
+    }
+    if (args.mTrackGPUVideo) {
+        fprintf(fp, ",msGPUVideoActive");
+    }
+    if (args.mTrackInput) {
+        fprintf(fp, ",msSinceInput");
     }
     if (args.mTrackINTCQueueTimers) {
         fprintf(fp,
@@ -132,6 +139,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double msUntilRenderComplete  = 0.0;
     double msUntilDisplayed       = 0.0;
     double msBetweenDisplayChange = 0.0;
+    double msSinceInput           = 0.0;
 
     if (args.mTrackDisplay) {
         if (p.ReadyTime != 0) {
@@ -158,6 +166,12 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             } else {
                 msUntilRenderStart = 1000.0 * QpcDeltaToSeconds(p.GPUStartTime - p.QpcTime);
             }
+        }
+    }
+
+    if (args.mTrackInput) {
+        if (p.InputTime != 0) {
+            msSinceInput = 1000.0 * QpcDeltaToSeconds(p.QpcTime - p.InputTime);
         }
     }
 
@@ -205,6 +219,13 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
         fprintf(fp, ",%.*lf,%.*lf",
             DBL_DIG - 1, msUntilRenderStart,
             DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.GPUDuration));
+    }
+    if (args.mTrackGPUVideo) {
+        fprintf(fp, ",%.*lf",
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.GPUVideoDuration));
+    }
+    if (args.mTrackInput) {
+        fprintf(fp, ",%.*lf", DBL_DIG - 1, msSinceInput);
     }
     if (args.mTrackINTCQueueTimers) {
         fprintf(fp, ",%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf",

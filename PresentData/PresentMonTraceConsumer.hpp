@@ -45,7 +45,17 @@ enum class PresentResult
 
 enum class Runtime
 {
-    DXGI, D3D9, Other
+    DXGI, D3D9, Other, CloudStreaming
+};
+
+enum class InputDeviceType
+{
+    Mouse, Keyboard, Unknown
+};
+
+struct InputEvent {
+    uint64_t Time;
+    InputDeviceType Type;
 };
 
 enum INTCQueueTimer {
@@ -69,14 +79,17 @@ struct ProcessEvent {
 };
 
 struct PresentEvent {
-    uint64_t QpcTime;       // QPC value of the first event related to the Present (D3D9, DXGI, or DXGK Present_Start)
-    uint32_t ProcessId;     // ID of the process that presented
-    uint32_t ThreadId;      // ID of the thread that presented
-    uint64_t TimeTaken;     // QPC duration between runtime present start and end
-    uint64_t GPUStartTime;  // QPC value when the frame's first DMA packet started
-    uint64_t ReadyTime;     // QPC value when the frame's last DMA packet completed
-    uint64_t GPUDuration;   // QPC duration during which a frame's DMA packet was running on any node
-    uint64_t ScreenTime;    // QPC value when the present was displayed on screen
+    uint64_t QpcTime;           // QPC value of the first event related to the Present (D3D9, DXGI, or DXGK Present_Start)
+    uint32_t ProcessId;         // ID of the process that presented
+    uint32_t ThreadId;          // ID of the thread that presented
+    uint64_t TimeTaken;         // QPC duration between runtime present start and end
+    uint64_t GPUStartTime;      // QPC value when the frame's first DMA packet started
+    uint64_t ReadyTime;         // QPC value when the frame's last DMA packet completed
+    uint64_t GPUDuration;       // QPC duration during which a frame's DMA packet was running on
+                                // ... any node (if mTrackGPUVideo==false) or non-video nodes (if mTrackGPUVideo==true)
+    uint64_t GPUVideoDuration;  // QPC duration during which a frame's DMA packet was running on a video node (if mTrackGPUVideo==true)
+    uint64_t ScreenTime;        // QPC value when the present was displayed on screen
+    uint64_t InputTime;         // Earliest QPC value when the keyboard/mouse was clicked and used by this frame
 
     // INTC metrics
     uint64_t INTC_ProducerPresentTime;
@@ -106,6 +119,7 @@ struct PresentEvent {
     Runtime Runtime;
     PresentMode PresentMode;
     PresentResult FinalState;
+    InputDeviceType InputType;
     bool SupportsTearing;
     bool MMIO;
     bool SeenDxgkPresent;
@@ -195,6 +209,8 @@ struct PMTraceConsumer
     bool mFilteredProcessIds = false;   // Whether to filter presents to specific processes
     bool mTrackDisplay = true;          // Whether the analysis should track presents to display
     bool mTrackGPU = false;             // Whether the analysis should track GPU work
+    bool mTrackGPUVideo = false;        // Whether the analysis should track GPU video work separately
+    bool mTrackInput = false;           // Whether to track keyboard/mouse click times
     bool mTrackINTCQueueTimers = false; // Whether the analysis should track Intel D3D11 driver producer/consumer queue timers
     bool mTrackINTCCpuGpuSync = false;  // Whether the analysis should track Intel driver CPU/GPU synchronizations
 
@@ -332,6 +348,9 @@ struct PMTraceConsumer
     uint32_t DwmProcessId = 0;
     uint32_t DwmPresentThreadId = 0;
 
+    // The process id of the first identified cloud streaming process.
+    uint32_t mCloudStreamingProcessId = 0;
+
     // Yet another unique way of tracking present history tokens, this time from DxgKrnl -> DWM, only for legacy blit
     std::map<uint64_t, std::shared_ptr<PresentEvent>> mPresentsByLegacyBlitToken;
 
@@ -344,14 +363,39 @@ struct PMTraceConsumer
     uint32_t mAnalysisPathID;
     #endif
 
-    // Tracking for GPU work contributing to each frame.  We need to track DMA
-    // packet queuing to know how when each DMA packet actually ran.
-    struct FrameDmaPackets {
+    // FrameDmaInfo is the execution information for each process' frame.
+    struct FrameDmaInfo {
         uint64_t mFirstDmaTime;         // QPC when the first DMA packet started for the current frame
         uint64_t mLastDmaTime;          // QPC when the last DMA packet completed for the current frame
         uint64_t mAccumulatedDmaTime;   // QPC duration while at least one DMA packet was running during the current frame
         uint64_t mRunningDmaStartTime;  // QPC when the oldest currently-running DMA packet started
         uint32_t mRunningDmaCount;      // Number of currently-running DMA packets
+    };
+
+    // Node is information about a particular GPU node, including any DMA
+    // packets currently running/queued to it.
+    struct Node {
+        enum { MAX_QUEUE_SIZE = 9 };                    // MAX_QUEUE_SIZE=9 for 2 full cachelines (one is not enough).
+        FrameDmaInfo* mFrameDmaInfo[MAX_QUEUE_SIZE];    // Frame state for enqueued packets
+        uint32_t mSequenceId[MAX_QUEUE_SIZE];           // Sequence IDs for enqueued packets
+        uint32_t mQueueIndex;                           // Index into mFrameDmaInfo and mSequenceId for currently-running packet
+        uint32_t mQueueCount;                           // Number of enqueued packets
+        bool mIsVideo;
+        bool mIsVideoDecode;
+    };
+
+    // Context is a process gpu context, mapping a FrameDmaInfo to a particular
+    // Node.
+    struct Context {
+        FrameDmaInfo* mFrameDmaInfo;
+        Node* mNode;
+        bool mIsVideoEncoderForCloudStreamingApp;
+    };
+
+    // Depending on mTrackGPUVideo, we may track video engines separately
+    struct xFrameInfo {
+        FrameDmaInfo mVideoEngines;
+        FrameDmaInfo mOtherEngines;
 
         // Internal timers:
         uint64_t mINTCProducerPresentTime;  // QPC of the present operation on the producer thread
@@ -362,25 +406,19 @@ struct PMTraceConsumer
         } mINTCQueueTimers[INTC_QUEUE_TIMER_COUNT];
     };
 
-    // A queue of up to 10 scheduled dma packets.  Using 10 to fill 2
-    // cachelines (when mINTCQueueTimers isn't included).  10 should be more than we need, but 4 (fills 1 cacheline)
-    // is not enough.
-    struct Node {
-        FrameDmaPackets* mFrameDmaPackets[10];  // Frame state for enqueued packets
-        uint32_t mSequenceId[10];               // Sequence IDs for enqueued packets
-        uint32_t mQueueIndex;                   // Index into mFrameDmaPackets and mSequenceId for currently-running packet
-        uint32_t mQueueCount;                   // Number of enqueued packets
-    };
+    std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes;   // pDxgAdapter -> NodeOrdinal -> Node
+    std::unordered_map<uint64_t, uint64_t> mDevices;                            // hDevice -> pDxgAdapter
+    std::unordered_map<uint64_t, Context> mContexts;                            // hContext -> Context
+    std::unordered_map<uint32_t, xFrameInfo> mProcessFrameInfo;                  // ProcessID -> FrameInfo
 
-    struct Context {
-        FrameDmaPackets* mFrameDmaPackets;
-        Node* mNode;
-    };
+    void CreateFrameDmaInfo(uint32_t processId, Context* context);
+    void AssignFrameInfo(PresentEvent* pEvent, LONGLONG timestamp);
 
-    std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes; // pDxgAdapter -> NodeOrdinal -> Node
-    std::unordered_map<uint64_t, uint64_t> mDevices;                          // hDevice -> pDxgAdapter
-    std::unordered_map<uint64_t, Context> mContexts;                          // hContext -> Context
-    std::unordered_map<uint32_t, FrameDmaPackets> mProcessFrameDmaPackets;    // ProcessID -> FrameDmaPackets
+    // State for tracking keyboard/mouse click times
+    uint64_t mLastInputDeviceReadTime;
+    InputDeviceType mLastInputDeviceType;
+
+    std::unordered_map<uint32_t, std::pair<uint64_t, InputDeviceType>> mRetrievedInput; // ProcessID -> <InputTime, InputType>
 
 
     void DequeueProcessEvents(std::vector<ProcessEvent>& outProcessEvents)
