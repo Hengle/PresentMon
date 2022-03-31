@@ -22,6 +22,7 @@
 #include "ETW/Microsoft_Windows_Win32k.h"
 #include "ETW/NT_Process.h"
 #include "ETW/Intel_Graphics_D3D10.h"
+#include "ETW/Intel_PCAT_Metrics.h"
 
 namespace {
 
@@ -227,7 +228,8 @@ ULONG EnableProviders(
         }
     }
 
-    if (pmConsumer->mTrackINTCQueueTimers || pmConsumer->mTrackINTCCpuGpuSync) {
+    if (pmConsumer->mTrackINTCQueueTimers || pmConsumer->mTrackINTCCpuGpuSync || pmConsumer->mDebugINTCFramePacing) {
+        // Intel_Graphics_D3D10
         anyKeywordMask = 0;
         eventIds.clear();
         if (pmConsumer->mTrackINTCQueueTimers) {
@@ -241,9 +243,26 @@ ULONG EnableProviders(
             eventIds.push_back(Intel_Graphics_D3D10::CpuGpuSync_Start::Id);
             eventIds.push_back(Intel_Graphics_D3D10::CpuGpuSync_Stop::Id);
         }
+        if (pmConsumer->mDebugINTCFramePacing) {
+            anyKeywordMask |= (uint64_t) Intel_Graphics_D3D10::Keyword::cIntelGraphicsD3D10_Analytic |
+                              (uint64_t) Intel_Graphics_D3D10::Keyword::kGenericDebug_Event;
+            eventIds.push_back(Intel_Graphics_D3D10::task_FramePacer_Info::Id);
+            eventIds.push_back(Intel_Graphics_D3D10::task_DdiPresentDXGI_Info::Id);
+        }
         allKeywordMask = anyKeywordMask;
 
         status = EnableFilteredProvider(sessionHandle, sessionGuid, Intel_Graphics_D3D10::GUID, TRACE_LEVEL_VERBOSE, anyKeywordMask, allKeywordMask, eventIds);
+        if (status != ERROR_SUCCESS) return status;
+    }
+
+    if (pmConsumer->mTrackPCAT) {
+        // Intel_PCAT_Metrics
+        anyKeywordMask = (uint64_t) Intel_PCAT_Metrics::Keyword::Intel_PCAT_Metrics_Analytic;
+        allKeywordMask = anyKeywordMask;
+        eventIds = {
+            Intel_PCAT_Metrics::Task_0_Opcode_0::Id,
+        };
+        status = EnableFilteredProvider(sessionHandle, sessionGuid, Intel_PCAT_Metrics::GUID, TRACE_LEVEL_INFORMATION, anyKeywordMask, allKeywordMask, eventIds);
         if (status != ERROR_SUCCESS) return status;
     }
 
@@ -263,6 +282,7 @@ void DisableProviders(TRACEHANDLE sessionHandle)
     status = EnableTraceEx2(sessionHandle, &DHD_PROVIDER_GUID,                      EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
     status = EnableTraceEx2(sessionHandle, &SPECTRUMCONTINUOUS_PROVIDER_GUID,       EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
     status = EnableTraceEx2(sessionHandle, &Intel_Graphics_D3D10::GUID,             EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
+    status = EnableTraceEx2(sessionHandle, &Intel_PCAT_Metrics::GUID,               EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
 }
 
 template<
@@ -270,7 +290,8 @@ template<
     bool TRACK_DISPLAY,
     bool TRACK_INPUT,
     bool TRACK_WMR,
-    bool TRACK_INTC>
+    bool TRACK_INTC,
+    bool TRACK_POWER>
 void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
 {
     auto session = (TraceSession*) pEventRecord->UserContext;
@@ -357,7 +378,14 @@ void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
 
     if constexpr (TRACK_INTC) {
         if (hdr.ProviderId == Intel_Graphics_D3D10::GUID) {
-            session->mPMConsumer->HandleINTCEvent(pEventRecord);
+            session->mPMConsumer->HandleIntelGraphicsEvent(pEventRecord);
+            return;
+        }
+    }
+
+    if constexpr (TRACK_POWER) {
+        if (hdr.ProviderId == Intel_PCAT_Metrics::GUID) {
+            session->mPMConsumer->HandleIntelPCATEvent(pEventRecord);
             return;
         }
     }
@@ -372,38 +400,45 @@ void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
     #pragma warning(pop)
 }
 
-template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY, bool TRACK_INPUT, bool TRACK_WMR>
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackINTC)
+template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY, bool TRACK_INPUT, bool TRACK_WMR, bool TRACK_INTC>
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackPower)
 {
-    return trackINTC ? &EventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, true>
-                     : &EventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, false>;
+    return trackPower ? &EventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, TRACK_INTC, true>
+                      : &EventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, TRACK_INTC, false>;
+}
+
+template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY, bool TRACK_INPUT, bool TRACK_WMR>
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackINTC, bool trackPower)
+{
+    return trackINTC ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, true>(trackPower)
+                     : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, false>(trackPower);
 }
 
 template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY, bool TRACK_INPUT>
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackWMR, bool trackINTC)
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackWMR, bool trackINTC, bool trackPower)
 {
-    return trackWMR ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, true>(trackINTC)
-                    : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, false>(trackINTC);
+    return trackWMR ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, true>(trackINTC, trackPower)
+                    : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, false>(trackINTC, trackPower);
 }
 
 template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY>
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackInput, bool trackWMR, bool trackINTC)
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackInput, bool trackWMR, bool trackINTC, bool trackPower)
 {
-    return trackInput ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, true>(trackWMR, trackINTC)
-                      : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, false>(trackWMR, trackINTC);
+    return trackInput ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, true>(trackWMR, trackINTC, trackPower)
+                      : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, false>(trackWMR, trackINTC, trackPower);
 }
 
 template<bool SAVE_FIRST_TIMESTAMP>
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackDisplay, bool trackInput, bool trackWMR, bool trackINTC)
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackDisplay, bool trackInput, bool trackWMR, bool trackINTC, bool trackPower)
 {
-    return trackDisplay ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, true>(trackInput, trackWMR, trackINTC)
-                        : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, false>(trackInput, trackWMR, trackINTC);
+    return trackDisplay ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, true>(trackInput, trackWMR, trackINTC, trackPower)
+                        : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, false>(trackInput, trackWMR, trackINTC, trackPower);
 }
 
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool saveFirstTimestamp, bool trackDisplay, bool trackInput, bool trackWMR, bool trackINTC)
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool saveFirstTimestamp, bool trackDisplay, bool trackInput, bool trackWMR, bool trackINTC, bool trackPower)
 {
-    return saveFirstTimestamp ? GetEventRecordCallback<true>(trackDisplay, trackInput, trackWMR, trackINTC)
-                              : GetEventRecordCallback<false>(trackDisplay, trackInput, trackWMR, trackINTC);
+    return saveFirstTimestamp ? GetEventRecordCallback<true>(trackDisplay, trackInput, trackWMR, trackINTC, trackPower)
+                              : GetEventRecordCallback<false>(trackDisplay, trackInput, trackWMR, trackINTC, trackPower);
 }
 
 ULONG CALLBACK BufferCallback(EVENT_TRACE_LOGFILEA* pLogFile)
@@ -445,11 +480,13 @@ ULONG TraceSession::Start(
 
     // Redirect to a specialized event handler based on the tracking parameters.
     auto saveFirstTimestamp = etlPath != nullptr;
-    auto trackDisplay       = pmConsumer->mTrackDisplay;
-    auto trackInput         = pmConsumer->mTrackInput;
-    auto trackWMR           = mrConsumer != nullptr;
-    auto trackINTC          = pmConsumer->mTrackINTCQueueTimers || pmConsumer->mTrackINTCCpuGpuSync;
-    traceProps.EventRecordCallback = GetEventRecordCallback(saveFirstTimestamp, trackDisplay, trackInput, trackWMR, trackINTC);
+    traceProps.EventRecordCallback = GetEventRecordCallback(
+        saveFirstTimestamp,
+        pmConsumer->mTrackDisplay,
+        pmConsumer->mTrackInput,
+        mrConsumer != nullptr,
+        pmConsumer->mTrackINTCQueueTimers || pmConsumer->mTrackINTCCpuGpuSync || pmConsumer->mDebugINTCFramePacing,
+        pmConsumer->mTrackPCAT);
 
     // When processing log files, we need to use the buffer callback in case
     // the user wants to stop processing before the entire log has been parsed.

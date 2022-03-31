@@ -1,10 +1,12 @@
+<!---
 [![](https://img.shields.io/github/license/GameTechDev/PresentMon)]()
 [![](https://img.shields.io/github/v/release/GameTechDev/PresentMon)](https://github.com/GameTechDev/PresentMon/releases/latest)
 [![](https://img.shields.io/github/commits-since/GameTechDev/PresentMon/latest/main)]()
 [![](https://img.shields.io/github/issues/GameTechDev/PresentMon)]()
 [![](https://img.shields.io/github/last-commit/GameTechDev/PresentMon)]()
+-->
 
-# PresentMon
+# Intel Internal PresentMon
 
 PresentMon is a tool to capture and analyze [ETW](https://msdn.microsoft.com/en-us/library/windows/desktop/bb968803%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396) events related to swap chain presentation on Windows.  It can be used to trace key performance metrics for graphics applications (e.g., CPU and Display frame durations and latencies) and works across different graphics APIs, different hardware configurations, and for both desktop and UWP applications.
 
@@ -29,10 +31,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 Binaries for main release versions of PresentMon are provided on GitHub:
 
-- [Latest release](https://github.com/GameTechDev/PresentMon/releases/latest)
-- [List of all releases](https://github.com/GameTechDev/PresentMon/releases)
+- [Latest release](https://github.com/intel-innersource/drivers.gpu.tools.presentmon/releases/latest)
+- [List of all releases](https://github.com/intel-innersource/drivers.gpu.tools.presentmon/releases)
 
-See [CONTRIBUTING](https://github.com/GameTechDev/PresentMon/blob/main/CONTRIBUTING.md) for information on how to request features, report issues, or contribute code changes.
+See [CONTRIBUTING](https://github.com/intel-innersource/drivers.gpu.tools.presentmon/blob/main/CONTRIBUTING.md) for information on how to request features, report issues, or contribute code changes.
 
 ## Command line options
 
@@ -100,8 +102,9 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | `-date_time`           | Output present time as a date and time with nanosecond precision.                                       |
 | `-track_gpu`           | Tracks the duration of each process' GPU work performed between presents.  Not supported on Win7.       |
 | `-track_gpu_video`     | Track the video encode/decode portion of GPU work separately from other engines. Not supported on Win7. |
-| `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                    |
 | `-track_input`         | Tracks the time of keyboard/mouse clicks that were used by each frame.                                  |
+| `-track_power`         | Writes PCAT metrics to presentmon_pcat.csv in the working directory.                                    |
+| `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                    |
 
 ### Internal Options
 
@@ -109,6 +112,7 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | --------------------- | --------------------------------------------------------- |
 | `-track_queue_timers` | Capture Intel D3D11 driver producer/consumer queue timers |
 | `-track_cpu_gpu_sync` | Capture Intel D3D11 driver CPU/GPU syncs                  |
+| `-debug_frame_pacing` | Report extra driver metrics realted to frame pacing.      |
 
 ## Comma-separated value (CSV) file output
 
@@ -217,7 +221,7 @@ If `-track_mixed_reality` is used, a second CSV file will be generated with `_WM
 
 ## Known issues
 
-See [GitHub Issues](https://github.com/GameTechDev/PresentMon/issues) for a current list of reported issues.
+See [public GitHub Issues](https://github.com/GameTechDev/PresentMon/issues) or [internal GitHub Issues](https://github.com/GameTechDev/PresentMon/issues) for a current list of reported issues.
 
 ### Analyzing OpenGL and Vulkan applications
 
@@ -234,7 +238,6 @@ In this case, PresentTime/TimeInSeconds will represent the first time the presen
 ### Measuring input latency
 
 When using `-track_input`, PresentMon will track when keyboard/mouse events are read by the OS and the target application.  Then, for frames where `msSinceInput` is non-zero, `msSinceInput + msUntilDisplayed` can be used to better-understand the latency between user input and the display of the resulting rendered frame.  Note, however, that this is just the OS-visible subset of the full  latency: it does not include any latency incurred within the input/display hardware and drivers.
-
 
 ### Shutting down PresentMon on Windows 7
 

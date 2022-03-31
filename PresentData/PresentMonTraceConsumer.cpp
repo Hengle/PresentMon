@@ -3,6 +3,8 @@
 
 #include "PresentMonTraceConsumer.hpp"
 
+#include "ETW/Intel_Graphics_D3D10.h"
+#include "ETW/Intel_PCAT_Metrics.h"
 #include "ETW/Microsoft_Windows_D3D9.h"
 #include "ETW/Microsoft_Windows_Dwm_Core.h"
 #include "ETW/Microsoft_Windows_DXGI.h"
@@ -63,6 +65,22 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , SwapChainAddress(0)
     , SyncInterval(-1)
     , PresentFlags(0)
+    , INTC_FrameID(0)
+    , INTC_AppWorkStart(0)
+    , INTC_AppSimulationTime(0)
+    , INTC_DriverWorkStart(0)
+    , INTC_DriverWorkEnd(0)
+    , INTC_KernelDriverSubmitStart(0)
+    , INTC_KernelDriverSubmitEnd(0)
+    , INTC_GPUStart(0)
+    , INTC_GPUEnd(0)
+    , INTC_KernelDriverFenceReport(0)
+    , INTC_PresentAPICall(0)
+    , INTC_TargetFrameTime(0)
+    , INTC_FlipReceivedTime(0)
+    , INTC_FlipReportTime(0)
+    , INTC_FlipProgrammingTime(0)
+    , INTC_ActualFlipTime(0)
     , Hwnd(0)
     , TokenPtr(0)
     , CompositionSurfaceLuid(0)
@@ -78,6 +96,7 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , MMIO(false)
     , SeenDxgkPresent(false)
     , SeenWin32KEvents(false)
+    , SeenINTCFramePacerInfo(false)
     , DwmNotified(false)
     , SeenInFrameEvent(false)
     , CompletionIsDeferred(false)
@@ -110,6 +129,277 @@ PMTraceConsumer::PMTraceConsumer()
     , mLastInputDeviceReadTime(0)
     , mLastInputDeviceType(InputDeviceType::Unknown)
 {
+}
+
+void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
+{
+    DebugEvent(pEventRecord, &mMetadata);
+
+    auto const& hdr = pEventRecord->EventHeader;
+    switch (hdr.EventDescriptor.Id) {
+    case Intel_Graphics_D3D10::QueueTimers_Info::Id:
+    {
+        assert(mTrackINTCQueueTimers);
+
+        auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
+
+        auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
+        switch (Type) {
+        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_APP:    frameInfo->mINTCProducerPresentTime = hdr.TimeStamp.QuadPart; break;
+        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_DRIVER: frameInfo->mINTCConsumerPresentTime = hdr.TimeStamp.QuadPart; break;
+        default: assert(false); break;
+        }
+        break;
+    }
+
+    case Intel_Graphics_D3D10::QueueTimers_Start::Id:
+    case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
+    case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
+    case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
+    {
+        auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
+        uint32_t timerIndex = 0;
+
+        switch (hdr.EventDescriptor.Id) {
+        case Intel_Graphics_D3D10::QueueTimers_Start::Id:
+        case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
+        {
+            assert(mTrackINTCQueueTimers);
+            auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
+            switch (Type) {
+            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_FULL_TIMER:           timerIndex = INTC_QUEUE_WAIT_IF_FULL_TIMER; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_EMPTY_TIMER:          timerIndex = INTC_QUEUE_WAIT_IF_EMPTY_TIMER; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_SYNC_TIMER:  timerIndex = INTC_QUEUE_WAIT_UNTIL_EMPTY_SYNC_TIMER; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_DRAIN_TIMER: timerIndex = INTC_QUEUE_WAIT_UNTIL_EMPTY_DRAIN_TIMER; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_FOR_FENCE:               timerIndex = INTC_QUEUE_WAIT_FOR_FENCE; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_FENCE_SUBMITTED:   timerIndex = INTC_QUEUE_WAIT_UNTIL_FENCE_SUBMITTED; break;
+            default: assert(false); break;
+            }
+            break;
+        }
+
+        case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
+        case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id: {
+            assert(mTrackINTCCpuGpuSync);
+            auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mSyncType>(pEventRecord, L"value");
+            switch (Type) {
+            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU:   timerIndex = INTC_QUEUE_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; break;
+            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_POLL_ON_QUERY_GET_DATA: timerIndex = INTC_QUEUE_SYNC_TYPE_POLL_ON_QUERY_GET_DATA; break;
+            default: assert(false); break;
+            }
+            break;
+        }
+        }
+
+        auto queueTimer = &frameInfo->mINTCQueueTimers[timerIndex];
+
+        switch (hdr.EventDescriptor.Id) {
+        case Intel_Graphics_D3D10::QueueTimers_Start::Id:
+        case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
+            assert(queueTimer->mStartTime == 0);
+            if (queueTimer->mStartTime == 0) {
+                queueTimer->mStartTime = hdr.TimeStamp.QuadPart;
+            }
+            break;
+
+        case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
+        case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
+            if (queueTimer->mStartTime != 0) {
+                queueTimer->mAccumulatedTime += hdr.TimeStamp.QuadPart - queueTimer->mStartTime;
+                queueTimer->mStartTime = 0;
+            }
+            break;
+        }
+
+        break;
+    }
+
+
+    // Provides a driver frame ID used to associate task_FramePacer_Info events
+    // which occur some time after display.
+    //
+    // Should occur between Microsoft_Windows_DXGI::Present_Start and
+    // Microsoft_Windows_DXGI::Present_Stop on the same thread.
+    case Intel_Graphics_D3D10::task_DdiPresentDXGI_Info::Id:
+    {
+        assert(mDebugINTCFramePacing);
+        EventDataDesc desc[] = {
+            { L"FrameID" },
+        };
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        auto FrameID = desc[0].GetData<uint64_t>();
+
+        auto present = FindOrCreatePresent(hdr);
+        DebugModifyPresent(*present);
+        present->INTC_FrameID = FrameID;
+        break;
+    }
+
+    // Provides application/driver-provided information about an
+    // already-displayed frame.
+    //
+    // Should occur between Microsoft_Windows_DXGI::Present_Start and
+    // Microsoft_Windows_DXGI::Present_Stop on the same thread.
+    case Intel_Graphics_D3D10::task_FramePacer_Info::Id:
+    {
+        assert(mDebugINTCFramePacing);
+        EventDataDesc desc[] = {
+            { L"FrameID" },
+            { L"AppWorkStart" },
+            { L"AppSimulationTime" },
+            { L"DriverWorkStart" },
+            { L"DriverWorkEnd" },
+            { L"KernelDriverSubmitStart" },
+            { L"KernelDriverSubmitEnd" },
+            { L"GPUStart" },
+            { L"GPUEnd" },
+            { L"KernelDriverFenceReport" },
+            { L"PresentAPICall" },
+            { L"TargetFrameTime" },
+            { L"FlipReceivedTime" },
+            { L"FlipReportTime" },
+            { L"FlipProgrammingTime" },
+            { L"ActualFlipTime" },
+        };
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        auto FrameID                 = desc[0].GetData<uint64_t>();
+        auto AppWorkStart            = desc[1].GetData<uint64_t>();
+        auto AppSimulationTime       = desc[2].GetData<uint64_t>();
+        auto DriverWorkStart         = desc[3].GetData<uint64_t>();
+        auto DriverWorkEnd           = desc[4].GetData<uint64_t>();
+        auto KernelDriverSubmitStart = desc[5].GetData<uint64_t>();
+        auto KernelDriverSubmitEnd   = desc[6].GetData<uint64_t>();
+        auto GPUStart                = desc[7].GetData<uint64_t>();
+        auto GPUEnd                  = desc[8].GetData<uint64_t>();
+        auto KernelDriverFenceReport = desc[9].GetData<uint64_t>();
+        auto PresentAPICall          = desc[10].GetData<uint64_t>();
+        auto TargetFrameTime         = desc[11].GetData<uint64_t>();
+        auto FlipReceivedTime        = desc[12].GetData<uint64_t>();
+        auto FlipReportTime          = desc[13].GetData<uint64_t>();
+        auto FlipProgrammingTime     = desc[14].GetData<uint64_t>();
+        auto ActualFlipTime          = desc[15].GetData<uint64_t>();
+
+        // Search for the present in the deferred completions first, as that is
+        // the most likely location.  If found, remove it from
+        // mDeferredCompletions.
+        std::shared_ptr<PresentEvent> present;
+        auto deferredIter = mDeferredCompletions.find(hdr.ProcessId);
+        if (deferredIter != mDeferredCompletions.end()) {
+            auto deferredCompletions = &deferredIter->second;
+            for (auto ii = deferredCompletions->begin(), ie = deferredCompletions->end(); ii != ie; ++ii) {
+                if (ii->first->INTC_FrameID == FrameID) {
+                    present = ii->first;
+                    deferredCompletions->erase(ii);
+                    break;
+                }
+            }
+        }
+
+        // If not found, also check in-flight presents for this process
+        if (present == nullptr) {
+            for (auto const& tuple : mPresentsByProcess[hdr.ProcessId]) {
+                if (tuple.second->INTC_FrameID == FrameID) {
+                    present = tuple.second;
+                    break;
+                }
+            }
+        }
+
+        // If found, add the frame pacer info and complete it if completion is
+        // deferred.
+        if (present != nullptr) {
+            DebugModifyPresent(*present);
+            present->INTC_AppWorkStart            = AppWorkStart;
+            present->INTC_AppSimulationTime       = AppSimulationTime;
+            present->INTC_DriverWorkStart         = DriverWorkStart;
+            present->INTC_DriverWorkEnd           = DriverWorkEnd;
+            present->INTC_KernelDriverSubmitStart = KernelDriverSubmitStart;
+            present->INTC_KernelDriverSubmitEnd   = KernelDriverSubmitEnd;
+            present->INTC_GPUStart                = GPUStart;
+            present->INTC_GPUEnd                  = GPUEnd;
+            present->INTC_KernelDriverFenceReport = KernelDriverFenceReport;
+            present->INTC_PresentAPICall          = PresentAPICall;
+            present->INTC_TargetFrameTime         = TargetFrameTime;
+            present->INTC_FlipReceivedTime        = FlipReceivedTime;
+            present->INTC_FlipReportTime          = FlipReportTime;
+            present->INTC_FlipProgrammingTime     = FlipProgrammingTime;
+            present->INTC_ActualFlipTime          = ActualFlipTime;
+            present->SeenINTCFramePacerInfo       = true;
+
+            if (present->CompletionIsDeferred) {
+                CompleteDeferredCompletion(present);
+            }
+        }
+        break;
+    }
+
+    default:
+        assert(!mFilteredEvents); // Assert that filtering is working if expected
+        break;
+    }
+}
+
+void PMTraceConsumer::HandleIntelPCATEvent(EVENT_RECORD* pEventRecord)
+{
+    DebugEvent(pEventRecord, &mMetadata);
+
+    auto const& hdr = pEventRecord->EventHeader;
+    switch (hdr.EventDescriptor.Id) {
+
+    case Intel_PCAT_Metrics::Task_0_Opcode_0::Id:
+    {
+        static FILE* powerCsv = nullptr;
+        if (powerCsv == nullptr) {
+            static bool powerCsvFailed = false;
+            if (powerCsvFailed) return;
+            if (fopen_s(&powerCsv, "presentmon_pcat.csv", "wb")) {
+                fprintf(stderr, "error: failed to create file: presentmon_pcat.csv\n");
+                powerCsvFailed = true;
+                return;
+            }
+
+            fprintf(powerCsv, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                "frequency",
+                "system_tick",
+                "timestamp",
+                "p1_12v_8p_v",
+                "p1_12v_8p_a",
+                "p2_12v_8p_v",
+                "p2_12v_8p_a",
+                "p3_12v_8p_v",
+                "p3_12v_8p_a",
+                "pcie_12v_v",
+                "pcie_12v_a",
+                "three_point_three_v",
+                "three_point_three_a",
+                "three_point_three_aux_v",
+                "three_point_three_aux_a");
+        }
+
+        auto p = (Intel_PCAT_Metrics::Task_0_Opcode_0_Struct*) pEventRecord->UserData;
+        fprintf(powerCsv, "%lld,%lld,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
+            p->frequency,
+            p->system_tick,
+            p->timestamp,
+            p->p1_12v_8p_v,
+            p->p1_12v_8p_a,
+            p->p2_12v_8p_v,
+            p->p2_12v_8p_a,
+            p->p3_12v_8p_v,
+            p->p3_12v_8p_a,
+            p->pcie_12v_v,
+            p->pcie_12v_a,
+            p->three_point_three_v,
+            p->three_point_three_a,
+            p->three_point_three_aux_v,
+            p->three_point_three_aux_a);
+        break;
+    }
+
+    default:
+        assert(!mFilteredEvents); // Assert that filtering is working if expected
+        break;
+    }
 }
 
 void PMTraceConsumer::HandleD3D9Event(EVENT_RECORD* pEventRecord)
@@ -332,7 +622,7 @@ static std::unordered_map<uint32_t, std::string> gNTProcessNames;
 
 void PMTraceConsumer::CreateFrameDmaInfo(uint32_t processId, Context* context)
 {
-    auto p = mProcessFrameInfo.emplace(processId, xFrameInfo{});
+    auto p = mProcessFrameInfo.emplace(processId, FrameInfo{});
 
     if (!mTrackGPUVideo) {
         context->mFrameDmaInfo = &p.first->second.mOtherEngines;
@@ -1950,6 +2240,11 @@ uint32_t GetDeferredCompletionWaitCount(PresentEvent const& p)
         return 1;
     }
 
+    // Missing task_FramePacer_Info
+    if (p.INTC_FrameID > 0 && p.SeenINTCFramePacerInfo == false) {
+        return 16;
+    }
+
     // All expected events already observed
     return 0;
 }
@@ -2273,82 +2568,6 @@ void PMTraceConsumer::HandleNTProcessEvent(EVENT_RECORD* pEventRecord)
         std::lock_guard<std::mutex> lock(mProcessEventMutex);
         mProcessEvents.emplace_back(event);
         return;
-    }
-}
-
-void PMTraceConsumer::HandleINTCEvent(EVENT_RECORD* pEventRecord)
-{
-    DebugEvent(pEventRecord, &mMetadata);
-
-    auto const& hdr = pEventRecord->EventHeader;
-
-    auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, xFrameInfo{}).first->second;
-    uint32_t timerIndex = 0;
-
-    // Figure out what timer this is
-    switch (hdr.EventDescriptor.Id) {
-    case Intel_Graphics_D3D10::QueueTimers_Info::Id: {
-        assert(mTrackINTCQueueTimers);
-        auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
-        switch (Type) {
-        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_APP:    frameInfo->mINTCProducerPresentTime = hdr.TimeStamp.QuadPart; break;
-        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_DRIVER: frameInfo->mINTCConsumerPresentTime = hdr.TimeStamp.QuadPart; break;
-        default: assert(false); break;
-        }
-        return;
-    }
-
-    case Intel_Graphics_D3D10::QueueTimers_Start::Id:
-    case Intel_Graphics_D3D10::QueueTimers_Stop::Id: {
-        assert(mTrackINTCQueueTimers);
-        auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
-        switch (Type) {
-        case Intel_Graphics_D3D10::mTimerType::WAIT_IF_FULL_TIMER:           timerIndex = INTC_QUEUE_WAIT_IF_FULL_TIMER; break;
-        case Intel_Graphics_D3D10::mTimerType::WAIT_IF_EMPTY_TIMER:          timerIndex = INTC_QUEUE_WAIT_IF_EMPTY_TIMER; break;
-        case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_SYNC_TIMER:  timerIndex = INTC_QUEUE_WAIT_UNTIL_EMPTY_SYNC_TIMER; break;
-        case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_DRAIN_TIMER: timerIndex = INTC_QUEUE_WAIT_UNTIL_EMPTY_DRAIN_TIMER; break;
-        case Intel_Graphics_D3D10::mTimerType::WAIT_FOR_FENCE:               timerIndex = INTC_QUEUE_WAIT_FOR_FENCE; break;
-        case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_FENCE_SUBMITTED:   timerIndex = INTC_QUEUE_WAIT_UNTIL_FENCE_SUBMITTED; break;
-        default: assert(false); break;
-        }
-        break;
-    }
-
-    case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
-    case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id: {
-        assert(mTrackINTCCpuGpuSync);
-        auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mSyncType>(pEventRecord, L"value");
-        switch (Type) {
-        case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU:   timerIndex = INTC_QUEUE_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; break;
-        case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_POLL_ON_QUERY_GET_DATA: timerIndex = INTC_QUEUE_SYNC_TYPE_POLL_ON_QUERY_GET_DATA; break;
-        default: assert(false); break;
-        }
-        break;
-    }
-
-    default:
-        assert(!mFilteredEvents); // Assert that filtering is working if expected
-        return;
-    }
-
-    auto queueTimer = &frameInfo->mINTCQueueTimers[timerIndex];
-
-    switch (hdr.EventDescriptor.Id) {
-    case Intel_Graphics_D3D10::QueueTimers_Start::Id:
-    case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
-        assert(queueTimer->mStartTime == 0);
-        if (queueTimer->mStartTime == 0) {
-            queueTimer->mStartTime = hdr.TimeStamp.QuadPart;
-        }
-        break;
-
-    case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
-    case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
-        if (queueTimer->mStartTime != 0) {
-            queueTimer->mAccumulatedTime += hdr.TimeStamp.QuadPart - queueTimer->mStartTime;
-            queueTimer->mStartTime = 0;
-        }
-        break;
     }
 }
 

@@ -101,6 +101,24 @@ struct PresentEvent {
     int32_t SyncInterval;
     uint32_t PresentFlags;
 
+    // Intel frame-pacing data
+    uint64_t INTC_FrameID;
+    uint64_t INTC_AppWorkStart;
+    uint64_t INTC_AppSimulationTime;
+    uint64_t INTC_DriverWorkStart;
+    uint64_t INTC_DriverWorkEnd;
+    uint64_t INTC_KernelDriverSubmitStart;
+    uint64_t INTC_KernelDriverSubmitEnd;
+    uint64_t INTC_GPUStart;
+    uint64_t INTC_GPUEnd;
+    uint64_t INTC_KernelDriverFenceReport;
+    uint64_t INTC_PresentAPICall;
+    uint64_t INTC_TargetFrameTime;
+    uint64_t INTC_FlipReceivedTime;
+    uint64_t INTC_FlipReportTime;
+    uint64_t INTC_FlipProgrammingTime;
+    uint64_t INTC_ActualFlipTime;
+
     // Keys used to index into PMTraceConsumer's tracking data structures:
     uint64_t DxgKrnlHContext;           // Key for mBltsByDxgContext
     uint64_t Win32KPresentCount;        // Combine with CompositionSurfaceLuid and Win32KBindId as key into mWin32KPresentHistoryTokens
@@ -124,6 +142,7 @@ struct PresentEvent {
     bool MMIO;
     bool SeenDxgkPresent;
     bool SeenWin32KEvents;
+    bool SeenINTCFramePacerInfo;
     bool DwmNotified;
     bool SeenInFrameEvent;      // This present has gotten a Win32k TokenStateChanged event into InFrame state
     bool CompletionIsDeferred;  // A FinalState has been determined, but not all expected events have been observed yet
@@ -213,6 +232,8 @@ struct PMTraceConsumer
     bool mTrackInput = false;           // Whether to track keyboard/mouse click times
     bool mTrackINTCQueueTimers = false; // Whether the analysis should track Intel D3D11 driver producer/consumer queue timers
     bool mTrackINTCCpuGpuSync = false;  // Whether the analysis should track Intel driver CPU/GPU synchronizations
+    bool mDebugINTCFramePacing = false; // Whether to report Intel driver metrics related to frame pacing
+    bool mTrackPCAT = false;            // Whether the analysis should track PCAT metrics
 
     // Whether we've completed any presents yet.  This is used to indicate that
     // all the necessary providers have started and it's safe to start tracking
@@ -393,7 +414,7 @@ struct PMTraceConsumer
     };
 
     // Depending on mTrackGPUVideo, we may track video engines separately
-    struct xFrameInfo {
+    struct FrameInfo {
         FrameDmaInfo mVideoEngines;
         FrameDmaInfo mOtherEngines;
 
@@ -409,7 +430,7 @@ struct PMTraceConsumer
     std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes;   // pDxgAdapter -> NodeOrdinal -> Node
     std::unordered_map<uint64_t, uint64_t> mDevices;                            // hDevice -> pDxgAdapter
     std::unordered_map<uint64_t, Context> mContexts;                            // hContext -> Context
-    std::unordered_map<uint32_t, xFrameInfo> mProcessFrameInfo;                  // ProcessID -> FrameInfo
+    std::unordered_map<uint32_t, FrameInfo> mProcessFrameInfo;                  // ProcessID -> FrameInfo
 
     void CreateFrameDmaInfo(uint32_t processId, Context* context);
     void AssignFrameInfo(PresentEvent* pEvent, LONGLONG timestamp);
@@ -461,6 +482,8 @@ struct PMTraceConsumer
     void RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> present, bool waitForPresentStop);
     void RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPresentBatching, ::Runtime runtime);
 
+    void HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord);
+    void HandleIntelPCATEvent(EVENT_RECORD* pEventRecord);
     void HandleNTProcessEvent(EVENT_RECORD* pEventRecord);
     void HandleDXGIEvent(EVENT_RECORD* pEventRecord);
     void HandleD3D9Event(EVENT_RECORD* pEventRecord);
@@ -468,8 +491,6 @@ struct PMTraceConsumer
     void HandleWin32kEvent(EVENT_RECORD* pEventRecord);
     void HandleDWMEvent(EVENT_RECORD* pEventRecord);
     void HandleMetadataEvent(EVENT_RECORD* pEventRecord);
-
-    void HandleINTCEvent(EVENT_RECORD* pEventRecord);
 
     void HandleWin7DxgkBlt(EVENT_RECORD* pEventRecord);
     void HandleWin7DxgkFlip(EVENT_RECORD* pEventRecord);

@@ -320,11 +320,13 @@ static void PrintHelp()
         "-track_gpu_video",         "Track the video encode/decode portion of GPU work separately."
                                     " Not supported on Win7.",
         "-track_input",             "Tracks the time of keyboard/mouse clicks that were used by each frame.",
+        "-track_power",             "Writes PCAT metrics to presentmon_pcat.csv in the working directory.",
         "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
 
         "Internal options", nullptr,
-        "-track_queue_timers",      "Capture Intel D3D11 driver producer/consumer queue timers",
-        "-track_cpu_gpu_sync",      "Capture Intel D3D11 driver CPU/GPU syncs",
+        "-track_queue_timers",      "Capture Intel D3D11 driver producer/consumer queue timers.",
+        "-track_cpu_gpu_sync",      "Capture Intel D3D11 driver CPU/GPU syncs.",
+        "-debug_frame_pacing",      "Report extra driver metrics related to frame pacing.",
     };
 
     fprintf(stderr, "PresentMon %s\n", PRESENT_MON_VERSION);
@@ -406,9 +408,11 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTrackDisplay = true;
     args->mTrackInput = false;
     args->mTrackDebug = false;
+    args->mTrackPower = false;
     args->mTrackWMR = false;
     args->mTrackINTCQueueTimers = false;
     args->mTrackINTCCpuGpuSync = false;
+    args->mDebugINTCFramePacing = false;
     args->mOutputCsvToFile = true;
     args->mOutputCsvToStdout = false;
     args->mOutputQpcTime = false;
@@ -472,12 +476,14 @@ bool ParseCommandLine(int argc, char** argv)
         else if (ParseArg(argv[i], "track_gpu"))             { args->mTrackGPU       = true; continue; }
         else if (ParseArg(argv[i], "track_gpu_video"))       { args->mTrackGPUVideo  = true; continue; }
         else if (ParseArg(argv[i], "track_input"))           { args->mTrackInput     = true; continue; }
+        else if (ParseArg(argv[i], "track_power"))           { args->mTrackPower     = true; continue; }
         else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR       = true; continue; }
         else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr        = true; continue; }
 
         // Internal options:
         else if (ParseArg(argv[i], "track_queue_timers" )) { args->mTrackINTCQueueTimers = true; continue; }
         else if (ParseArg(argv[i], "track_cpu_gpu_sync" )) { args->mTrackINTCCpuGpuSync  = true; continue; }
+        else if (ParseArg(argv[i], "debug_frame_pacing" )) { args->mDebugINTCFramePacing = true; continue; }
 
         // Provided argument wasn't recognized
         else if (!(ParseArg(argv[i], "?") || ParseArg(argv[i], "h") || ParseArg(argv[i], "help"))) {
@@ -638,9 +644,11 @@ bool ParseCommandLine(int argc, char** argv)
         !args->mTrackDisplay ||
         args->mTrackGPU ||
         args->mTrackDebug ||
+        args->mTrackPower ||
         args->mTrackWMR ||
         args->mTrackINTCQueueTimers ||
         args->mTrackINTCCpuGpuSync ||
+        args->mDebugINTCFramePacing ||
         args->mTerminateOnProcExit ||
         args->mTerminateAfterTimer)) {
         fprintf(stderr, "warning: -terminate_existing exits without capturing anything; ignoring all capture,\n");

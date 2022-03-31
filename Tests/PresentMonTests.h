@@ -24,6 +24,22 @@ struct PresentMonCsv
 
         // Optional headers:
         Header_QPCTime,
+        Header_INTC_FrameID,
+        Header_INTC_AppWorkStart,
+        Header_INTC_AppSimulationTime,
+        Header_INTC_DriverWorkStart,
+        Header_INTC_DriverWorkEnd,
+        Header_INTC_KernelDriverSubmitStart,
+        Header_INTC_KernelDriverSubmitEnd,
+        Header_INTC_GPUStart,
+        Header_INTC_GPUEnd,
+        Header_INTC_KernelDriverFenceReport,
+        Header_INTC_PresentAPICall,
+        Header_INTC_ScheduledFlipTime,
+        Header_INTC_FlipReceivedTime,
+        Header_INTC_FlipReportTime,
+        Header_INTC_FlipProgrammingTime,
+        Header_INTC_ActualFlipTime,
 
         // Required headers when -track_display is used:
         Header_AllowsTearing,
@@ -92,6 +108,22 @@ struct PresentMonCsv
         case Header_msBetweenPresents:      return "msBetweenPresents";
         case Header_msInPresentAPI:         return "msInPresentAPI";
         case Header_QPCTime:                return "QPCTime";
+        case Header_INTC_FrameID:                 return "INTC_FrameID";
+        case Header_INTC_AppWorkStart:            return "INTC_AppWorkStart";
+        case Header_INTC_AppSimulationTime:       return "INTC_AppSimulationTime";
+        case Header_INTC_DriverWorkStart:         return "INTC_DriverWorkStart";
+        case Header_INTC_DriverWorkEnd:           return "INTC_DriverWorkEnd";
+        case Header_INTC_KernelDriverSubmitStart: return "INTC_KernelDriverSubmitStart";
+        case Header_INTC_KernelDriverSubmitEnd:   return "INTC_KernelDriverSubmitEnd";
+        case Header_INTC_GPUStart:                return "INTC_GPUStart";
+        case Header_INTC_GPUEnd:                  return "INTC_GPUEnd";
+        case Header_INTC_KernelDriverFenceReport: return "INTC_KernelDriverFenceReport";
+        case Header_INTC_PresentAPICall:          return "INTC_PresentAPICall";
+        case Header_INTC_ScheduledFlipTime:       return "INTC_ScheduledFlipTime";
+        case Header_INTC_FlipReceivedTime:        return "INTC_FlipReceivedTime";
+        case Header_INTC_FlipReportTime:          return "INTC_FlipReportTime";
+        case Header_INTC_FlipProgrammingTime:     return "INTC_FlipProgrammingTime";
+        case Header_INTC_ActualFlipTime:          return "INTC_ActualFlipTime";
         case Header_AllowsTearing:          return "AllowsTearing";
         case Header_PresentMode:            return "PresentMode";
         case Header_msBetweenDisplayChange: return "msBetweenDisplayChange";

@@ -264,7 +264,7 @@ static void AddPresents(std::vector<std::shared_ptr<PresentEvent>> const& presen
 
         // Output CSV row if recording (need to do this before updating chain).
         if (recording) {
-            UpdateCsv(processInfo, *chain, *presentEvent);
+            UpdateCsv(processInfo, *chain, presentEvent.get());
         }
 
         // Add the present to the swapchain history.

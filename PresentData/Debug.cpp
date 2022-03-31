@@ -7,6 +7,8 @@
 
 #include "PresentMonTraceConsumer.hpp"
 
+#include "ETW/Intel_Graphics_D3D10.h"
+#include "ETW/Intel_PCAT_Metrics.h"
 #include "ETW/Microsoft_Windows_D3D9.h"
 #include "ETW/Microsoft_Windows_Dwm_Core.h"
 #include "ETW/Microsoft_Windows_DXGI.h"
@@ -57,6 +59,7 @@ char* AddCommas(uint64_t t)
     return buf;
 }
 
+void PrintFloat(float value) { printf("%g", value); }
 void PrintU32(uint32_t value) { printf("%u", value); }
 void PrintU64(uint64_t value) { printf("%llu", value); }
 void PrintU64x(uint64_t value) { printf("%llx", value); }
@@ -220,6 +223,7 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintU64x,          SwapChainAddress)
     FLUSH_MEMBER(PrintU32,           SyncInterval)
     FLUSH_MEMBER(PrintU32,           PresentFlags)
+    FLUSH_MEMBER(PrintU64,           INTC_FrameID)
     FLUSH_MEMBER(PrintU64x,          Hwnd)
     FLUSH_MEMBER(PrintU64x,          TokenPtr)
     FLUSH_MEMBER(PrintTimeDelta,     GPUDuration)
@@ -428,12 +432,48 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
 
     if (hdr.ProviderId == Intel_Graphics_D3D10::GUID) {
         using namespace Intel_Graphics_D3D10;
-        switch (hdr.EventDescriptor.Id) {
+        switch (id) {
         case QueueTimers_Info::Id:  PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Info",  { L"value", PrintU32 }); break;
         case QueueTimers_Start::Id: PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Start", { L"value", PrintU32 }); break;
         case QueueTimers_Stop::Id:  PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Stop",  { L"value", PrintU32 }); break;
         case CpuGpuSync_Start::Id:  PrintEventHeader(eventRecord, metadata, "INTC_CpuGpuSync_Start",  { L"value", PrintU32 }); break;
         case CpuGpuSync_Stop::Id:   PrintEventHeader(eventRecord, metadata, "INTC_CpuGpuSync_Stop",   { L"value", PrintU32 }); break;
+
+        case task_DdiPresentDXGI_Info::Id:
+            PrintEventHeader(eventRecord, metadata, "INTC_DdiPresentDXGI_Info", {
+                L"FrameID", PrintU64,
+            });
+            break;
+        case task_FramePacer_Info::Id:
+            PrintEventHeader(eventRecord, metadata, "INTC_FramePacer_Info", {
+                L"FrameID", PrintU64,
+            });
+#if 0
+            printf(  "%*sAppWorkStart            = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));
+            printf("\n%*sAppSimulationTime       = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime"));
+            printf("\n%*sDriverWorkStart         = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));
+            printf("\n%*sDriverWorkEnd           = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));
+            printf("\n%*sKernelDriverSubmitStart = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitStart"));
+            printf("\n%*sKernelDriverSubmitEnd   = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitEnd"));
+            printf("\n%*sGPUStart                = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));
+            printf("\n%*sGPUEnd                  = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));
+            printf("\n%*sKernelDriverFenceReport = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverFenceReport"));
+            printf("\n%*sPresentAPICall          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
+            printf("\n%*sTargetFrameTime         = ", 29, ""); PrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, L"TargetFrameTime"));
+            printf("\n%*sFlipReceivedTime        = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReceivedTime"));
+            printf("\n%*sFlipReportTime          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReportTime"));
+            printf("\n%*sFlipProgrammingTime     = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipProgrammingTime"));
+            printf("\n%*sActualFlipTime          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
+            printf("\n");
+#endif
+            break;
+        }
+        return;
+    }
+
+    if (hdr.ProviderId == Intel_PCAT_Metrics::GUID) {
+        switch (id) {
+        case Intel_PCAT_Metrics::Task_0_Opcode_0::Id: PrintEventHeader(hdr, "INTC_PCAT"); break;
         }
         return;
     }

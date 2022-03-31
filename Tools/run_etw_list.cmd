@@ -1,25 +1,31 @@
 :: Copyright (C) 2020-2021 Intel Corporation
 :: SPDX-License-Identifier: MIT
-
 @echo off
-setlocal enabledelayedexpansion
-set etw_list=%~1
-if not exist "%etw_list%" (
-    where msbuild > NUL
-    if %errorlevel% equ 0 (
-        msbuild /nologo /verbosity:quiet /maxCpuCount /p:Platform=x64,Configuration=release "%~dp0etw_list"
-        set etw_list=%~dp0..\build\Release\etw_list-dev-x64.exe
-    ) else (
-        echo error: path to etw_list not provided and msbuild is not available
-    )
-    if not exist "!etw_list!" (
-        echo usage: run_etw_list.cmd [path_to_etw_list_exe]
-        exit /b 1
-    )
+setlocal
+
+where msbuild > NUL
+if %errorlevel% neq 0 (
+    echo error: dependency missing: msbuild
+    exit /b 1
+)
+
+msbuild /nologo /verbosity:quiet /maxCpuCount /p:Platform=x64,Configuration=release "%~dp0etw_list"
+if %errorlevel% neq 0 (
+    echo error: failed to build etw_list
+    exit /b 1
 )
 
 for %%a in ("%~dp0..") do set out_dir=%%~fa\PresentData\ETW
 if not exist "%out_dir%\." mkdir "%out_dir%"
+
+set events=
+set events=%events% --event=task_DdiPresentDXGI::Info
+set events=%events% --event=task_FramePacer::Info
+call :etw_list "Intel-Graphics-D3D10" "%out_dir%\Intel_Graphics_D3D10.h"
+
+set events=
+set events=%events% --event=Task_0::Opcode_0
+call :etw_list "Intel-PCAT-Metrics" "%out_dir%\Intel_PCAT_Metrics.h"
 
 set events=
 set events=%events% --event=Present::Start
@@ -102,6 +108,6 @@ exit /b 0
 
 :etw_list
     echo %~2
-    %etw_list% --no_event_structs %events% --provider=%~1>%2
+    "%~dp0..\build\Release\etw_list-dev-x64.exe" --no_event_structs %events% --provider=%~1>%2
     exit /b 0
 
