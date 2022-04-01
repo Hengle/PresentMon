@@ -127,22 +127,19 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
                 trackInputCount += 1;
                 break;
 
-            case Header_WaitIfFullTime:
-            case Header_WaitUntilEmptySyncTime:
-            case Header_WaitUntilEmptySyncAsincTime:
-            case Header_WaitUntilEmptyDrainTime:
-            case Header_WaitUntilEmptyDrainAsyncTime:
-            case Header_WaitForFence:
-            case Header_WaitUntilFenceSubmitted:
-            case Header_WaitIfEmptyTime:
-            case Header_FrameTimeApp:
-            case Header_FrameTimeDrv:
+            case Header_msStalledOnFullQueue:
+            case Header_msStalledOnEmptyQueue:
+            case Header_msWaitingOnQueueSync:
+            case Header_msWaitingOnQueueDrain:
+            case Header_msWaitingOnFence:
+            case Header_msWaitingOnFenceSubmission:
+            case Header_ProducerPresentTime:
+            case Header_ConsumerPresentTime:
                 trackQueueTimersCount += 1;
                 break;
 
-            case Header_WaitSyncObjFromCpu:
-            case Header_WaitSyncObjFromGpu:
-            case Header_PollOnQueryGetData:
+            case Header_msWaitingOnSyncObject:
+            case Header_msWaitingOnQueryData:
                 trackCpuGpuSyncCount += 1;
                 break;
             }

@@ -63,21 +63,18 @@ struct PresentMonCsv
         Header_msSinceInput,
 
         // Required headers when -track_queue_timers is used:
-        Header_WaitIfFullTime,
-        Header_WaitUntilEmptySyncTime,
-        Header_WaitUntilEmptySyncAsincTime,
-        Header_WaitUntilEmptyDrainTime,
-        Header_WaitUntilEmptyDrainAsyncTime,
-        Header_WaitForFence,
-        Header_WaitUntilFenceSubmitted,
-        Header_WaitIfEmptyTime,
-        Header_FrameTimeApp,
-        Header_FrameTimeDrv,
+        Header_msStalledOnFullQueue,
+        Header_msStalledOnEmptyQueue,
+        Header_msWaitingOnQueueSync,
+        Header_msWaitingOnQueueDrain,
+        Header_msWaitingOnFence,
+        Header_msWaitingOnFenceSubmission,
+        Header_ProducerPresentTime,
+        Header_ConsumerPresentTime,
 
         // Required headers when -track_cpu_gpu_sync is used:
-        Header_WaitSyncObjFromCpu,
-        Header_WaitSyncObjFromGpu,
-        Header_PollOnQueryGetData,
+        Header_msWaitingOnSyncObject,
+        Header_msWaitingOnQueryData,
 
         // Special values:
         KnownHeaderCount,
@@ -90,8 +87,8 @@ struct PresentMonCsv
         GPUHeaderCount      = 2,
         GPUVideoHeaderCount = 1,
         InputHeaderCount    = 1,
-        QueueTimersHeaderCount = 10,
-        CpuGpuSyncHeaderCount  = 3,
+        QueueTimersHeaderCount = 8,
+        CpuGpuSyncHeaderCount  = 2,
     };
 
     static constexpr char const* GetHeaderString(Header h)
@@ -135,19 +132,16 @@ struct PresentMonCsv
         case Header_msGPUActive:            return "msGPUActive";
         case Header_msGPUVideoActive:       return "msGPUVideoActive";
         case Header_msSinceInput:           return "msSinceInput";
-        case Header_WaitIfFullTime:               return "WaitIfFullTime";
-        case Header_WaitUntilEmptySyncTime:       return "WaitUntilEmptySyncTime";
-        case Header_WaitUntilEmptySyncAsincTime:  return "WaitUntilEmptySyncAsincTime";
-        case Header_WaitUntilEmptyDrainTime:      return "WaitUntilEmptyDrainTime";
-        case Header_WaitUntilEmptyDrainAsyncTime: return "WaitUntilEmptyDrainAsyncTime";
-        case Header_WaitForFence:                 return "WaitForFence";
-        case Header_WaitUntilFenceSubmitted:      return "WaitUntilFenceSubmitted";
-        case Header_WaitIfEmptyTime:              return "WaitIfEmptyTime";
-        case Header_FrameTimeApp:                 return "FrameTimeApp";
-        case Header_FrameTimeDrv:                 return "FrameTimeDrv";
-        case Header_WaitSyncObjFromCpu:           return "WaitSyncObjFromCpu";
-        case Header_WaitSyncObjFromGpu:           return "WaitSyncObjFromGpu";
-        case Header_PollOnQueryGetData:           return "PollOnQueryGetData";
+        case Header_msStalledOnFullQueue:       return "msStalledOnFullQueue";
+        case Header_msStalledOnEmptyQueue:      return "msStalledOnEmptyQueue";
+        case Header_msWaitingOnQueueSync:       return "msWaitingOnQueueSync";
+        case Header_msWaitingOnQueueDrain:      return "msWaitingOnQueueDrain";
+        case Header_msWaitingOnFence:           return "msWaitingOnFence";
+        case Header_msWaitingOnFenceSubmission: return "msWaitingOnFenceSubmission";
+        case Header_ProducerPresentTime:        return "ProducerPresentTime";
+        case Header_ConsumerPresentTime:        return "ConsumerPresentTime";
+        case Header_msWaitingOnSyncObject:      return "msWaitingOnSyncObject";
+        case Header_msWaitingOnQueryData:       return "msWaitingOnQueryData";
         }
         return "<unknown>";
     }
