@@ -127,16 +127,23 @@
     <ClCompile Include="TraceSession.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\build\obj\generated\command_line_options.inl" />
     <ClInclude Include="..\build\obj\generated\version.h" />
     <ClInclude Include="LateStageReprojectionData.hpp" />
     <ClInclude Include="PresentMon.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\CONTRIBUTING.md" />
-    <None Include="..\README.md" />
+    <Text Include="..\CONTRIBUTING.md" />
+    <Text Include="..\LICENSE.txt" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="..\LICENSE.txt" />
+    <CustomBuild Include="..\README.md">
+      <FileType>Document</FileType>
+      <Message>Extracting command line options from %(Identity)...</Message>
+      <Command>..\Tools\generate_options_header.cmd %(Identity) ..\build\obj\generated\command_line_options.inl</Command>
+      <Outputs>..\build\obj\generated\command_line_options.inl</Outputs>
+      <AdditionalInputs>..\Tools\generate_options_header.cmd</AdditionalInputs>
+    </CustomBuild>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

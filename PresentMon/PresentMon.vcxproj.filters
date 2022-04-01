@@ -17,6 +17,9 @@
     <ClInclude Include="..\build\obj\generated\version.h">
       <Filter>generated</Filter>
     </ClInclude>
+    <ClInclude Include="..\build\obj\generated\command_line_options.inl">
+      <Filter>generated</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="generated">
@@ -27,16 +30,16 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\CONTRIBUTING.md">
+    <Text Include="..\CONTRIBUTING.md">
       <Filter>docs</Filter>
-    </None>
-    <None Include="..\README.md">
-      <Filter>docs</Filter>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
+    </Text>
     <Text Include="..\LICENSE.txt">
       <Filter>docs</Filter>
     </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\README.md">
+      <Filter>docs</Filter>
+    </CustomBuild>
   </ItemGroup>
 </Project>

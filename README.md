@@ -50,19 +50,15 @@ To add a user to the "Performance Log Users" user group:
 
 If PresentMon is not run with administrator privilege, it will not have complete process information for processes running on different user accounts.  Such processes will be listed in the console and CSV as "<error>", and they cannot be targeted by name.
 
-### Capture Target Options
+| Capture Target Options |                                                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `-captureall`          | Record all processes (default).                                                                                  |
+| `-process_name name`   | Record only processes with the provided exe name.  This argument can be repeated to capture multiple processes.  |
+| `-exclude name`        | Don't record processes with the provided exe name.  This argument can be repeated to exclude multiple processes. |
+| `-process_id id`       | Record only the process specified by ID.                                                                         |
+| `-etl_file path`       | Consume events from an ETW log file instead of running processes.                                                |
 
-|                      |                                                                                                                  |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `-captureall`        | Record all processes (default).                                                                                  |
-| `-process_name name` | Record only processes with the provided exe name.  This argument can be repeated to capture multiple processes.  |
-| `-exclude name`      | Don't record processes with the provided exe name.  This argument can be repeated to exclude multiple processes. |
-| `-process_id id`     | Record only the process specified by ID.                                                                         |
-| `-etl_file path`     | Consume events from an ETW log file instead of running processes.                                                |
-
-### Output Options
-
-|                     |                                                                          |
+| Output Options      |                                                                          |
 | ------------------- | ------------------------------------------------------------------------ |
 | `-output_file path` | Write CSV output to the provided path.                                   |
 | `-output_stdout`    | Write CSV output to STDOUT.                                              |
@@ -72,9 +68,7 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | `-qpc_time`         | Output present time as a performance counter value.                      |
 | `-qpc_time_s`       | Output present time as a performance counter value converted to seconds. |
 
-### Recording Options
-
-|                     |                                                                                                                                               |
+| Recording Options   |                                                                                                                                               |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-hotkey key`       | Use provided key to start and stop recording, writing to a unique CSV file each time. 'key' is of the form MODIFIER+KEY, e.g., alt+shift+f11. |
 | `-delay seconds`    | Wait for provided time before starting to record. If using -hotkey, the delay occurs each time recording is started.                          |
@@ -84,9 +78,7 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | `-no_track_display` | Disable tracking through GPU and display.                                                                                                     |
 | `-track_debug`      | Adds additional data to output not relevant to normal usage.                                                                                  |
 
-### Execution Options
-
-|                           |                                                                                                                                                                                                                                                                                                                   |
+| Execution Options         |                                                                                                                                                                                                                                                                                                                   |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-session_name name`      | Use the provided name to start a new realtime ETW session, instead of the default "PresentMon". This can be used to start multiple realtime captures at the same time (using distinct, case-insensitive names). A realtime PresentMon capture cannot start if there are any existing sessions with the same name. |
 | `-stop_existing_session`  | If a trace session with the same name is already running, stop the existing session (to allow this one to proceed).                                                                                                                                                                                               |
@@ -95,9 +87,7 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | `-terminate_on_proc_exit` | Terminate PresentMon when all the target processes have exited.                                                                                                                                                                                                                                                   |
 | `-terminate_after_timed`  | When using `-timed`, terminate PresentMon after the timed capture completes.                                                                                                                                                                                                                                      |
 
-### Beta Options
-
-|                        |                                                                                                         |
+| Beta Options           |                                                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------------------------------- |
 | `-date_time`           | Output present time as a date and time with nanosecond precision.                                       |
 | `-track_gpu`           | Tracks the duration of each process' GPU work performed between presents.  Not supported on Win7.       |
@@ -106,13 +96,11 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | `-track_power`         | Writes PCAT metrics to presentmon_pcat.csv in the working directory.                                    |
 | `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                    |
 
-### Internal Options
-
-|                       |                                                           |
-| --------------------- | --------------------------------------------------------- |
-| `-track_queue_timers` | Capture Intel D3D11 driver producer/consumer queue timers |
-| `-track_cpu_gpu_sync` | Capture Intel D3D11 driver CPU/GPU syncs                  |
-| `-debug_frame_pacing` | Report extra driver metrics realted to frame pacing.      |
+| Internal Options      |                                                            |
+| --------------------- | ---------------------------------------------------------- |
+| `-track_queue_timers` | Capture Intel D3D11 driver producer/consumer queue timers. |
+| `-track_cpu_gpu_sync` | Capture Intel D3D11 driver CPU/GPU syncs.                  |
+| `-debug_frame_pacing` | Report extra driver metrics realted to frame pacing.       |
 
 ## Comma-separated value (CSV) file output
 

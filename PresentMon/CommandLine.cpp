@@ -263,75 +263,12 @@ static bool ParseValue(char** argv, int argc, int* i, UINT* value)
 
 static void PrintHelp()
 {
-    // NOTE: remember to update README.md when modifying usage
-    char* s[] = {
-        "Capture target options", nullptr,
-        "-captureall",              "Record all processes (default).",
-        "-process_name name",       "Record only processes with the provided exe name."
-                                    " This argument can be repeated to capture multiple processes.",
-        "-exclude name",            "Don't record processes with the provided exe name."
-                                    " This argument can be repeated to exclude multiple processes.",
-        "-process_id id",           "Record only the process specified by ID.",
-        "-etl_file path",           "Consume events from an ETW log file instead of running processes.",
-
-        "Output options (see README for file naming defaults)", nullptr,
-        "-output_file path",        "Write CSV output to the provided path.",
-        "-output_stdout",           "Write CSV output to STDOUT.",
-        "-multi_csv",               "Create a separate CSV file for each captured process.",
-        "-no_csv",                  "Do not create any output file.",
-        "-no_top",                  "Don't display active swap chains in the console window.",
-        "-qpc_time",                "Output present time as a performance counter value.",
-        "-qpc_time_s",              "Output present time as a performance counter value converted to seconds.",
-
-        "Recording options", nullptr,
-        "-hotkey key",              "Use provided key to start and stop recording, writing to a"
-                                    " unique CSV file each time. 'key' is of the form MODIFIER+KEY,"
-                                    " e.g., alt+shift+f11. (See README for subsequent file naming).",
-        "-delay seconds",           "Wait for provided time before starting to record."
-                                    " If using -hotkey, the delay occurs each time recording is started.",
-        "-timed seconds",           "Stop recording after the provided amount of time.",
-        "-exclude_dropped",         "Exclude dropped presents from the csv output.",
-        "-scroll_indicator",        "Enable scroll lock while recording.",
-        "-no_track_display",        "Disable tracking through GPU and display.",
-        "-track_debug",             "Adds additional data to output not relevant to normal usage.",
-
-        "Execution options", nullptr,
-        "-session_name name",       "Use the provided name to start a new realtime ETW session, instead"
-                                    " of the default \"PresentMon\". This can be used to start multiple"
-                                    " realtime captures at the same time (using distinct, case insensitive names)."
-                                    " A realtime PresentMon capture cannot start if there are any"
-                                    " existing sessions with the same name.",
-        "-stop_existing_session",   "If a trace session with the same name is already running, stop"
-                                    " the existing session (to allow this one to proceed).",
-        "-terminate_existing",      "Terminate any existing PresentMon realtime trace sessions, then exit."
-                                    " Use with -session_name to target particular sessions.",
-        "-restart_as_admin",        "If not running with elevated privilege, restart as administrator."
-                                    " Elevated privilege isn't required to trace a process you started,"
-                                    " but it is in order to query processes started on another account."
-                                    " Without it, these processes cannot be targeted by name and will be"
-                                    " listed as '<error>'.",
-        "-terminate_on_proc_exit",  "Terminate PresentMon when all the target processes have exited.",
-        "-terminate_after_timed",   "When using -timed, terminate PresentMon after the timed capture completes.",
-
-        "Beta options", nullptr,
-        "-date_time",               "Output present time as a date and time with nanosecond precision.",
-        "-track_gpu",               "Tracks the duration of each process' GPU work performed between presents."
-                                    " Not supported on Win7.",
-        "-track_gpu_video",         "Track the video encode/decode portion of GPU work separately."
-                                    " Not supported on Win7.",
-        "-track_input",             "Tracks the time of keyboard/mouse clicks that were used by each frame.",
-        "-track_power",             "Writes PCAT metrics to presentmon_pcat.csv in the working directory.",
-        "-track_mixed_reality",     "Capture Windows Mixed Reality data to a CSV file with \"_WMR\" suffix.",
-
-        "Internal options", nullptr,
-        "-track_queue_timers",      "Capture Intel D3D11 driver producer/consumer queue timers.",
-        "-track_cpu_gpu_sync",      "Capture Intel D3D11 driver CPU/GPU syncs.",
-        "-debug_frame_pacing",      "Report extra driver metrics related to frame pacing.",
-    };
-
     fprintf(stderr, "PresentMon %s\n", PRESENT_MON_VERSION);
 
     // Layout usage 
+    char* s[] = {
+        #include <generated/command_line_options.inl>
+    };
     size_t argWidth = 0;
     for (size_t i = 0; i < _countof(s); i += 2) {
         auto arg = s[i];
