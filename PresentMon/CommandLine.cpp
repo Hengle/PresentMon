@@ -264,6 +264,8 @@ static bool ParseValue(char** argv, int argc, int* i, UINT* value)
 static void PrintHelp()
 {
     fprintf(stderr, "PresentMon %s\n", PRESENT_MON_VERSION);
+    fprintf(stderr, "    Intel INTERNAL version, do not distribute externally.\n"
+                    "    https://github.com/intel-innersource/drivers.gpu.tools.presentmon\n");
 
     // Layout usage 
     char* s[] = {

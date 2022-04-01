@@ -6,7 +6,7 @@
 [![](https://img.shields.io/github/last-commit/GameTechDev/PresentMon)]()
 -->
 
-# Intel Internal PresentMon
+# Intel INTERNAL PresentMon
 
 PresentMon is a tool to capture and analyze [ETW](https://msdn.microsoft.com/en-us/library/windows/desktop/bb968803%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396) events related to swap chain presentation on Windows.  It can be used to trace key performance metrics for graphics applications (e.g., CPU and Display frame durations and latencies) and works across different graphics APIs, different hardware configurations, and for both desktop and UWP applications.
 
@@ -16,6 +16,8 @@ While PresentMon itself is focused on lightweight collection and analysis, there
 - [FrameView](https://www.nvidia.com/en-us/geforce/technologies/frameview/)
 - [OCAT](https://github.com/GPUOpen-Tools/OCAT)
 - [PIX](https://devblogs.microsoft.com/pix/download/) (used as part of its [system monitor UI](https://devblogs.microsoft.com/pix/system-monitor/))
+
+The public version of the tool is available here: [https://github.com/GameTechDev/PresentMon](https://github.com/GameTechDev/PresentMon)
 
 ## License
 
@@ -101,6 +103,8 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | `-track_queue_timers` | Capture Intel D3D11 driver producer/consumer queue timers. |
 | `-track_cpu_gpu_sync` | Capture Intel D3D11 driver CPU/GPU syncs.                  |
 | `-debug_frame_pacing` | Report extra driver metrics realted to frame pacing.       |
+
+Note: internal options require a release-internal driver, with the GfxEvents manifest installed from its corresponding TestTools package. Some options may also require specific driver feature branches.
 
 ## Comma-separated value (CSV) file output
 
