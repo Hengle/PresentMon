@@ -1,4 +1,4 @@
-:: Copyright (C) 2020-2021 Intel Corporation
+:: Copyright (C) 2020-2022 Intel Corporation
 :: SPDX-License-Identifier: MIT
 @echo off
 setlocal
@@ -52,6 +52,7 @@ set events=%events% --event=AdapterAllocation::DCStart
 set events=%events% --event=Blit::Info
 set events=%events% --event=Flip::Info
 set events=%events% --event=FlipMultiPlaneOverlay::Info
+set events=%events% --event=IndependentFlip::Info
 set events=%events% --event=HSyncDPCMultiPlane::Info
 set events=%events% --event=VSyncDPCMultiPlane::Info
 set events=%events% --event=MMIOFlip::Info

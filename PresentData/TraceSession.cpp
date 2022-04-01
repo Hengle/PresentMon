@@ -95,6 +95,7 @@ ULONG EnableProviders(
     if (pmConsumer->mTrackDisplay) {
         eventIds.push_back(Microsoft_Windows_DxgKrnl::Blit_Info::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::Flip_Info::Id);
+        eventIds.push_back(Microsoft_Windows_DxgKrnl::IndependentFlip_Info::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::FlipMultiPlaneOverlay_Info::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::HSyncDPCMultiPlane_Info::Id);
         eventIds.push_back(Microsoft_Windows_DxgKrnl::VSyncDPCMultiPlane_Info::Id);

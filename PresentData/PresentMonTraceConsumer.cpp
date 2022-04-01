@@ -918,12 +918,31 @@ void PMTraceConsumer::HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t fl
     if (flipEntryStatusAfterFlip == (uint32_t) Microsoft_Windows_DxgKrnl::FlipEntryStatus::FlipWaitComplete) {
         pEvent->ScreenTime = hdr.TimeStamp.QuadPart;
     }
+
     if (pEvent->PresentMode == PresentMode::Hardware_Legacy_Flip) {
         CompletePresent(pEvent);
     }
 }
 
-void PMTraceConsumer::HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, bool isMultiPlane)
+void PMTraceConsumer::HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence)
+{
+    // The VSyncDPC/HSyncDPC contains a field telling us what flipped to screen.
+    // This is the way to track completion of a fullscreen present.
+    auto pEvent = FindBySubmitSequence(flipSubmitSequence);
+    if (pEvent == nullptr) {
+        return;
+    }
+
+    TRACK_PRESENT_PATH_SAVE_GENERATED_ID(pEvent);
+
+    pEvent->ScreenTime = hdr.TimeStamp.QuadPart;
+    pEvent->FinalState = PresentResult::Presented;
+    if (pEvent->PresentMode == PresentMode::Hardware_Legacy_Flip) {
+        CompletePresent(pEvent);
+    }
+}
+
+void PMTraceConsumer::HandleDxgkSyncDPCMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, bool isMultiPlane)
 {
     // The VSyncDPC/HSyncDPC contains a field telling us what flipped to screen.
     // This is the way to track completion of a fullscreen present.
@@ -946,10 +965,9 @@ void PMTraceConsumer::HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSu
     if (pEvent->FinalState != PresentResult::Presented) {
         pEvent->ScreenTime = hdr.TimeStamp.QuadPart;
         pEvent->FinalState = PresentResult::Presented;
-        if (pEvent->PresentMode == PresentMode::Hardware_Legacy_Flip) {
-            CompletePresent(pEvent);
-        }
     }
+
+    CompletePresent(pEvent);
 }
 
 void PMTraceConsumer::HandleDxgkPresentHistory(
@@ -1083,6 +1101,21 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         HandleDxgkFlip(hdr, FlipInterval, MMIOFlip);
         return;
     }
+    case Microsoft_Windows_DxgKrnl::IndependentFlip_Info::Id:
+    {
+        EventDataDesc desc[] = {
+            { L"SubmitSequence" },
+        };
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        auto flipSubmitSequence = desc[0].GetData<uint32_t>();
+
+        // We should not have already identified as hardware_composed - this
+        // can only be detected around Vsync/HsyncDPC time.
+        auto pEvent = FindBySubmitSequence(flipSubmitSequence);
+        assert(pEvent->PresentMode != PresentMode::Hardware_Composed_Independent_Flip);
+        pEvent->PresentMode = PresentMode::Hardware_Independent_Flip;
+        return;
+    }
     case Microsoft_Windows_DxgKrnl::FlipMultiPlaneOverlay_Info::Id:
         TRACK_PRESENT_PATH_GENERATE_ID();
         HandleDxgkFlip(hdr, -1, true);
@@ -1175,7 +1208,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         auto isMultiPlane = activePlaneCount > 1;
         for (uint32_t i = 0; i < FlipCount; i++) {
             auto FlipId = mMetadata.GetEventData<uint64_t>(pEventRecord, L"FlipSubmitSequence", i);
-            HandleDxgkSyncDPC(hdr, (uint32_t)(FlipId >> 32u), isMultiPlane);
+            HandleDxgkSyncDPCMPO(hdr, (uint32_t)(FlipId >> 32u), isMultiPlane);
         }
         return;
     }
@@ -1184,7 +1217,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         TRACK_PRESENT_PATH_GENERATE_ID();
 
         auto FlipFenceId = mMetadata.GetEventData<uint64_t>(pEventRecord, L"FlipFenceId");
-        HandleDxgkSyncDPC(hdr, (uint32_t)(FlipFenceId >> 32u), false);
+        HandleDxgkSyncDPC(hdr, (uint32_t)(FlipFenceId >> 32u));
         return;
     }
     case Microsoft_Windows_DxgKrnl::Present_Info::Id:
@@ -1796,7 +1829,7 @@ void PMTraceConsumer::HandleWin7DxgkVSyncDPC(EVENT_RECORD* pEventRecord)
     auto pVSyncDPCEvent = reinterpret_cast<Win7::DXGKETW_SCHEDULER_VSYNC_DPC*>(pEventRecord->UserData);
 
     // Windows 7 does not support MultiPlaneOverlay.
-    HandleDxgkSyncDPC(pEventRecord->EventHeader, (uint32_t)(pVSyncDPCEvent->FlipFenceId.QuadPart >> 32u), false);
+    HandleDxgkSyncDPC(pEventRecord->EventHeader, (uint32_t)(pVSyncDPCEvent->FlipFenceId.QuadPart >> 32u));
 }
 
 void PMTraceConsumer::HandleWin7DxgkMMIOFlip(EVENT_RECORD* pEventRecord)
