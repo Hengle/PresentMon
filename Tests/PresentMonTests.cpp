@@ -127,17 +127,51 @@ int wmain(
     wchar_t** argv)
 {
     // Set defaults
-    PresentMon::exePath_ = L"PresentMon-";
-    if (strncmp(PRESENT_MON_VERSION, "dev", 3) == 0) {
-        PresentMon::exePath_ += L"dev";
-    } else {
-        PresentMon::exePath_ += Convert(PRESENT_MON_VERSION);
-    }
-    PresentMon::exePath_ += L"-x64.exe";
-
     std::wstring goldDir(L"../../Tests/Gold");
 
     {
+        // If exe == <dir>/PresentMonTests-<ver>-<platform>.exe use
+        // <dir>/PresentMon-<ver>-<platform>.exe as the default PresentMon
+        // path.  Otherwise use same the same <dir> but reconstruct
+        // <ver>/<platform> from version header and compiler macros.
+        wchar_t path[MAX_PATH];
+        GetModuleFileName(NULL, path, _countof(path));
+        PresentMon::exePath_.assign(path);
+        size_t i = PresentMon::exePath_.size();
+        for (; i > 0; --i) {
+            if (PresentMon::exePath_[i] == '/' || PresentMon::exePath_[i] == '\\') {
+                i += 1;
+                break;
+            }
+        }
+        if (PresentMon::exePath_.compare(i, 15, L"PresentMonTests") == 0) {
+            PresentMon::exePath_.erase(i + 10, 5);
+        } else {
+            PresentMon::exePath_.erase(i);
+            PresentMon::exePath_ += L"PresentMon-";
+            if (isdigit(*PRESENT_MON_VERSION)) {
+                PresentMon::exePath_ += L"dev";
+            } else {
+                PresentMon::exePath_ += Convert(PRESENT_MON_VERSION);
+            }
+            #ifdef _WIN64
+            #ifdef _M_ARM64
+            PresentMon::exePath_ += L"-ARM64.exe";
+            #else
+            PresentMon::exePath_ += L"-x64.exe";
+            #endif
+            #else
+            #ifdef _M_ARM
+            PresentMon::exePath_ += L"-ARM.exe";
+            #else
+            PresentMon::exePath_ += L"-x86.exe";
+            #endif
+            #endif
+        }
+    }
+
+    {
+        // Default output directory = <temp>/PresentMonTestOutput/
         wchar_t path[MAX_PATH];
         GetTempPath(_countof(path), path);
         outDir_.assign(path);
