@@ -424,6 +424,7 @@ struct PMTraceConsumer
         struct {
             uint64_t mStartTime;            // QPC of the start event for this timer, or 0 if no start event
             uint64_t mAccumulatedTime;      // QPC duration of all processed timer durations
+            uint32_t mStartCount;           // The number of timers started
         } mINTCQueueTimers[INTC_QUEUE_TIMER_COUNT];
     };
 

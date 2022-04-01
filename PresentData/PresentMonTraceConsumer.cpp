@@ -196,17 +196,20 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         switch (hdr.EventDescriptor.Id) {
         case Intel_Graphics_D3D10::QueueTimers_Start::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
-            assert(queueTimer->mStartTime == 0);
-            if (queueTimer->mStartTime == 0) {
+            queueTimer->mStartCount += 1;
+            if (queueTimer->mStartCount == 1) {
                 queueTimer->mStartTime = hdr.TimeStamp.QuadPart;
             }
             break;
 
         case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
-            if (queueTimer->mStartTime != 0) {
-                queueTimer->mAccumulatedTime += hdr.TimeStamp.QuadPart - queueTimer->mStartTime;
-                queueTimer->mStartTime = 0;
+            if (queueTimer->mStartCount >= 1) {
+                queueTimer->mStartCount -= 1;
+                if (queueTimer->mStartCount == 0) {
+                    queueTimer->mAccumulatedTime += hdr.TimeStamp.QuadPart - queueTimer->mStartTime;
+                    queueTimer->mStartTime = 0;
+                }
             }
             break;
         }
