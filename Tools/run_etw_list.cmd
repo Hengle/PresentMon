@@ -73,6 +73,12 @@ set events=%events% --event=Device::Start
 set events=%events% --event=Device::Stop
 set events=%events% --event=DmaPacket::Start
 set events=%events% --event=DmaPacket::Info
+set events=%events% --event=MakeResident::Start
+set events=%events% --event=MakeResident::Stop
+set events=%events% --event=PagingQueuePacket::Start
+set events=%events% --event=PagingQueuePacket::Info
+set events=%events% --event=PagingQueuePacket::Stop
+
 call :etw_list "Microsoft-Windows-DxgKrnl" "%out_dir%\Microsoft_Windows_DxgKrnl.h"
 
 set events=

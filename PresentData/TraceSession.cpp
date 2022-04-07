@@ -159,6 +159,16 @@ ULONG EnableProviders(
     if (pmConsumer->mTrackGPUVideo) {
         provider.AddEvent<Microsoft_Windows_DxgKrnl::NodeMetadata_Info>();
     }
+
+    if (pmConsumer->mTrackMemoryResidency) {
+        provider.AddEvent<Microsoft_Windows_DxgKrnl::MakeResident_Start>();
+        provider.AddEvent<Microsoft_Windows_DxgKrnl::MakeResident_Stop>();
+        provider.AddEvent<Microsoft_Windows_DxgKrnl::PagingQueuePacket_Start>();
+        provider.AddEvent<Microsoft_Windows_DxgKrnl::PagingQueuePacket_Start_2>();
+        provider.AddEvent<Microsoft_Windows_DxgKrnl::PagingQueuePacket_Info>();
+        provider.AddEvent<Microsoft_Windows_DxgKrnl::PagingQueuePacket_Stop>();
+    }
+
     status = provider.Enable(sessionHandle, sessionGuid, Microsoft_Windows_DxgKrnl::GUID);
     if (status != ERROR_SUCCESS) return status;
 

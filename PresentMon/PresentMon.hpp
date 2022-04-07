@@ -59,6 +59,7 @@ struct CommandLineArgs {
     bool mTrackINTCQueueTimers;
     bool mTrackINTCCpuGpuSync;
     bool mDebugINTCFramePacing;
+	bool mTrackMemoryResidency;
     bool mOutputCsvToFile;
     bool mOutputCsvToStdout;
     bool mOutputQpcTime;

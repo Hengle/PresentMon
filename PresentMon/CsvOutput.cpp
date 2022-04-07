@@ -101,6 +101,9 @@ static void WriteCsvHeader(FILE* fp)
             ",msWaitingOnSyncObject"
             ",msWaitingOnQueryData");
     }
+    if (args.mTrackMemoryResidency) {
+        fprintf(fp, ",msMakeResident,msPagingPackets");
+    }
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");
     }
@@ -243,7 +246,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
                                                                 -1000.0 * QpcDeltaToSeconds(p.QpcTime - scheduledQpc);
         }
     }
-
+ 
     // Output in CSV format
     fprintf(fp, "%s,%d,0x%016llX,%s,%d,%d,%s,",
         processInfo->mModuleName.c_str(),
@@ -312,6 +315,13 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_UmdTimers[INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU]),
             DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_UmdTimers[INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA]));
     }
+
+    if (args.mTrackMemoryResidency) {
+        fprintf(fp, ",%.*lf,%.*lf",
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.MemoryResidency[DXGK_RESIDENCY_EVENT_MAKE_RESIDENT]),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.MemoryResidency[DXGK_RESIDENCY_EVENT_PAGING_QUEUE_PACKET]));
+    }
+ 
     if (args.mOutputQpcTime) {
         if (args.mOutputQpcTimeInSeconds) {
             fprintf(fp, ",%.*lf", DBL_DIG - 1, QpcDeltaToSeconds(p.QpcTime));

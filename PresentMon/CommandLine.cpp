@@ -352,6 +352,7 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTrackINTCQueueTimers = false;
     args->mTrackINTCCpuGpuSync = false;
     args->mDebugINTCFramePacing = false;
+	args->mTrackMemoryResidency = false;
     args->mOutputCsvToFile = true;
     args->mOutputCsvToStdout = false;
     args->mOutputQpcTime = false;
@@ -418,11 +419,13 @@ bool ParseCommandLine(int argc, char** argv)
         else if (ParseArg(argv[i], "track_power"))           { args->mTrackPower     = true; continue; }
         else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR       = true; continue; }
         else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr        = true; continue; }
+		else if (ParseArg(argv[i], "track_memory_residency")){ args->mTrackMemoryResidency = true; continue; }
 
         // Internal options:
         else if (ParseArg(argv[i], "track_queue_timers" )) { args->mTrackINTCQueueTimers = true; continue; }
         else if (ParseArg(argv[i], "track_cpu_gpu_sync" )) { args->mTrackINTCCpuGpuSync  = true; continue; }
         else if (ParseArg(argv[i], "debug_frame_pacing" )) { args->mDebugINTCFramePacing = true; continue; }
+
 
         // Provided argument wasn't recognized
         else if (!(ParseArg(argv[i], "?") || ParseArg(argv[i], "h") || ParseArg(argv[i], "help"))) {

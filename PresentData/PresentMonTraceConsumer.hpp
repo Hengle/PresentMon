@@ -21,6 +21,7 @@
 
 #include "Debug.hpp"
 #include "TraceConsumer.hpp"
+#include "ETW/Microsoft_Windows_DxgKrnl.h"
 #include "ETW/Intel_Graphics_D3D10.h"
 
 // PresentMode represents the different paths a present can take on windows.
@@ -134,6 +135,13 @@ enum INTCUmdTimer {
     INTC_TIMER_COUNT
 };
 
+enum ResidencyEventTypes {
+    DXGK_RESIDENCY_EVENT_MAKE_RESIDENT,
+    DXGK_RESIDENCY_EVENT_PAGING_QUEUE_PACKET,
+
+    DXGK_RESIDENCY_EVENT_COUNT
+};
+
 // A ProcessEvent occurs whenever a Process starts or stops.
 struct ProcessEvent {
     std::string ImageFileName;
@@ -164,6 +172,10 @@ struct PresentEvent {
     uint64_t SwapChainAddress;
     int32_t SyncInterval;
     uint32_t PresentFlags;
+
+    // Memory Residency tracking
+    uint64_t MemoryResidency[DXGK_RESIDENCY_EVENT_COUNT];   // MemoryResidency array
+
 
     // Intel frame-pacing data
     uint64_t INTC_FrameID;
@@ -256,6 +268,7 @@ struct PMTraceConsumer
     bool mTrackINTCQueueTimers = false; // Whether the analysis should track Intel D3D11 driver producer/consumer queue timers
     bool mTrackINTCCpuGpuSync = false;  // Whether the analysis should track Intel driver CPU/GPU synchronizations
     bool mDebugINTCFramePacing = false; // Whether to report Intel driver metrics related to frame pacing
+    bool mTrackMemoryResidency = false; // Whether the analysis should track Memory Residency
     bool mTrackPCAT = false;            // Whether the analysis should track PCAT metrics
 
     // Whether we've completed any presents yet.  This is used to indicate that
@@ -461,12 +474,19 @@ struct PMTraceConsumer
             uint64_t mAccumulatedTime;      // QPC duration of all processed timer durations
             uint32_t mStartCount;           // The number of timers started
         } mINTCUmdTimers[INTC_TIMER_COUNT];
+
+        struct {
+            std::map <uint64_t, uint64_t>   mStartTime;            // Memory Residency array for start time maps: SequenceId -> StartTime
+            uint64_t                        mAccumulatedTime;      // QPC duration of all processed timer durations
+            uint32_t                        mStartCount;           // The number of timers started
+        } mResidencyTimers[DXGK_RESIDENCY_EVENT_COUNT];
     };
 
     std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes;   // pDxgAdapter -> NodeOrdinal -> Node
     std::unordered_map<uint64_t, uint64_t> mDevices;                            // hDevice -> pDxgAdapter
     std::unordered_map<uint64_t, Context> mContexts;                            // hContext -> Context
     std::unordered_map<uint32_t, FrameInfo> mProcessFrameInfo;                  // ProcessID -> FrameInfo
+    std::map<uint64_t, uint32_t> mPagingSequenceIds;                            // SequenceID -> ProcessID
 
     void CreateFrameDmaInfo(uint32_t processId, Context* context);
     void AssignFrameInfo(PresentEvent* pEvent, LONGLONG timestamp);
@@ -491,6 +511,8 @@ struct PMTraceConsumer
     void HandleDxgkSyncDPCMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, bool isMultiplane);
     void HandleDxgkPresentHistory(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, PresentMode knownPresentMode);
     void HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint64_t token);
+	void HandleDxgkResidencyEvent(EVENT_RECORD* pEventRecord);
+    void HandleDxgkPagingQueuePacket(EVENT_RECORD* pEventRecord);
 
     void CompletePresent(std::shared_ptr<PresentEvent> const& p);
     void CompletePresentHelper(std::shared_ptr<PresentEvent> const& p);

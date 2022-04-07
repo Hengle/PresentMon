@@ -63,6 +63,7 @@ bool StartTraceSession()
     gPMConsumer->mTrackINTCCpuGpuSync = args.mTrackINTCCpuGpuSync;
     gPMConsumer->mDebugINTCFramePacing = args.mDebugINTCFramePacing;
     gPMConsumer->mTrackPCAT = args.mTrackPower;
+	gPMConsumer->mTrackMemoryResidency = args.mTrackMemoryResidency;
 
     if (filterProcessIds) {
         gPMConsumer->AddTrackedProcessForFiltering(args.mTargetPid);
