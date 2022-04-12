@@ -3,6 +3,9 @@
 
 #include "PresentMonTests.h"
 
+#include <initializer_list>
+#include <unordered_set>
+
 void AddTestFailure(char const* file, int line, char const* fmt, ...)
 {
     char buffer[512];
@@ -17,6 +20,43 @@ void AddTestFailure(char const* file, int line, char const* fmt, ...)
 
 namespace {
 
+struct HeaderCollection {
+    wchar_t const* param_;
+    std::unordered_set<PresentMonCsv::Header> required_;
+    uint32_t foundCount_;
+
+    HeaderCollection(wchar_t const* param, std::initializer_list<PresentMonCsv::Header> const& i)
+        : param_(param)
+        , required_(i)
+        , foundCount_(0)
+    {
+    }
+
+    bool Check(PresentMonCsv::Header h)
+    {
+        if (required_.find(h) == required_.end()) {
+            return false;
+        }
+        foundCount_ += 1;
+        return true;
+    }
+
+    bool Validate(std::vector<wchar_t const*>* params) const
+    {
+        if (param_ != nullptr) {
+            if (foundCount_ == 0) {
+                if (wcsncmp(param_, L"-no_", 4) == 0) {
+                    params->push_back(param_);
+                }
+                return true;
+            }
+
+            params->push_back(param_);
+        }
+        return foundCount_ == required_.size();
+    }
+};
+
 PresentMonCsv::Header FindHeader(char const* header)
 {
     for (uint32_t i = 0; i < PresentMonCsv::KnownHeaderCount; ++i) {
@@ -30,21 +70,70 @@ PresentMonCsv::Header FindHeader(char const* header)
 
 }
 
-PresentMonCsv::PresentMonCsv()
-    : line_(0)
-    , fp_(nullptr)
-    , trackDisplay_(false)
-    , trackDebug_(false)
-    , trackGPU_(false)
-    , trackGPUVideo_(false)
-    , trackInput_(false)
-    , trackQueueTimers_(false)
-    , trackCpuGpuSync_(false)
-{
-}
-
 bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
 {
+    // Setup the header groups
+    HeaderCollection headerGroups[] = {
+        HeaderCollection(nullptr, { Header_Application,
+                                    Header_ProcessID,
+                                    Header_SwapChainAddress,
+                                    Header_Runtime,
+                                    Header_SyncInterval,
+                                    Header_PresentFlags,
+                                    Header_Dropped,
+                                    Header_TimeInSeconds,
+                                    Header_msBetweenPresents,
+                                    Header_msInPresentAPI }),
+
+        HeaderCollection(L"-qpc_time", { Header_QPCTime, }),
+
+        HeaderCollection(L"-no_track_display", { Header_AllowsTearing,
+                                                 Header_PresentMode,
+                                                 Header_msBetweenDisplayChange,
+                                                 Header_msUntilRenderComplete,
+                                                 Header_msUntilDisplayed }),
+
+        HeaderCollection(L"-track_debug", { Header_WasBatched,
+                                            Header_DwmNotified }),
+
+        HeaderCollection(L"-track_gpu", { Header_msUntilRenderStart,
+                                          Header_msGPUActive }),
+
+        HeaderCollection(L"-track_gpu_video", { Header_msGPUVideoActive }),
+
+        HeaderCollection(L"-track_input", { Header_msSinceInput }),
+
+        HeaderCollection(L"-debug_frame_pacing", { Header_INTC_FrameID,
+                                                   Header_INTC_AppWorkStart,
+                                                   Header_INTC_AppSimulationTime,
+                                                   Header_INTC_DriverWorkStart,
+                                                   Header_INTC_DriverWorkEnd,
+                                                   Header_INTC_KernelDriverSubmitStart,
+                                                   Header_INTC_KernelDriverSubmitEnd,
+                                                   Header_INTC_GPUStart,
+                                                   Header_INTC_GPUEnd,
+                                                   Header_INTC_KernelDriverFenceReport,
+                                                   Header_INTC_PresentAPICall,
+                                                   Header_INTC_ScheduledFlipTime,
+                                                   Header_INTC_FlipReceivedTime,
+                                                   Header_INTC_FlipReportTime,
+                                                   Header_INTC_FlipProgrammingTime,
+                                                   Header_INTC_ActualFlipTime }),
+
+        HeaderCollection(L"-track_queue_timers", { Header_msStalledOnFullQueue,
+                                                   Header_msStalledOnEmptyQueue,
+                                                   Header_msWaitingOnQueueSync,
+                                                   Header_msWaitingOnQueueDrain,
+                                                   Header_msWaitingOnFence,
+                                                   Header_msWaitingOnFenceSubmission,
+                                                   Header_ProducerPresentTime,
+                                                   Header_ConsumerPresentTime }),
+
+        HeaderCollection(L"-track_cpu_gpu_sync", { Header_msWaitingOnSyncObject,
+                                                   Header_msWaitingOnQueryData }),
+    };
+
+    // Load the CSV
     for (uint32_t i = 0; i < _countof(headerColumnIndex_); ++i) {
         headerColumnIndex_[i] = SIZE_MAX;
     }
@@ -70,14 +159,6 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
     // Read the header and ensure required columns are present
     ReadRow();
 
-    uint32_t requiredCount = 0;
-    uint32_t trackDisplayCount = 0;
-    uint32_t trackDebugCount = 0;
-    uint32_t trackGPUCount = 0;
-    uint32_t trackGPUVideoCount = 0;
-    uint32_t trackInputCount = 0;
-    uint32_t trackQueueTimersCount = 0;
-    uint32_t trackCpuGpuSyncCount = 0;
     for (size_t i = 0, n = cols_.size(); i < n; ++i) {
         auto h = FindHeader(cols_[i]);
         if (h == UnknownHeader) {
@@ -87,82 +168,18 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
         } else {
             headerColumnIndex_[(size_t) h] = i;
 
-            switch (h) {
-            case Header_Application:
-            case Header_ProcessID:
-            case Header_SwapChainAddress:
-            case Header_Runtime:
-            case Header_SyncInterval:
-            case Header_PresentFlags:
-            case Header_Dropped:
-            case Header_TimeInSeconds:
-            case Header_msBetweenPresents:
-            case Header_msInPresentAPI:
-                requiredCount += 1;
-                break;
-
-            case Header_AllowsTearing:
-            case Header_PresentMode:
-            case Header_msBetweenDisplayChange:
-            case Header_msUntilRenderComplete:
-            case Header_msUntilDisplayed:
-                trackDisplayCount += 1;
-                break;
-
-            case Header_WasBatched:
-            case Header_DwmNotified:
-                trackDebugCount += 1;
-                break;
-
-            case Header_msUntilRenderStart:
-            case Header_msGPUActive:
-                trackGPUCount += 1;
-                break;
-
-            case Header_msGPUVideoActive:
-                trackGPUVideoCount += 1;
-                break;
-
-            case Header_msSinceInput:
-                trackInputCount += 1;
-                break;
-
-            case Header_msStalledOnFullQueue:
-            case Header_msStalledOnEmptyQueue:
-            case Header_msWaitingOnQueueSync:
-            case Header_msWaitingOnQueueDrain:
-            case Header_msWaitingOnFence:
-            case Header_msWaitingOnFenceSubmission:
-            case Header_ProducerPresentTime:
-            case Header_ConsumerPresentTime:
-                trackQueueTimersCount += 1;
-                break;
-
-            case Header_msWaitingOnSyncObject:
-            case Header_msWaitingOnQueryData:
-                trackCpuGpuSyncCount += 1;
-                break;
+            for (auto& hg : headerGroups) {
+                if (hg.Check(h)) {
+                    break;
+                }
             }
         }
     }
 
-    trackDisplay_  = trackDisplayCount > 0;
-    trackDebug_    = trackDebugCount > 0;
-    trackGPU_      = trackGPUCount > 0;
-    trackGPUVideo_ = trackGPUVideoCount > 0;
-    trackInput_    = trackInputCount > 0;
-    trackQueueTimers_ = trackQueueTimersCount > 0;
-    trackCpuGpuSync_  = trackCpuGpuSyncCount > 0;
-
-    if (                   requiredCount      != RequiredHeaderCount ||
-        (trackDisplay_  && trackDisplayCount  != DisplayHeaderCount) ||
-        (trackDebug_    && trackDebugCount    != DebugHeaderCount) ||
-        (trackGPU_      && trackGPUCount      != GPUHeaderCount) ||
-        (trackGPUVideo_ && trackGPUVideoCount != GPUVideoHeaderCount) ||
-        (trackInput_    && trackInputCount    != InputHeaderCount) ||
-        (trackQueueTimers_ && trackQueueTimersCount != QueueTimersHeaderCount) ||
-        (trackCpuGpuSync_  && trackCpuGpuSyncCount  != CpuGpuSyncHeaderCount)) {
-        AddTestFailure(Convert(path_).c_str(), (int) line_, "Missing required columns.");
+    for (auto const& hg : headerGroups) {
+        if (!hg.Validate(&params_)) {
+            AddTestFailure(Convert(path_).c_str(), (int) line_, "Missing required columns.");
+        }
     }
 
     return true;

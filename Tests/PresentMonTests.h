@@ -24,22 +24,6 @@ struct PresentMonCsv
 
         // Optional headers:
         Header_QPCTime,
-        Header_INTC_FrameID,
-        Header_INTC_AppWorkStart,
-        Header_INTC_AppSimulationTime,
-        Header_INTC_DriverWorkStart,
-        Header_INTC_DriverWorkEnd,
-        Header_INTC_KernelDriverSubmitStart,
-        Header_INTC_KernelDriverSubmitEnd,
-        Header_INTC_GPUStart,
-        Header_INTC_GPUEnd,
-        Header_INTC_KernelDriverFenceReport,
-        Header_INTC_PresentAPICall,
-        Header_INTC_ScheduledFlipTime,
-        Header_INTC_FlipReceivedTime,
-        Header_INTC_FlipReportTime,
-        Header_INTC_FlipProgrammingTime,
-        Header_INTC_ActualFlipTime,
 
         // Required headers when -track_display is used:
         Header_AllowsTearing,
@@ -62,6 +46,24 @@ struct PresentMonCsv
         // Required headers when -track_input is used:
         Header_msSinceInput,
 
+        // Required headers when -debug_frame_pacing is used:
+        Header_INTC_FrameID,
+        Header_INTC_AppWorkStart,
+        Header_INTC_AppSimulationTime,
+        Header_INTC_DriverWorkStart,
+        Header_INTC_DriverWorkEnd,
+        Header_INTC_KernelDriverSubmitStart,
+        Header_INTC_KernelDriverSubmitEnd,
+        Header_INTC_GPUStart,
+        Header_INTC_GPUEnd,
+        Header_INTC_KernelDriverFenceReport,
+        Header_INTC_PresentAPICall,
+        Header_INTC_ScheduledFlipTime,
+        Header_INTC_FlipReceivedTime,
+        Header_INTC_FlipReportTime,
+        Header_INTC_FlipProgrammingTime,
+        Header_INTC_ActualFlipTime,
+
         // Required headers when -track_queue_timers is used:
         Header_msStalledOnFullQueue,
         Header_msStalledOnEmptyQueue,
@@ -78,17 +80,7 @@ struct PresentMonCsv
 
         // Special values:
         KnownHeaderCount,
-
         UnknownHeader,
-
-        RequiredHeaderCount = 10,
-        DisplayHeaderCount  = 5,
-        DebugHeaderCount    = 2,
-        GPUHeaderCount      = 2,
-        GPUVideoHeaderCount = 1,
-        InputHeaderCount    = 1,
-        QueueTimersHeaderCount = 8,
-        CpuGpuSyncHeaderCount  = 2,
     };
 
     static constexpr char const* GetHeaderString(Header h)
@@ -105,6 +97,17 @@ struct PresentMonCsv
         case Header_msBetweenPresents:      return "msBetweenPresents";
         case Header_msInPresentAPI:         return "msInPresentAPI";
         case Header_QPCTime:                return "QPCTime";
+        case Header_AllowsTearing:          return "AllowsTearing";
+        case Header_PresentMode:            return "PresentMode";
+        case Header_msBetweenDisplayChange: return "msBetweenDisplayChange";
+        case Header_msUntilRenderComplete:  return "msUntilRenderComplete";
+        case Header_msUntilDisplayed:       return "msUntilDisplayed";
+        case Header_WasBatched:             return "WasBatched";
+        case Header_DwmNotified:            return "DwmNotified";
+        case Header_msUntilRenderStart:     return "msUntilRenderStart";
+        case Header_msGPUActive:            return "msGPUActive";
+        case Header_msGPUVideoActive:       return "msGPUVideoActive";
+        case Header_msSinceInput:           return "msSinceInput";
         case Header_INTC_FrameID:                 return "INTC_FrameID";
         case Header_INTC_AppWorkStart:            return "INTC_AppWorkStart";
         case Header_INTC_AppSimulationTime:       return "INTC_AppSimulationTime";
@@ -121,34 +124,23 @@ struct PresentMonCsv
         case Header_INTC_FlipReportTime:          return "INTC_FlipReportTime";
         case Header_INTC_FlipProgrammingTime:     return "INTC_FlipProgrammingTime";
         case Header_INTC_ActualFlipTime:          return "INTC_ActualFlipTime";
-        case Header_AllowsTearing:          return "AllowsTearing";
-        case Header_PresentMode:            return "PresentMode";
-        case Header_msBetweenDisplayChange: return "msBetweenDisplayChange";
-        case Header_msUntilRenderComplete:  return "msUntilRenderComplete";
-        case Header_msUntilDisplayed:       return "msUntilDisplayed";
-        case Header_WasBatched:             return "WasBatched";
-        case Header_DwmNotified:            return "DwmNotified";
-        case Header_msUntilRenderStart:     return "msUntilRenderStart";
-        case Header_msGPUActive:            return "msGPUActive";
-        case Header_msGPUVideoActive:       return "msGPUVideoActive";
-        case Header_msSinceInput:           return "msSinceInput";
-        case Header_msStalledOnFullQueue:       return "msStalledOnFullQueue";
-        case Header_msStalledOnEmptyQueue:      return "msStalledOnEmptyQueue";
-        case Header_msWaitingOnQueueSync:       return "msWaitingOnQueueSync";
-        case Header_msWaitingOnQueueDrain:      return "msWaitingOnQueueDrain";
-        case Header_msWaitingOnFence:           return "msWaitingOnFence";
-        case Header_msWaitingOnFenceSubmission: return "msWaitingOnFenceSubmission";
-        case Header_ProducerPresentTime:        return "ProducerPresentTime";
-        case Header_ConsumerPresentTime:        return "ConsumerPresentTime";
-        case Header_msWaitingOnSyncObject:      return "msWaitingOnSyncObject";
-        case Header_msWaitingOnQueryData:       return "msWaitingOnQueryData";
+        case Header_msStalledOnFullQueue:         return "msStalledOnFullQueue";
+        case Header_msStalledOnEmptyQueue:        return "msStalledOnEmptyQueue";
+        case Header_msWaitingOnQueueSync:         return "msWaitingOnQueueSync";
+        case Header_msWaitingOnQueueDrain:        return "msWaitingOnQueueDrain";
+        case Header_msWaitingOnFence:             return "msWaitingOnFence";
+        case Header_msWaitingOnFenceSubmission:   return "msWaitingOnFenceSubmission";
+        case Header_ProducerPresentTime:          return "ProducerPresentTime";
+        case Header_ConsumerPresentTime:          return "ConsumerPresentTime";
+        case Header_msWaitingOnSyncObject:        return "msWaitingOnSyncObject";
+        case Header_msWaitingOnQueryData:         return "msWaitingOnQueryData";
         }
         return "<unknown>";
     }
 
     std::wstring path_;
-    size_t line_;
-    FILE* fp_;
+    size_t line_ = 0;
+    FILE* fp_ = nullptr;
 
     // headerColumnIndex_[h] is the file column index where h was found, or SIZE_MAX if
     // h wasn't found in the file.
@@ -156,15 +148,8 @@ struct PresentMonCsv
 
     char row_[1024];
     std::vector<char const*> cols_;
-    bool trackDisplay_;
-    bool trackDebug_;
-    bool trackGPU_;
-    bool trackGPUVideo_;
-    bool trackInput_;
-    bool trackQueueTimers_;
-    bool trackCpuGpuSync_;
+    std::vector<wchar_t const*> params_;
 
-    PresentMonCsv();
     bool Open(char const* file, int line, std::wstring const& path);
     void Close();
     bool ReadRow();
@@ -198,15 +183,18 @@ struct PresentMon : PROCESS_INFORMATION {
 #define PMSTART() Start(__FILE__, __LINE__)
 #define PMEXITED(...) ExpectExited(__FILE__, __LINE__, __VA_ARGS__)
 
-extern std::wstring outDir_;
-
-// PresentMon.cpp
-void AddTestFailure(char const* file, int line, char const* fmt, ...);
-
 // PresentMonTests.cpp
+extern std::wstring outDir_;
+extern bool reportAllCsvDiffs_;
+extern bool warnOnMissingCsv_;
+extern std::wstring diffPath_;
+
 bool EnsureDirectoryCreated(std::wstring path);
 std::string Convert(std::wstring const& s);
 std::wstring Convert(std::string const& s);
 
+// PresentMon.cpp
+void AddTestFailure(char const* file, int line, char const* fmt, ...);
+
 // GoldEtlCsvTests.cpp
-void AddGoldEtlCsvTests(std::wstring const& dir, size_t relIdx, bool reportAllCsvDiffs);
+void AddGoldEtlCsvTests(std::wstring const& dir, size_t relIdx);

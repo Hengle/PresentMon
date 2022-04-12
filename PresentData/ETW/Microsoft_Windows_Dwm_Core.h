@@ -63,9 +63,9 @@ EVENT_DESCRIPTOR_DECL(SCHEDULE_PRESENT_Start                                    
 EVENT_DESCRIPTOR_DECL(SCHEDULE_SURFACEUPDATE_Info                                    , 0x00c4, 0x00, 0x10, 0x04, 0x00, 0x007f, 0x8000000000000001)
 
 // These events added manually:
-EVENT_DESCRIPTOR_DECL(FlipChain_Pending                                              , 0x0045, 0x00, 0x00, 0x00, 0x00, 0x0000, 0x0000000000000000)
 EVENT_DESCRIPTOR_DECL(FlipChain_Complete                                             , 0x0046, 0x00, 0x00, 0x00, 0x00, 0x0000, 0x0000000000000000)
 EVENT_DESCRIPTOR_DECL(FlipChain_Dirty                                                , 0x0065, 0x00, 0x00, 0x00, 0x00, 0x0000, 0x0000000000000000)
+EVENT_DESCRIPTOR_DECL(FlipChain_Pending                                              , 0x0045, 0x00, 0x00, 0x00, 0x00, 0x0000, 0x0000000000000000)
 
 #undef EVENT_DESCRIPTOR_DECL
 

@@ -30,15 +30,12 @@ void DebugEvent(_EVENT_RECORD* eventRecord, EventMetadata* metadata);
 void DebugCreatePresent(PresentEvent const& p);
 
 // Call before modifying any PresentEvent member
-void DebugModifyPresent(PresentEvent const& p);
+void DebugModifyPresent(PresentEvent const* p);
 
-// Call when a present is lost
-void DebugLostPresent(PresentEvent const& p);
-
-// Call when 
+// Call whenever a Dma starts on an idle engine 
 void DebugFirstDmaStart();
 
-// Call when 
+// Call whenever Dma time is added to a queue
 void DebugDmaAccumulated(uint64_t currentTime, uint64_t addedTime);
 
 #else
@@ -48,7 +45,6 @@ void DebugDmaAccumulated(uint64_t currentTime, uint64_t addedTime);
 #define DebugEvent(eventRecord, metadata)                   (void) eventRecord, metadata
 #define DebugCreatePresent(p)                               (void) p
 #define DebugModifyPresent(p)                               (void) p
-#define DebugLostPresent(p)                                 (void) p
 #define DebugFirstDmaStart()
 #define DebugDmaAccumulated(currentTime, addedTime)         (void) currentTime, addedTime
 

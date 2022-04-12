@@ -3,33 +3,41 @@
 
 #include "PresentMon.hpp"
 
-static HANDLE gConsoleHandle;
-static char gConsoleWriteBuffer[8 * 1024];
-static uint32_t gConsoleWriteBufferIndex;
-static uint32_t gConsolePrevWriteBufferSize;
-static SHORT gConsoleTop;
-static SHORT gConsoleWidth;
-static SHORT gConsoleBufferHeight;
-static bool gConsoleFirstCommit;
+static HANDLE gConsoleHandle = INVALID_HANDLE_VALUE;
+static char gConsoleWriteBuffer[8 * 1024] = {};
+static uint32_t gConsoleWriteBufferIndex = 0;
+static uint32_t gConsolePrevWriteBufferSize = 0;
+static SHORT gConsoleTop = 0;
+static SHORT gConsoleWidth = 0;
+static SHORT gConsoleBufferHeight = 0;
+static bool gConsoleFirstCommit = true;
+
+bool IsConsoleInitialized()
+{
+    return gConsoleHandle != INVALID_HANDLE_VALUE;
+}
 
 bool InitializeConsole()
 {
-    gConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (gConsoleHandle == INVALID_HANDLE_VALUE) {
-        return false;
-    }
+    if (!IsConsoleInitialized()) {
+        gConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (gConsoleHandle == INVALID_HANDLE_VALUE) {
+            return false;
+        }
 
-    CONSOLE_SCREEN_BUFFER_INFO info = {};
-    if (GetConsoleScreenBufferInfo(gConsoleHandle, &info) == 0) {
-        return false;
-    }
+        CONSOLE_SCREEN_BUFFER_INFO info = {};
+        if (GetConsoleScreenBufferInfo(gConsoleHandle, &info) == 0) {
+            gConsoleHandle = INVALID_HANDLE_VALUE;
+            return false;
+        }
 
-    gConsoleTop = info.dwCursorPosition.Y;
-    gConsoleWidth = info.srWindow.Right - info.srWindow.Left + 1;
-    gConsoleBufferHeight = info.dwSize.Y;
-    gConsoleWriteBufferIndex = 0;
-    gConsolePrevWriteBufferSize = 0;
-    gConsoleFirstCommit = true;
+        gConsoleTop = info.dwCursorPosition.Y;
+        gConsoleWidth = info.srWindow.Right - info.srWindow.Left + 1;
+        gConsoleBufferHeight = info.dwSize.Y;
+        gConsoleWriteBufferIndex = 0;
+        gConsolePrevWriteBufferSize = 0;
+        gConsoleFirstCommit = true;
+    }
 
     return true;
 }
@@ -219,3 +227,57 @@ void UpdateConsole(uint32_t processId, ProcessInfo const& processInfo)
     }
 }
 
+namespace {
+
+int PrintColor(WORD color, char const* format, va_list val)
+{
+    #ifndef NDEBUG
+    {
+        char buffer[256];
+        if (_vsnprintf_s(buffer, _TRUNCATE, format, val) == -1) {
+            buffer[252] = '.';
+            buffer[253] = '.';
+            buffer[254] = '.';
+        }
+        OutputDebugStringA(buffer);
+    }
+    #endif
+
+    CONSOLE_SCREEN_BUFFER_INFO info = {};
+    auto setColor = IsConsoleInitialized() && GetConsoleScreenBufferInfo(gConsoleHandle, &info) != 0;
+    if (setColor) {
+        auto bg = info.wAttributes & (BACKGROUND_BLUE | BACKGROUND_GREEN | BACKGROUND_RED | BACKGROUND_INTENSITY);
+        if (bg == 0) {
+            color |= FOREGROUND_INTENSITY;
+        }
+        SetConsoleTextAttribute(gConsoleHandle, WORD(bg | color));
+    }
+
+    int c = vfprintf(stderr, format, val);
+
+    if (setColor) {
+        SetConsoleTextAttribute(gConsoleHandle, info.wAttributes);
+    }
+
+    return c;
+}
+
+}
+
+int PrintWarning(char const* format, ...)
+{
+    va_list val;
+    va_start(val, format);
+    int c = PrintColor(FOREGROUND_RED | FOREGROUND_GREEN, format, val);
+    va_end(val);
+    return c;
+}
+
+int PrintError(char const* format, ...)
+{
+    va_list val;
+    va_start(val, format);
+    int c = PrintColor(FOREGROUND_RED, format, val);
+    va_end(val);
+    return c;
+}

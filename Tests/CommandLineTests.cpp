@@ -75,33 +75,37 @@ void QpcTimeTest(wchar_t const* qpcTimeArg)
         return;
     }
 
+    auto qmin = Convert<T>((uint64_t) qpcMin.QuadPart, freq);
+    auto qmax = Convert<T>((uint64_t) qpcMax.QuadPart, freq);
+
     PresentMonCsv csv;
     if (!csv.CSVOPEN(csvPath)) {
+        printf("    PresentMon didn't create a CSV file, likely because there were no presents to capture.\n"
+               "    Re-run the test with a graphics application running.\n");
         return;
     }
 
+    auto idxProcessID     = csv.GetColumnIndex("ProcessID");
     auto idxTimeInSeconds = csv.GetColumnIndex("TimeInSeconds");
     auto idxQPCTime       = csv.GetColumnIndex("QPCTime");
+    EXPECT_NE(idxProcessID,     SIZE_MAX);
     EXPECT_NE(idxTimeInSeconds, SIZE_MAX);
     EXPECT_NE(idxQPCTime,       SIZE_MAX);
 
-    auto t0 = 0.0;
-    auto q0 = (T) 0;
-    auto qmin = Convert<T>((uint64_t) qpcMin.QuadPart, freq);
-    auto qmax = Convert<T>((uint64_t) qpcMax.QuadPart, freq);
+    // TimeInSeconds is only ordered per-process, so we track each process separately
+    std::unordered_map<uint32_t, std::pair<double, T>> firstMeasurement;
+
     while (!::testing::Test::HasFailure() && csv.ReadRow()) {
+        auto pid = strtoul(csv.cols_[idxProcessID], nullptr, 10);
         auto t = Convert<double>(csv.cols_[idxTimeInSeconds], freq);
         auto q = Convert<T>     (csv.cols_[idxQPCTime],       freq);
-        if (csv.line_ == 2) {
-            t0 = t;
-            q0 = q;
-        }
 
         EXPECT_LE(qmin, q);
         EXPECT_LE(q, qmax);
 
-        t -= t0;
-        q -= q0;
+        auto const& first = firstMeasurement.emplace(std::make_pair(pid, std::make_pair(t, q))).first->second;
+        t -= first.first;
+        q -= first.second;
 
         auto tq = Convert<double>(q, freq);
         EXPECT_LE(fabs(t - tq), 0.0000010001) // TimeInSeconds format is %.6lf
@@ -114,6 +118,10 @@ void QpcTimeTest(wchar_t const* qpcTimeArg)
         }
     }
     csv.Close();
+
+    ASSERT_GT(csv.line_, 1)
+        << "    PresentMon didn't capture any presents during the test.\n"
+           "    Re-run the test with a graphics application running.";
 
     if (::testing::Test::HasFailure()) {
         printf("%ls\n", csvPath.c_str());

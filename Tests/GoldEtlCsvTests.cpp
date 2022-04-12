@@ -10,7 +10,6 @@ struct TestArgs {
     std::wstring etl_;
     std::wstring goldCsv_;
     std::wstring testCsv_;
-    bool reportAllCsvDiffs_;
 };
 
 class Tests : public ::testing::Test, TestArgs {
@@ -41,12 +40,9 @@ public:
         pm.Add(L"-stop_existing_session");
         pm.AddEtlPath(etl_);
         pm.AddCsvPath(testCsv_);
-        if (!goldCsv.trackDisplay_) pm.Add(L"-no_track_display");
-        if (goldCsv.trackDebug_) pm.Add(L"-track_debug");
-        if (goldCsv.trackGPU_) pm.Add(L"-track_gpu");
-        if (goldCsv.trackQueueTimers_) pm.Add(L"-track_queue_timers");
-        if (goldCsv.trackCpuGpuSync_) pm.Add(L"-track_cpu_gpu_sync");
-        if (goldCsv.GetColumnIndex("QPCTime") != SIZE_MAX) pm.Add(L"-qpc_time"); // TODO: check if %ull or %.9lf to see if -qpc_time_s
+        for (auto param : goldCsv.params_) {
+            pm.Add(param);
+        }
         pm.PMSTART();
         pm.PMEXITED();
 
@@ -127,6 +123,27 @@ public:
 
         goldCsv.Close();
         testCsv.Close();
+
+        if (::testing::Test::HasFailure() && !diffPath_.empty()) {
+            std::wstring cmd;
+            cmd += diffPath_;
+            cmd += L" \"";
+            cmd += goldCsv_;
+            cmd += L"\" \"";
+            cmd += testCsv_;
+            cmd += L"\"";
+
+            STARTUPINFO si = {};
+            si.cb = sizeof(si);
+            si.dwFlags = STARTF_USESTDHANDLES;
+
+            PROCESS_INFORMATION pi = {};
+            if (CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, TRUE, 0, nullptr, nullptr, &si, &pi) == 0) {
+                printf("error: failed to execute diff request: %ls\n", cmd.c_str());
+            } else {
+                CloseHandle(pi.hProcess);
+            }
+        }
     }
 };
 
@@ -151,6 +168,9 @@ bool CheckGoldEtlCsvPair(
 
     auto attr = GetFileAttributes(args->goldCsv_.c_str());
     if (attr == INVALID_FILE_ATTRIBUTES || (attr & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        if (warnOnMissingCsv_) {
+            fprintf(stderr, "warning: missing gold CSV: %ls%ls\n", dir.c_str(), fileName);
+        }
         return false;
     }
 
@@ -158,6 +178,15 @@ bool CheckGoldEtlCsvPair(
     std::wstring relName(path.substr(relIdx));
     args->name_ = Convert(relName);
     args->testCsv_ = outDir_ + relName + L".csv";
+
+    // Replace any '-' characters in the name, as they will screw up googletest
+    // filters.
+    for (auto& ch : args->name_) {
+        if (ch == '-') {
+            ch = '_';
+        }
+    }
+
     return true;
 }
 
@@ -165,11 +194,9 @@ bool CheckGoldEtlCsvPair(
 
 void AddGoldEtlCsvTests(
     std::wstring const& dir,
-    size_t relIdx,
-    bool reportAllCsvDiffs)
+    size_t relIdx)
 {
     TestArgs args;
-    args.reportAllCsvDiffs_ = reportAllCsvDiffs;
 
     WIN32_FIND_DATA ff = {};
     auto h = FindFirstFile((dir + L'*').c_str(), &ff);
@@ -181,7 +208,7 @@ void AddGoldEtlCsvTests(
         if (ff.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             if (wcscmp(ff.cFileName, L".") == 0) continue;
             if (wcscmp(ff.cFileName, L"..") == 0) continue;
-            AddGoldEtlCsvTests(dir + ff.cFileName + L'\\', relIdx, reportAllCsvDiffs);
+            AddGoldEtlCsvTests(dir + ff.cFileName + L'\\', relIdx);
         } else {
             if (CheckGoldEtlCsvPair(dir, relIdx, ff.cFileName, &args)) {
                 ::testing::RegisterTest(

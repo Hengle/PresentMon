@@ -36,5 +36,4 @@ exit /b 0
     )
     echo %presentmon% %pmargs% -etl_file %1 -output_file "%~dpn1.csv"
     %presentmon% %pmargs% -etl_file %1 -output_file "%~dpn1.csv" >NUL
-    echo.
     exit /b 0

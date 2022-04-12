@@ -4,22 +4,31 @@
 @echo off
 setlocal enabledelayedexpansion
 for %%a in ("%~dp0..") do set pmdir=%%~fa
-set dobuild=1
-set dogtest=1
-set oneconfig=0
+set only_x64_platform=0
+set use_debug_config=1
+set use_release_config=1
+set do_build=1
+set do_default_gtests=1
+set do_full_csv_tests=0
 set errorcount=0
 :args_begin
     if "%~1"=="" goto args_end
-    if "%~1"=="nobuild" ( set dobuild=0 ) else (
-    if "%~1"=="nogtest" ( set dogtest=0 ) else (
-    if "%~1"=="oneconfig" ( set oneconfig=1 ) else (
+    if "%~1"=="x64" ( set only_x64_platform=1 ) else (
+    if "%~1"=="debug" ( set use_release_config=0 ) else (
+    if "%~1"=="release" ( set use_debug_config=0 ) else (
+    if "%~1"=="nobuild" ( set do_build=0 ) else (
+    if "%~1"=="nogtests" ( set do_default_gtests=0 ) else (
+    if "%~1"=="fullcsvs" ( set do_full_csv_tests=1 ) else (
         echo usage: run_tests.cmd [options]
         echo options:
-        echo     oneconfig  Only build one configuration
-        echo     nobuild    Don't build any configurations
-        echo     nogtest    Don't run gtests
+        echo     x64          Only test the x64 build
+        echo     debug        Only test the debug build
+        echo     release      Only test the release build
+        echo     nobuild      Don't build any configurations
+        echo     nogtests     Don't run default test suite
+        echo     fullcsvs     Test Full\ CSV test suite
         exit /b 1
-    )))
+    ))))))
     shift
     goto args_begin
 :args_end
@@ -28,12 +37,10 @@ set errorcount=0
 :: -----------------------------------------------------------------------------
 echo [96mVersion lookup...[90m
 set version=
-if not exist "%pmdir%\PresentMon.props" (
-    echo [31merror: missing dependency: PresentMon.props[0m
-    goto version_end
-)
-for /f "tokens=2,3 delims=<>" %%a in ('type "%pmdir%\PresentMon.props" ^| findstr "<PresentMonVersion>"') do (
-    if "%%a"=="PresentMonVersion" set version=%%b
+if exist "%pmdir%\PresentMon.props" (
+    for /f "tokens=2,3 delims=<>" %%a in ('type "%pmdir%\PresentMon.props" ^| findstr "<PresentMonVersion>"') do (
+        if "%%a"=="PresentMonVersion" set version=%%b
+    )
 )
 if "%version%"=="" (
     echo [31merror: version not found in PresentMon.props[0m
@@ -45,30 +52,24 @@ if "%version%"=="" (
 
 :: -----------------------------------------------------------------------------
 set build_configs=
-set build_configs=%build_configs% debug
-set build_configs=%build_configs% release
+if %use_debug_config%   EQU 1 set build_configs=%build_configs% debug
+if %use_release_config% EQU 1 set build_configs=%build_configs% release
 
-set build_platforms=
-set build_platforms=%build_platforms% x86
-set build_platforms=%build_platforms% x64
-set build_platforms=%build_platforms% arm
-set build_platforms=%build_platforms% arm64
+set build_platforms=x64
+set test_platforms=x64
+if %only_x64_platform% EQU 0 (
+    set build_platforms=%build_platforms% x86
+    set build_platforms=%build_platforms% arm
+    set build_platforms=%build_platforms% arm64
 
-set test_platforms=
-set test_platforms=%test_platforms% x86
-set test_platforms=%test_platforms% x64
-
-if %oneconfig% equ 1 (
-    set build_configs=debug
-    set build_platforms=x64
-    set test_platforms=x64
+    set test_platforms=%test_platforms% x86
 )
 
 set prebuild_errorcount=%errorcount%
 
 echo.
 echo [96mBuilding...[90m
-if %dobuild% equ 0 (
+if %do_build% EQU 0 (
     echo [31mwarning: skipping build[0m
 ) else (
     for %%a in (%build_platforms%) do for %%b in (%build_configs%) do call :build %%a %%b "PresentMon.sln"
@@ -104,13 +105,21 @@ for %%a in (%test_platforms%)  do for %%b in (%build_configs%) do call :check_pm
 :: -----------------------------------------------------------------------------
 echo.
 echo [96mTesting functionality...[0m
-if %dogtest% equ 0 (
-    echo [31mwarning: skipping gtests[0m
-    echo.
+
+if %use_release_config% EQU 1 (
+    set pmtest=build\Release\PresentMonTests-%version%-x64.exe
 ) else (
-    call :find_pmtest
-    if !errorlevel! equ 0 for %%a in (%test_platforms%) do for %%b in (%build_configs%) do call :gtests "build\%%b\PresentMon-%version%-%%a.exe"
+    set pmtest=build\Debug\PresentMonTests-%version%-x64.exe
 )
+
+if %do_default_gtests% EQU 1 (
+    for %%a in (%test_platforms%) do for %%b in (%build_configs%) do (
+        call :gtests --presentmon="%pmdir%\build\%%b\PresentMon-%version%-%%a.exe" --golddir="%pmdir%\Tests\Gold"
+    )
+)
+
+if %do_full_csv_tests% EQU 1 call :gtests --golddir="%pmdir%\Tests\Full" --gtest_filter=GoldEtlCsvTests.*
+
 
 :: -----------------------------------------------------------------------------
 if %errorcount% neq 0 (
@@ -167,7 +176,7 @@ exit /b 0
             )
         )
         if "%%~xa"==".dll" (
-            if !checkdll! equ 1 (
+            if !checkdll! EQU 1 (
                 if not "%%a"=="KERNEL32.dll" (
                     echo [31merror: dll dependency is not delay-loaded: %%a[0m
                     set /a errorcount=%errorcount%+1
@@ -192,28 +201,8 @@ exit /b 0
     exit /b 0
 
 :: -----------------------------------------------------------------------------
-:find_pmtest
-    if %oneconfig% equ 1 (
-        set pmtest=build\%build_configs%\PresentMonTests-%version%-%test_platforms%.exe
-    ) else (
-        set pmtest=build\Release\PresentMonTests-%version%-x64.exe
-    )
-    if exist "%pmdir%\%pmtest%" exit /b 0
-    for %%a in (%test_platforms%) do for %%b in (%build_configs%) do (
-        if exist "%pmdir%\build\%%b\PresentMonTests-%version%-%%a.exe" (
-            set pmtest=build\%%b\PresentMonTests-%version%-%%a.exe
-            exit /b 0
-        )
-    )
-    echo [31merror: missing dependency: PresentMonTests-?.exe[0m
-    set /a errorcount=%errorcount%+1
-    exit /b 1
-
-:: -----------------------------------------------------------------------------
 :gtests
-    if not exist "%pmdir%\%~1" exit /b 0
-    echo [90m"%pmtest%" --presentmon=%1 --golddir=Tests\Gold[0m
-    "%pmdir%\%pmtest%" --presentmon="%pmdir%\%~1" --golddir="%pmdir%\Tests\Gold"
+    echo [90m"%pmdir%\%pmtest%" %*[0m
+    "%pmdir%\%pmtest%" %*
     if not "%errorlevel%"=="0" set /a errorcount=%errorcount%+1
-    echo.
     exit /b 0

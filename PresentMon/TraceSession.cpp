@@ -12,19 +12,48 @@ TraceSession gSession;
 static PMTraceConsumer* gPMConsumer = nullptr;
 static MRTraceConsumer* gMRConsumer = nullptr;
 
+bool FilteredEventsExpected()
+{
+    // Scope filtering based on event ID only works for realtime collection
+    auto const& args = GetCommandLineArgs();
+    if (args.mEtlFileName != nullptr) {
+        return false;
+    }
+
+    // Scope filtering based on event ID doesn't work <Win8.1
+    //
+    // Note: IsWindows8Point1OrGreater() returns FALSE if the application isn't
+    // built with a manifest.
+    auto hmodule = LoadLibraryExA("ntdll.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (hmodule == NULL) {
+        return false;
+    }
+
+    auto pRtlGetVersion = (NTSTATUS (WINAPI*)(PRTL_OSVERSIONINFOW)) GetProcAddress(hmodule, "RtlGetVersion");
+    if (pRtlGetVersion == nullptr) {
+        FreeLibrary(hmodule);
+        return false;
+    }
+
+    RTL_OSVERSIONINFOW info = {};
+    info.dwOSVersionInfoSize = sizeof(info);
+    auto status = (*pRtlGetVersion)(&info);
+    FreeLibrary(hmodule);
+
+    // Win8.1 is version 6.3
+    return status == 0 && (info.dwMajorVersion > 6 || (info.dwMajorVersion == 6 && info.dwMinorVersion >= 3));
+}
+
 }
 
 bool StartTraceSession()
 {
     auto const& args = GetCommandLineArgs();
-    auto expectFilteredEvents =
-        args.mEtlFileName == nullptr && // Scope filtering based on event ID only works for realtime collection
-        IsWindows8Point1OrGreater();    // and requires Win8.1+
     auto filterProcessIds = args.mTargetPid != 0; // Does not support process names at this point
 
     // Create consumers
     gPMConsumer = new PMTraceConsumer();
-    gPMConsumer->mFilteredEvents = expectFilteredEvents;
+    gPMConsumer->mFilteredEvents = FilteredEventsExpected();
     gPMConsumer->mFilteredProcessIds = filterProcessIds;
     gPMConsumer->mTrackDisplay = args.mTrackDisplay;
     gPMConsumer->mTrackGPU = args.mTrackGPU;
@@ -51,12 +80,12 @@ bool StartTraceSession()
 
     if (status == ERROR_ALREADY_EXISTS) {
         if (args.mStopExistingSession) {
-            fprintf(stderr,
+            PrintWarning(
                 "warning: a trace session named \"%s\" is already running and it will be stopped.\n"
                 "         Use -session_name with a different name to start a new session.\n",
                 args.mSessionName);
         } else {
-            fprintf(stderr,
+            PrintError(
                 "error: a trace session named \"%s\" is already running. Use -stop_existing_session\n"
                 "       to stop the existing session, or use -session_name with a different name to\n"
                 "       start a new session.\n",
@@ -76,19 +105,19 @@ bool StartTraceSession()
 
     // Report error if we failed to start a new session
     if (status != ERROR_SUCCESS) {
-        fprintf(stderr, "error: failed to start trace session");
+        PrintError("error: failed to start trace session");
         switch (status) {
-        case ERROR_FILE_NOT_FOUND:    fprintf(stderr, " (file not found)"); break;
-        case ERROR_PATH_NOT_FOUND:    fprintf(stderr, " (path not found)"); break;
-        case ERROR_BAD_PATHNAME:      fprintf(stderr, " (invalid --session_name)"); break;
-        case ERROR_ACCESS_DENIED:     fprintf(stderr, " (access denied)"); break;
-        case ERROR_FILE_CORRUPT:      fprintf(stderr, " (invalid --etl_file)"); break;
-        default:                      fprintf(stderr, " (error=%lu)", status); break;
+        case ERROR_FILE_NOT_FOUND:    PrintError(" (file not found)"); break;
+        case ERROR_PATH_NOT_FOUND:    PrintError(" (path not found)"); break;
+        case ERROR_BAD_PATHNAME:      PrintError(" (invalid --session_name)"); break;
+        case ERROR_ACCESS_DENIED:     PrintError(" (access denied)"); break;
+        case ERROR_FILE_CORRUPT:      PrintError(" (invalid --etl_file)"); break;
+        default:                      PrintError(" (error=%lu)", status); break;
         }
-        fprintf(stderr, ".\n");
+        PrintError(".\n");
 
         if (status == ERROR_ACCESS_DENIED && !InPerfLogUsersGroup()) {
-            fprintf(stderr,
+            PrintError(
                 "       PresentMon requires either administrative privileges or to be run by a user in the\n"
                 "       \"Performance Log Users\" user group.  View the readme for more details.\n");
         }

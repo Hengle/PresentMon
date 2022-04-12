@@ -41,7 +41,6 @@ const char* FinalStateToDroppedString(PresentResult res)
 {
     switch (res) {
     case PresentResult::Presented: return "0";
-    case PresentResult::Error: return "Error";
     default: return "1";
     }
 }
@@ -102,6 +101,9 @@ static void WriteCsvHeader(FILE* fp)
             ",msWaitingOnSyncObject"
             ",msWaitingOnQueryData");
     }
+    if (args.mOutputQpcTime) {
+        fprintf(fp, ",QPCTime");
+    }
     if (args.mDebugINTCFramePacing) {
         fprintf(fp,
             ",INTC_FrameID"
@@ -120,9 +122,6 @@ static void WriteCsvHeader(FILE* fp)
             ",INTC_FlipReportTime"
             ",INTC_FlipProgrammingTime"
             ",INTC_ActualFlipTime");
-    }
-    if (args.mOutputQpcTime) {
-        fprintf(fp, ",QPCTime");
     }
     fprintf(fp, "\n");
 }
@@ -313,6 +312,13 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_QueueTimers[INTC_QUEUE_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU]),
             DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_QueueTimers[INTC_QUEUE_SYNC_TYPE_POLL_ON_QUERY_GET_DATA]));
     }
+    if (args.mOutputQpcTime) {
+        if (args.mOutputQpcTimeInSeconds) {
+            fprintf(fp, ",%.*lf", DBL_DIG - 1, QpcDeltaToSeconds(p.QpcTime));
+        } else {
+            fprintf(fp, ",%llu", p.QpcTime);
+        }
+    }
     if (args.mDebugINTCFramePacing) {
         fprintf(fp, ",%llu", p.INTC_FrameID);
         fprintf(fp, ",%lf", INTC_AppWorkStart);
@@ -330,13 +336,6 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
         fprintf(fp, ",%lf", INTC_FlipReportTime);
         fprintf(fp, ",%lf", INTC_FlipProgrammingTime);
         fprintf(fp, ",%lf", INTC_ActualFlipTime);
-    }
-    if (args.mOutputQpcTime) {
-        if (args.mOutputQpcTimeInSeconds) {
-            fprintf(fp, ",%.*lf", DBL_DIG - 1, QpcDeltaToSeconds(p.QpcTime));
-        } else {
-            fprintf(fp, ",%llu", p.QpcTime);
-        }
     }
     fprintf(fp, "\n");
 }

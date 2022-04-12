@@ -107,6 +107,9 @@ bool CheckPath(
 
 std::wstring PresentMon::exePath_;
 std::wstring outDir_;
+bool reportAllCsvDiffs_ = false;
+bool warnOnMissingCsv_ = true;
+std::wstring diffPath_;
 
 std::string Convert(std::wstring const& src)
 {
@@ -193,7 +196,9 @@ int wmain(
                 "    --golddir=path       Path to directory of test ETLs and gold CSVs (default=%ls).\n"
                 "    --outdir=path        Path to directory for test outputs (default=%%temp%%/PresentMonTestOutput).\n"
                 "    --nodelete           Keep the output directory after tests.\n"
+                "    --nowarnmissing      Don't warn if a found ETL is missing a gold CSV.\n"
                 "    --allcsvdiffs        Report all CSV differences, not just the first.\n"
+                "    --diff=path          Start an extra process to compare each differing CSV.\n"
                 "\n",
                 PresentMon::exePath_.c_str(),
                 goldDir.c_str());
@@ -213,7 +218,6 @@ int wmain(
     wchar_t* goldDirArg = nullptr;
     wchar_t* outDirArg = nullptr;
     bool deleteOutDir = true;
-    bool reportAllCsvDiffs = false;
     for (int i = 1; i < argc; ++i) {
         if (_wcsnicmp(argv[i], L"--presentmon=", 13) == 0) {
             presentMonPathArg = argv[i] + 13;
@@ -235,8 +239,18 @@ int wmain(
             continue;
         }
 
+        if (_wcsicmp(argv[i], L"--nowarnmissing") == 0) {
+            warnOnMissingCsv_ = false;
+            continue;
+        }
+
         if (_wcsicmp(argv[i], L"--allcsvdiffs") == 0) {
-            reportAllCsvDiffs = true;
+            reportAllCsvDiffs_ = true;
+            continue;
+        }
+
+        if (_wcsnicmp(argv[i], L"--diff=", 7) == 0) {
+            diffPath_ = argv[i] + 7;
             continue;
         }
 
@@ -255,7 +269,7 @@ int wmain(
     }
 
     if (goldDirExists) {
-        AddGoldEtlCsvTests(goldDir, goldDir.size(), reportAllCsvDiffs);
+        AddGoldEtlCsvTests(goldDir, goldDir.size());
     } else {
         fprintf(stderr, "warning: gold directory does not exist: %ls\n", goldDir.c_str());
         fprintf(stderr, "         Continuing, but no GoldEtlCsvTests.* will run.  Specify a new path\n");

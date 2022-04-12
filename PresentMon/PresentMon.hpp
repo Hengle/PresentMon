@@ -109,6 +109,9 @@ CommandLineArgs const& GetCommandLineArgs();
 
 // Console.cpp:
 bool InitializeConsole();
+bool IsConsoleInitialized();
+int PrintWarning(char const* format, ...);
+int PrintError(char const* format, ...);
 void ConsolePrint(char const* format, ...);
 void ConsolePrintLn(char const* format, ...);
 void CommitConsole();

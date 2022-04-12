@@ -151,17 +151,17 @@ static bool ParseKeyName(KeyNameCode const* valid, size_t validCount, char* name
         }
     }
 
-    int col = fprintf(stderr, "error: %s '%s'.\nValid options (case insensitive):", errorMessage, name);
+    int col = PrintError("error: %s '%s'.\nValid options (case insensitive):", errorMessage, name);
 
     size_t consoleWidth = GetConsoleWidth();
     for (size_t i = 0; i < validCount; ++i) {
         auto len = strlen(valid[i].mName);
         if (col + len + 1 > consoleWidth) {
-            col = fprintf(stderr, "\n   ") - 1;
+            col = PrintError("\n   ") - 1;
         }
-        col += fprintf(stderr, " %s", valid[i].mName);
+        col += PrintError(" %s", valid[i].mName);
     }
-    fprintf(stderr, "\n");
+    PrintError("\n");
 
     return false;
 }
@@ -193,11 +193,11 @@ static bool AssignHotkey(char* key, CommandLineArgs* args)
 static void SetCaptureAll(CommandLineArgs* args)
 {
     if (!args->mTargetProcessNames.empty()) {
-        fprintf(stderr, "warning: -captureall elides all previous -process_name arguments.\n");
+        PrintWarning("warning: -captureall elides all previous -process_name arguments.\n");
         args->mTargetProcessNames.clear();
     }
     if (args->mTargetPid != 0) {
-        fprintf(stderr, "warning: -captureall elides all previous -process_id arguments.\n");
+        PrintWarning("warning: -captureall elides all previous -process_id arguments.\n");
         args->mTargetPid = 0;
     }
 }
@@ -234,7 +234,7 @@ static bool ParseValue(char** argv, int argc, int* i)
         *i += 1;
         return true;
     }
-    fprintf(stderr, "error: %s expecting argument.\n", argv[*i]);
+    PrintError("error: %s expecting argument.\n", argv[*i]);
     return false;
 }
 
@@ -319,7 +319,7 @@ static bool RequireINTCRegDWORD(char const* name, DWORD value)
         return true;
     }
 
-    fprintf(stderr, "error: requested features require HKLM\\SOFTWARE\\Intel\\IGFX\\D3D10\\%s = %u\n", name, value);
+    PrintError("error: requested features require HKLM\\SOFTWARE\\Intel\\IGFX\\D3D10\\%s = %u\n", name, value);
     return false;
 }
 
@@ -426,7 +426,7 @@ bool ParseCommandLine(int argc, char** argv)
 
         // Provided argument wasn't recognized
         else if (!(ParseArg(argv[i], "?") || ParseArg(argv[i], "h") || ParseArg(argv[i], "help"))) {
-            fprintf(stderr, "error: unrecognized argument '%s'.\n", argv[i]);
+            PrintError("error: unrecognized argument '%s'.\n", argv[i]);
         }
 
         PrintHelp();
@@ -435,32 +435,32 @@ bool ParseCommandLine(int argc, char** argv)
 
     // Handle deprecated command line arguments
     if (DEPRECATED_simple) {
-        fprintf(stderr, "warning: -simple command line argument has been deprecated; using -no_track_display instead.\n");
+        PrintWarning("warning: -simple command line argument has been deprecated; using -no_track_display instead.\n");
         args->mTrackDisplay = false;
     }
     if (DEPRECATED_verbose) {
-        fprintf(stderr, "warning: -verbose command line argument has been deprecated; using -track_debug instead.\n");
+        PrintWarning("warning: -verbose command line argument has been deprecated; using -track_debug instead.\n");
         args->mTrackDebug = true;
     }
     if (DEPRECATED_wmr) {
-        fprintf(stderr, "warning: -include_mixed_reality command line argument has been deprecated; using -track_mixed_reality instead.\n");
+        PrintWarning("warning: -include_mixed_reality command line argument has been deprecated; using -track_mixed_reality instead.\n");
         args->mTrackWMR = true;
     }
     if (DEPRECATED_dontRestart) {
-        fprintf(stderr, "warning: -dont_restart_as_admin command line argument has been deprecated; it is now the default behaviour.\n");
+        PrintWarning("warning: -dont_restart_as_admin command line argument has been deprecated; it is now the default behaviour.\n");
     }
 
     // Ignore -no_track_display if required for other requested tracking
     if (args->mTrackDebug && !args->mTrackDisplay) {
-        fprintf(stderr, "warning: -track_debug requires display tracking; ignoring -no_track_display.\n");
+        PrintWarning("warning: -track_debug requires display tracking; ignoring -no_track_display.\n");
         args->mTrackDisplay = true;
     }
     if (args->mTrackGPU && !args->mTrackDisplay) {
-        fprintf(stderr, "warning: -track_gpu requires display tracking; ignoring -no_track_display.\n");
+        PrintWarning("warning: -track_gpu requires display tracking; ignoring -no_track_display.\n");
         args->mTrackDisplay = true;
     }
     if (args->mTrackGPUVideo && !args->mTrackDisplay) {
-        fprintf(stderr, "warning: -track_gpu_video requires display tracking; ignoring -no_track_display.\n");
+        PrintWarning("warning: -track_gpu_video requires display tracking; ignoring -no_track_display.\n");
         args->mTrackDisplay = true;
     }
 
@@ -472,7 +472,7 @@ bool ParseCommandLine(int argc, char** argv)
 
     // -date_time is mutually exclusive to -qpc_time and -qpc_time_s
     if (args->mOutputDateTime && (args->mOutputQpcTime || args->mOutputQpcTimeInSeconds)) {
-        fprintf(stderr, "error: -date_time and -qpc_time or -qpc_time_s cannot be used at the same time.\n");
+        PrintError("error: -date_time and -qpc_time or -qpc_time_s cannot be used at the same time.\n");
         PrintHelp();
         return false;
     }
@@ -482,13 +482,13 @@ bool ParseCommandLine(int argc, char** argv)
         if ((args->mHotkeyModifiers & MOD_CONTROL) != 0 && (
             args->mHotkeyVirtualKeyCode == 0x44 /*C*/ ||
             args->mHotkeyVirtualKeyCode == VK_SCROLL)) {
-            fprintf(stderr, "error: CTRL+C or CTRL+SCROLL cannot be used as a -hotkey, they are reserved for terminating the trace.\n");
+            PrintError("error: CTRL+C or CTRL+SCROLL cannot be used as a -hotkey, they are reserved for terminating the trace.\n");
             PrintHelp();
             return false;
         }
 
         if (args->mHotkeyModifiers == MOD_NOREPEAT && args->mHotkeyVirtualKeyCode == VK_F12) {
-            fprintf(stderr, "error: 'F12' cannot be used as a -hotkey, it is reserved for the debugger.\n");
+            PrintError("error: 'F12' cannot be used as a -hotkey, it is reserved for the debugger.\n");
             PrintHelp();
             return false;
         }
@@ -498,24 +498,24 @@ bool ParseCommandLine(int argc, char** argv)
     // -output_file, or -output_stdout if they are also used.
     if (!args->mOutputCsvToFile) {
         if (args->mOutputQpcTime) {
-            fprintf(stderr, "warning: -qpc_time and -qpc_time_s are only relevant for CSV output; ignoring due to -no_csv.\n");
+            PrintWarning("warning: -qpc_time and -qpc_time_s are only relevant for CSV output; ignoring due to -no_csv.\n");
             args->mOutputQpcTime = false;
             args->mOutputQpcTimeInSeconds = false;
         }
         if (args->mOutputDateTime) {
-            fprintf(stderr, "warning: -date_time is only relevant for CSV output; ignoring due to -no_csv.\n");
+            PrintWarning("warning: -date_time is only relevant for CSV output; ignoring due to -no_csv.\n");
             args->mOutputDateTime = false;
         }
         if (args->mMultiCsv) {
-            fprintf(stderr, "warning: -multi_csv and -no_csv arguments are not compatible; ignoring -multi_csv.\n");
+            PrintWarning("warning: -multi_csv and -no_csv arguments are not compatible; ignoring -multi_csv.\n");
             args->mMultiCsv = false;
         }
         if (args->mOutputCsvFileName != nullptr) {
-            fprintf(stderr, "warning: -output_file and -no_csv arguments are not compatible; ignoring -output_file.\n");
+            PrintWarning("warning: -output_file and -no_csv arguments are not compatible; ignoring -output_file.\n");
             args->mOutputCsvFileName = nullptr;
         }
         if (args->mOutputCsvToStdout) {
-            fprintf(stderr, "warning: -output_stdout and -no_csv arguments are not compatible; ignoring -output_stdout.\n");
+            PrintWarning("warning: -output_stdout and -no_csv arguments are not compatible; ignoring -output_stdout.\n");
             args->mOutputCsvToStdout = false;
         }
     }
@@ -530,30 +530,30 @@ bool ParseCommandLine(int argc, char** argv)
         args->mConsoleOutputType = ConsoleOutput::None; // No warning needed if user used -no_top, just swap out Simple for None
 
         if (args->mOutputCsvFileName != nullptr) {
-            fprintf(stderr, "error: only one of -output_file or -output_stdout arguments can be used.\n");
+            PrintError("error: only one of -output_file or -output_stdout arguments can be used.\n");
             PrintHelp();
             return false;
         }
 
         if (args->mMultiCsv) {
-            fprintf(stderr, "warning: -multi_csv and -output_stdout are not compatible; ignoring -multi_csv.\n");
+            PrintWarning("warning: -multi_csv and -output_stdout are not compatible; ignoring -multi_csv.\n");
             args->mMultiCsv = false;
         }
 
         if (args->mTrackWMR) {
-            fprintf(stderr, "warning: -track_mixed_reality and -output_stdout are not compatible; ignoring -track_mixed_reality.\n");
+            PrintWarning("warning: -track_mixed_reality and -output_stdout are not compatible; ignoring -track_mixed_reality.\n");
             args->mTrackWMR = false;
         }
     }
 
     // Try to initialize the console, and warn if we're not going to be able to
     // do the advanced display as requested.
-    if (args->mConsoleOutputType == ConsoleOutput::Full && !args->mOutputCsvToStdout && !InitializeConsole()) {
+    if (args->mConsoleOutputType == ConsoleOutput::Full && !args->mOutputCsvToStdout && !IsConsoleInitialized()) {
         if (args->mOutputCsvToFile) {
-            fprintf(stderr, "warning: could not initialize console display; continuing with -no_top.\n");
+            PrintWarning("warning: could not initialize console display; continuing with -no_top.\n");
             args->mConsoleOutputType = ConsoleOutput::Simple;
         } else {
-            fprintf(stderr, "error: could not initialize console display; use -no_top or -output_stdout in this environment.\n");
+            PrintError("error: could not initialize console display; use -no_top or -output_stdout in this environment.\n");
             PrintHelp();
             return false;
         }
@@ -590,8 +590,8 @@ bool ParseCommandLine(int argc, char** argv)
         args->mDebugINTCFramePacing ||
         args->mTerminateOnProcExit ||
         args->mTerminateAfterTimer)) {
-        fprintf(stderr, "warning: -terminate_existing exits without capturing anything; ignoring all capture,\n");
-        fprintf(stderr, "         output, and recording arguments.\n");
+        PrintWarning("warning: -terminate_existing exits without capturing anything; ignoring all capture,\n"
+                     "         output, and recording arguments.\n");
     }
 
     // If the INTC provider is required, check that the manifest is installed.
@@ -599,9 +599,9 @@ bool ParseCommandLine(int argc, char** argv)
         ULONG bufferSize = 0;
         auto status = TdhEnumerateManifestProviderEvents((LPGUID) &Intel_Graphics_D3D10::GUID, nullptr, &bufferSize);
         if (status == ERROR_NOT_FOUND) {
-            fprintf(stderr, "error: Intel graphics events not found on this PC. In order to use Intel internal\n"
-                            "       features, you must run GfxEvents\\Install.bat from the driver's TestTools\n"
-                            "       package as administrator.\n");
+            PrintError("error: Intel graphics events not found on this PC. In order to use Intel internal\n"
+                       "       features, you must run GfxEvents\\Install.bat from the driver's TestTools\n"
+                       "       package as administrator.\n");
             return false;
         }
 

@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <string>
 
+#include "PresentMon.hpp"
+
 bool InPerfLogUsersGroup()
 {
     // PERFLOG_USERS = S-1-5-32-559
@@ -113,17 +115,17 @@ int RestartAsAdministrator(
         GetExitCodeProcess(info.hProcess, &code);
         CloseHandle(info.hProcess);
     } else {
-        fprintf(stderr, "error: failed to elevate privilege ");
+        PrintError("error: failed to elevate privilege ");
         int e = GetLastError();
         switch (e) {
-        case ERROR_FILE_NOT_FOUND:    fprintf(stderr, "(file not found).\n"); break;
-        case ERROR_PATH_NOT_FOUND:    fprintf(stderr, "(path not found).\n"); break;
-        case ERROR_DLL_NOT_FOUND:     fprintf(stderr, "(dll not found).\n"); break;
-        case ERROR_ACCESS_DENIED:     fprintf(stderr, "(access denied).\n"); break;
-        case ERROR_CANCELLED:         fprintf(stderr, "(cancelled).\n"); break;
-        case ERROR_NOT_ENOUGH_MEMORY: fprintf(stderr, "(out of memory).\n"); break;
-        case ERROR_SHARING_VIOLATION: fprintf(stderr, "(sharing violation).\n"); break;
-        default:                      fprintf(stderr, "(%u).\n", e); break;
+        case ERROR_FILE_NOT_FOUND:    PrintError("(file not found).\n"); break;
+        case ERROR_PATH_NOT_FOUND:    PrintError("(path not found).\n"); break;
+        case ERROR_DLL_NOT_FOUND:     PrintError("(dll not found).\n"); break;
+        case ERROR_ACCESS_DENIED:     PrintError("(access denied).\n"); break;
+        case ERROR_CANCELLED:         PrintError("(cancelled).\n"); break;
+        case ERROR_NOT_ENOUGH_MEMORY: PrintError("(out of memory).\n"); break;
+        case ERROR_SHARING_VIOLATION: PrintError("(sharing violation).\n"); break;
+        default:                      PrintError("(%u).\n", e); break;
         }
     }
 
