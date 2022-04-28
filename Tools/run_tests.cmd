@@ -58,9 +58,9 @@ if %use_release_config% EQU 1 set build_configs=%build_configs% release
 set build_platforms=x64
 set test_platforms=x64
 if %only_x64_platform% EQU 0 (
-    set build_platforms=%build_platforms% x86
-    set build_platforms=%build_platforms% arm
-    set build_platforms=%build_platforms% arm64
+    set build_platforms=!build_platforms! x86
+    set build_platforms=!build_platforms! arm
+    set build_platforms=!build_platforms! arm64
 
     set test_platforms=%test_platforms% x86
 )

@@ -88,9 +88,9 @@ void QpcTimeTest(wchar_t const* qpcTimeArg)
     auto idxProcessID     = csv.GetColumnIndex("ProcessID");
     auto idxTimeInSeconds = csv.GetColumnIndex("TimeInSeconds");
     auto idxQPCTime       = csv.GetColumnIndex("QPCTime");
-    EXPECT_NE(idxProcessID,     SIZE_MAX);
-    EXPECT_NE(idxTimeInSeconds, SIZE_MAX);
-    EXPECT_NE(idxQPCTime,       SIZE_MAX);
+    ASSERT_NE(idxProcessID,     SIZE_MAX) << "    Output missing required column: ProcessID";
+    ASSERT_NE(idxTimeInSeconds, SIZE_MAX) << "    Output missing required column: TimeInSeconds";
+    ASSERT_NE(idxQPCTime,       SIZE_MAX) << "    Output missing required column: QPCTime";
 
     // TimeInSeconds is only ordered per-process, so we track each process separately
     std::unordered_map<uint32_t, std::pair<double, T>> firstMeasurement;
@@ -119,7 +119,7 @@ void QpcTimeTest(wchar_t const* qpcTimeArg)
     }
     csv.Close();
 
-    ASSERT_GT(csv.line_, 1)
+    ASSERT_GT(csv.line_, 1u)
         << "    PresentMon didn't capture any presents during the test.\n"
            "    Re-run the test with a graphics application running.";
 
@@ -167,3 +167,55 @@ TEST(CommandLineTests, QPCTimeInSeconds)
 {
     QpcTimeTest<double>(L"-qpc_time_s");
 }
+
+TEST(CommandLineTests, Input)
+{
+    std::wstring csvPath(outDir_ + L"input.csv");
+
+    // TODO: This test requires a target application to be presenting, and the
+    // user to provide input (move the mouse at minimum) during the capture.
+    // Otherwise the test will fail.  Is there a better way than just hoping
+    // this happens and failing if not?
+
+    PresentMon pm;
+    pm.Add(L"-stop_existing_session -terminate_after_timed -timed 3 -track_input");
+    pm.AddCsvPath(csvPath);
+
+    pm.PMSTART();
+    pm.PMEXITED(5000, 0);
+    if (::testing::Test::HasFailure()) {
+        return;
+    }
+
+    PresentMonCsv csv;
+    if (!csv.CSVOPEN(csvPath)) {
+        printf("    PresentMon didn't create a CSV file, likely because there were no presents to capture.\n"
+               "    Re-run the test with a graphics application running.\n");
+        return;
+    }
+
+    auto idxmsSinceInput = csv.GetColumnIndex("msSinceInput");
+    ASSERT_NE(idxmsSinceInput, SIZE_MAX) << "    Output missing required column: msSinceInput";
+
+    uint32_t nonZeroInputRowCount = 0;
+    while (!::testing::Test::HasFailure() && csv.ReadRow()) {
+        auto msSinceInput = strtod(csv.cols_[idxmsSinceInput], nullptr);
+        if (msSinceInput != 0) {
+            nonZeroInputRowCount += 1;
+        }
+    }
+    csv.Close();
+
+    ASSERT_GT(csv.line_, 1u)
+        << "    PresentMon didn't capture any presents during the test.\n"
+           "    Re-run the test with a graphics application running.";
+
+    EXPECT_GT(nonZeroInputRowCount, 0u)
+        << "    PresentMon didn't capture any inputs during the test.\n"
+           "    Re-run the test and make sure to interact with the kb or mouse.";
+
+    if (::testing::Test::HasFailure()) {
+        printf("%ls\n", csvPath.c_str());
+    }
+}
+

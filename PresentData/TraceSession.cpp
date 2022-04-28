@@ -59,10 +59,11 @@ struct FilteredProvider {
 
         #pragma warning(suppress: 4984) // C++17 extension
         if constexpr ((uint64_t) T::Keyword != 0ull) {
-            anyKeywordMask_ |= (uint64_t) T::Keyword;
-            if (allKeywordMask_ == 0) {
+            if (anyKeywordMask_ == 0) {
+                anyKeywordMask_ = (uint64_t) T::Keyword;
                 allKeywordMask_ = (uint64_t) T::Keyword;
             } else {
+                anyKeywordMask_ |= (uint64_t) T::Keyword;
                 allKeywordMask_ &= (uint64_t) T::Keyword;
             }
         }
