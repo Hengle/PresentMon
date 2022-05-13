@@ -65,12 +65,12 @@ struct PresentMonCsv
         Header_INTC_ActualFlipTime,
 
         // Required headers when -track_queue_timers is used:
-        Header_msStalledOnFullQueue,
-        Header_msStalledOnEmptyQueue,
+        Header_msStalledOnQueueFull,
         Header_msWaitingOnQueueSync,
         Header_msWaitingOnQueueDrain,
         Header_msWaitingOnFence,
         Header_msWaitingOnFenceSubmission,
+        Header_msStalledOnQueueEmpty,
         Header_ProducerPresentTime,
         Header_ConsumerPresentTime,
 
@@ -124,8 +124,8 @@ struct PresentMonCsv
         case Header_INTC_FlipReportTime:          return "INTC_FlipReportTime";
         case Header_INTC_FlipProgrammingTime:     return "INTC_FlipProgrammingTime";
         case Header_INTC_ActualFlipTime:          return "INTC_ActualFlipTime";
-        case Header_msStalledOnFullQueue:         return "msStalledOnFullQueue";
-        case Header_msStalledOnEmptyQueue:        return "msStalledOnEmptyQueue";
+        case Header_msStalledOnQueueFull:         return "msStalledOnQueueFull";
+        case Header_msStalledOnQueueEmpty:        return "msStalledOnQueueEmpty";
         case Header_msWaitingOnQueueSync:         return "msWaitingOnQueueSync";
         case Header_msWaitingOnQueueDrain:        return "msWaitingOnQueueDrain";
         case Header_msWaitingOnFence:             return "msWaitingOnFence";

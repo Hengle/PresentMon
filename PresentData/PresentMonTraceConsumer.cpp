@@ -153,7 +153,7 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     Id = presentCount;
 #endif
 
-    memset(INTC_QueueTimers, 0, sizeof(INTC_QueueTimers));
+    memset(INTC_UmdTimers, 0, sizeof(INTC_UmdTimers));
 }
 
 PMTraceConsumer::PMTraceConsumer()
@@ -200,12 +200,12 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
 
             auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
             switch (Type) {
-            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_FULL_TIMER:           timerIndex = INTC_QUEUE_WAIT_IF_FULL_TIMER; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_EMPTY_TIMER:          timerIndex = INTC_QUEUE_WAIT_IF_EMPTY_TIMER; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_SYNC_TIMER:  timerIndex = INTC_QUEUE_WAIT_UNTIL_EMPTY_SYNC_TIMER; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_DRAIN_TIMER: timerIndex = INTC_QUEUE_WAIT_UNTIL_EMPTY_DRAIN_TIMER; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_FOR_FENCE:               timerIndex = INTC_QUEUE_WAIT_FOR_FENCE; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_FENCE_SUBMITTED:   timerIndex = INTC_QUEUE_WAIT_UNTIL_FENCE_SUBMITTED; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_FULL_TIMER:           timerIndex = INTC_TIMER_WAIT_IF_FULL; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_EMPTY_TIMER:          timerIndex = INTC_TIMER_WAIT_IF_EMPTY; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_SYNC_TIMER:  timerIndex = INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_DRAIN_TIMER: timerIndex = INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_FOR_FENCE:               timerIndex = INTC_TIMER_WAIT_FOR_FENCE; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_FENCE_SUBMITTED:   timerIndex = INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED; break;
             default: assert(false); break;
             }
             break;
@@ -218,32 +218,32 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
 
             auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mSyncType>(pEventRecord, L"value");
             switch (Type) {
-            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU:   timerIndex = INTC_QUEUE_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; break;
-            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_POLL_ON_QUERY_GET_DATA: timerIndex = INTC_QUEUE_SYNC_TYPE_POLL_ON_QUERY_GET_DATA; break;
+            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU:   timerIndex = INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; break;
+            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_POLL_ON_QUERY_GET_DATA: timerIndex = INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA; break;
             default: assert(false); break;
             }
             break;
         }
         }
 
-        auto queueTimer = &frameInfo->mINTCQueueTimers[timerIndex];
+        auto timer = &frameInfo->mINTCUmdTimers[timerIndex];
 
         switch (hdr.EventDescriptor.Id) {
         case Intel_Graphics_D3D10::QueueTimers_Start::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
-            queueTimer->mStartCount += 1;
-            if (queueTimer->mStartCount == 1) {
-                queueTimer->mStartTime = hdr.TimeStamp.QuadPart;
+            timer->mStartCount += 1;
+            if (timer->mStartCount == 1) {
+                timer->mStartTime = hdr.TimeStamp.QuadPart;
             }
             break;
 
         case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
-            if (queueTimer->mStartCount >= 1) {
-                queueTimer->mStartCount -= 1;
-                if (queueTimer->mStartCount == 0) {
-                    queueTimer->mAccumulatedTime += hdr.TimeStamp.QuadPart - queueTimer->mStartTime;
-                    queueTimer->mStartTime = 0;
+            if (timer->mStartCount >= 1) {
+                timer->mStartCount -= 1;
+                if (timer->mStartCount == 0) {
+                    timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime;
+                    timer->mStartTime = 0;
                 }
             }
             break;
@@ -831,13 +831,13 @@ void PMTraceConsumer::AssignFrameInfo(
             frameInfo->mINTCProducerPresentTime = 0;
             frameInfo->mINTCConsumerPresentTime = 0;
 
-            for (uint32_t i = 0; i < INTC_QUEUE_TIMER_COUNT; ++i) {
-                if (frameInfo->mINTCQueueTimers[i].mStartTime != 0) {
-                    frameInfo->mINTCQueueTimers[i].mAccumulatedTime += timestamp - frameInfo->mINTCQueueTimers[i].mStartTime;
-                    frameInfo->mINTCQueueTimers[i].mStartTime = timestamp;
+            for (uint32_t i = 0; i < INTC_TIMER_COUNT; ++i) {
+                if (frameInfo->mINTCUmdTimers[i].mStartTime != 0) {
+                    frameInfo->mINTCUmdTimers[i].mAccumulatedTime += timestamp - frameInfo->mINTCUmdTimers[i].mStartTime;
+                    frameInfo->mINTCUmdTimers[i].mStartTime = timestamp;
                 }
-                pEvent->INTC_QueueTimers[i] = frameInfo->mINTCQueueTimers[i].mAccumulatedTime;
-                frameInfo->mINTCQueueTimers[i].mAccumulatedTime = 0;
+                pEvent->INTC_UmdTimers[i] = frameInfo->mINTCUmdTimers[i].mAccumulatedTime;
+                frameInfo->mINTCUmdTimers[i].mAccumulatedTime = 0;
             }
         }
 

@@ -120,12 +120,12 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
                                                    Header_INTC_FlipProgrammingTime,
                                                    Header_INTC_ActualFlipTime }),
 
-        HeaderCollection(L"-track_queue_timers", { Header_msStalledOnFullQueue,
-                                                   Header_msStalledOnEmptyQueue,
+        HeaderCollection(L"-track_queue_timers", { Header_msStalledOnQueueFull,
                                                    Header_msWaitingOnQueueSync,
                                                    Header_msWaitingOnQueueDrain,
                                                    Header_msWaitingOnFence,
                                                    Header_msWaitingOnFenceSubmission,
+                                                   Header_msStalledOnQueueEmpty,
                                                    Header_ProducerPresentTime,
                                                    Header_ConsumerPresentTime }),
 

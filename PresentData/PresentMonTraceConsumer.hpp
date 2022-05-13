@@ -122,16 +122,16 @@ struct InputEvent {
     InputDeviceType Type;
 };
 
-enum INTCQueueTimer {
-    INTC_QUEUE_WAIT_IF_FULL_TIMER,
-    INTC_QUEUE_WAIT_IF_EMPTY_TIMER,
-    INTC_QUEUE_WAIT_UNTIL_EMPTY_SYNC_TIMER,
-    INTC_QUEUE_WAIT_UNTIL_EMPTY_DRAIN_TIMER,
-    INTC_QUEUE_WAIT_FOR_FENCE,
-    INTC_QUEUE_WAIT_UNTIL_FENCE_SUBMITTED,
-    INTC_QUEUE_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU,
-    INTC_QUEUE_SYNC_TYPE_POLL_ON_QUERY_GET_DATA,
-    INTC_QUEUE_TIMER_COUNT
+enum INTCUmdTimer {
+    INTC_TIMER_WAIT_IF_FULL,
+    INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC,
+    INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN,
+    INTC_TIMER_WAIT_FOR_FENCE,
+    INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED,
+    INTC_TIMER_WAIT_IF_EMPTY,
+    INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU,
+    INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA,
+    INTC_TIMER_COUNT
 };
 
 // A ProcessEvent occurs whenever a Process starts or stops.
@@ -158,7 +158,7 @@ struct PresentEvent {
     // INTC metrics
     uint64_t INTC_ProducerPresentTime;
     uint64_t INTC_ConsumerPresentTime;
-    uint64_t INTC_QueueTimers[INTC_QUEUE_TIMER_COUNT];
+    uint64_t INTC_UmdTimers[INTC_TIMER_COUNT];
 
     // Extra present parameters obtained through DXGI or D3D9 present
     uint64_t SwapChainAddress;
@@ -460,7 +460,7 @@ struct PMTraceConsumer
             uint64_t mStartTime;            // QPC of the start event for this timer, or 0 if no start event
             uint64_t mAccumulatedTime;      // QPC duration of all processed timer durations
             uint32_t mStartCount;           // The number of timers started
-        } mINTCQueueTimers[INTC_QUEUE_TIMER_COUNT];
+        } mINTCUmdTimers[INTC_TIMER_COUNT];
     };
 
     std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes;   // pDxgAdapter -> NodeOrdinal -> Node
