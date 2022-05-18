@@ -1166,7 +1166,6 @@ void PMTraceConsumer::HandleDxgkPagingQueuePacket(EVENT_RECORD* pEventRecord)
 
     switch (hdr.EventDescriptor.Id) {
     case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Start::Id:
-    case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Start_2::Id:
     {
         // On Start - we just add the SequenceId to our map, not starting time yet
         mPagingSequenceIds[SequenceId] = hdr.ProcessId;
@@ -1177,7 +1176,7 @@ void PMTraceConsumer::HandleDxgkPagingQueuePacket(EVENT_RECORD* pEventRecord)
     {
         auto pagingIter = mPagingSequenceIds.find(SequenceId);
         if (pagingIter == mPagingSequenceIds.end()) {
-            printf("Could find processId %d for SequenceId %I64d\n", hdr.ProcessId, SequenceId);
+            //We don't handle packets that we don't have start even for
             return;
         }
         
@@ -1185,28 +1184,28 @@ void PMTraceConsumer::HandleDxgkPagingQueuePacket(EVENT_RECORD* pEventRecord)
 
         if (hdr.EventDescriptor.Id == Microsoft_Windows_DxgKrnl::PagingQueuePacket_Info::Id) {
             // On Info, which indicates start of packet execution, we update start time
-            frameInfo->mResidencyTimers[EventType].mStartTime[SequenceId] = hdr.TimeStamp.QuadPart;
+            frameInfo->mResidencyTimers[EventType].mStartTime = hdr.TimeStamp.QuadPart;
         }
         else {
             // On Stop we accumulate
-            if (frameInfo->mResidencyTimers[EventType].mStartTime[SequenceId] > 0) {
-                frameInfo->mResidencyTimers[EventType].mAccumulatedTime += hdr.TimeStamp.QuadPart - frameInfo->mResidencyTimers[EventType].mStartTime[SequenceId];
+            if (frameInfo->mResidencyTimers[EventType].mStartTime > 0) {
+                frameInfo->mResidencyTimers[EventType].mAccumulatedTime += hdr.TimeStamp.QuadPart - frameInfo->mResidencyTimers[EventType].mStartTime;
             }
             // Remove SequenceId from start map
-            frameInfo->mResidencyTimers[EventType].mStartTime.erase(SequenceId);
+            frameInfo->mResidencyTimers[EventType].mStartTime = 0;
             // Remove SequenceId from global map
             mPagingSequenceIds.erase(pagingIter);
         }
         break;
     }
     default:
+        assert(!mFilteredEvents);
         return;
     }
 }
 void PMTraceConsumer::HandleDxgkResidencyEvent(EVENT_RECORD* pEventRecord)
 {
     ResidencyEventTypes eventType = DXGK_RESIDENCY_EVENT_COUNT;
-    uint64_t  startIdx = 0;
 
     auto const& hdr = pEventRecord->EventHeader;
     auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
@@ -1219,26 +1218,20 @@ void PMTraceConsumer::HandleDxgkResidencyEvent(EVENT_RECORD* pEventRecord)
         eventType = DXGK_RESIDENCY_EVENT_MAKE_RESIDENT;
         break;
     }
-    default: assert(false); break;
+    default: assert(!mFilteredEvents); break;
     }
 
     auto timer = &frameInfo->mResidencyTimers[eventType];
 
     switch (hdr.EventDescriptor.Id) {
     case Microsoft_Windows_DxgKrnl::MakeResident_Start::Id:
-        timer->mStartCount += 1;
-        if (timer->mStartCount == 1) {
-            timer->mStartTime[startIdx] = hdr.TimeStamp.QuadPart;
-        }
+        timer->mStartTime = hdr.TimeStamp.QuadPart;
         break;
 
     case Microsoft_Windows_DxgKrnl::MakeResident_Stop::Id:
-        if (timer->mStartCount >= 1) {
-            timer->mStartCount -= 1;
-            if (timer->mStartCount == 0) {
-                timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime[startIdx];
-                timer->mStartTime.erase(startIdx);
-            }
+        if (timer->mStartTime > 0) {
+            timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime;
+            timer->mStartTime = 0;
         }
         break;
     }
@@ -1826,7 +1819,6 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             return;
         }
         case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Start::Id:
-        case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Start_2::Id:
         case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Info::Id:
         case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Stop::Id:
         {

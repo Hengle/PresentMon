@@ -476,9 +476,8 @@ struct PMTraceConsumer
         } mINTCUmdTimers[INTC_TIMER_COUNT];
 
         struct {
-            std::map <uint64_t, uint64_t>   mStartTime;            // Memory Residency array for start time maps: SequenceId -> StartTime
-            uint64_t                        mAccumulatedTime;      // QPC duration of all processed timer durations
-            uint32_t                        mStartCount;           // The number of timers started
+            uint64_t mStartTime;            // Memory Residency array for start time maps: SequenceId -> StartTime
+            uint64_t mAccumulatedTime;      // QPC duration of all processed timer durations
         } mResidencyTimers[DXGK_RESIDENCY_EVENT_COUNT];
     };
 
