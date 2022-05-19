@@ -1049,7 +1049,7 @@ void PMTraceConsumer::HandleDxgkPresentHistory(
     EVENT_HEADER const& hdr,
     uint64_t token,
     uint64_t tokenData,
-    PresentMode knownPresentMode)
+    Microsoft_Windows_DxgKrnl::PresentModel presentModel)
 {
     // These events are emitted during submission of all types of windowed presents while DWM is on.
     // It gives us up to two different types of keys to correlate further.
@@ -1089,13 +1089,21 @@ void PMTraceConsumer::HandleDxgkPresentHistory(
     mPresentByDxgkPresentHistoryToken[token] = presentEvent;
 
     if (presentEvent->PresentMode == PresentMode::Hardware_Legacy_Copy_To_Front_Buffer) {
+        assert(presentModel == Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_UNINITIALIZED ||
+               presentModel == Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_BLT);
         presentEvent->PresentMode = PresentMode::Composed_Copy_GPU_GDI;
-        assert(knownPresentMode == PresentMode::Unknown ||
-               knownPresentMode == PresentMode::Composed_Copy_GPU_GDI);
 
     } else if (presentEvent->PresentMode == PresentMode::Unknown) {
-        if (knownPresentMode == PresentMode::Composed_Composition_Atlas) {
+        if (presentModel == Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_COMPOSITION) {
+            /* BEGIN WORKAROUND: DirectComposition presents are currently ignored. There
+             * were rare situations observed where they would lead to issues during present
+             * completion (including stackoverflow caused by recursive completion).  This
+             * could not be diagnosed, so we removed support for this present mode for now...
             presentEvent->PresentMode = PresentMode::Composed_Composition_Atlas;
+            */
+            RemoveLostPresent(presentEvent);
+            return;
+            /* END WORKAROUND */
         } else {
             // When there's no Win32K events, we'll assume PHTs that aren't after a blt, and aren't composition tokens
             // are flip tokens and that they're displayed. There are no Win32K events on Win7, and they might not be
@@ -1137,8 +1145,11 @@ void PMTraceConsumer::HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint
         ? hdr.TimeStamp.QuadPart
         : std::min(eventIter->second->ReadyTime, (uint64_t) hdr.TimeStamp.QuadPart);
 
-    // Composed Composition Atlas or Win7 Flip does not have DWM events indicating intent to present this frame.
-    if (eventIter->second->PresentMode == PresentMode::Composed_Composition_Atlas ||
+    // Neither Composed Composition Atlas or Win7 Flip has DWM events indicating intent
+    // to present this frame.
+    //
+    // Composed presents are currently ignored.
+    if (//eventIter->second->PresentMode == PresentMode::Composed_Composition_Atlas ||
         (eventIter->second->PresentMode == PresentMode::Composed_Flip && !eventIter->second->SeenWin32KEvents)) {
         mPresentsWaitingForDWM.emplace_back(eventIter->second);
         eventIter->second->PresentInDwmWaitingStruct = true;
@@ -1353,16 +1364,8 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         auto TokenData = desc[2].GetData<uint64_t>();
 
         if (Model != Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_GDI) {
-            auto presentMode = PresentMode::Unknown;
-            switch (Model) {
-            case Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_BLT:         presentMode = PresentMode::Composed_Copy_GPU_GDI; break;
-            case Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_VISTABLT:    presentMode = PresentMode::Composed_Copy_CPU_GDI; break;
-            case Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_FLIP:        presentMode = PresentMode::Composed_Flip; break;
-            case Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_COMPOSITION: presentMode = PresentMode::Composed_Composition_Atlas; break;
-            }
-
             TRACK_PRESENT_PATH_GENERATE_ID();
-            HandleDxgkPresentHistory(hdr, Token, TokenData, presentMode);
+            HandleDxgkPresentHistory(hdr, Token, TokenData, Model);
         }
         return;
     }
@@ -1956,7 +1959,7 @@ void PMTraceConsumer::HandleWin7DxgkPresentHistory(EVENT_RECORD* pEventRecord)
             pEventRecord->EventHeader,
             pPresentHistoryEvent->Token,
             0,
-            PresentMode::Unknown);
+            Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_UNINITIALIZED);
     } else if (pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_INFO) {
         TRACK_PRESENT_PATH_GENERATE_ID();
         HandleDxgkPresentHistoryInfo(pEventRecord->EventHeader, pPresentHistoryEvent->Token);
@@ -2513,7 +2516,7 @@ void PMTraceConsumer::CompletePresent(std::shared_ptr<PresentEvent> const& p)
     // persist for the full capture.
     //
     // We handle this by throwing away all queued presents up to this point.
-    if (!mHasCompletedAPresent) {
+    if (!mHasCompletedAPresent && !p->IsLost) {
         mHasCompletedAPresent = true;
 
         for (auto const& pr : mOrderedPresentsByProcessId) {

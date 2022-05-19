@@ -21,7 +21,6 @@ const char* PresentModeToString(PresentMode mode)
     case PresentMode::Composed_Flip: return "Composed: Flip";
     case PresentMode::Composed_Copy_GPU_GDI: return "Composed: Copy with GPU GDI";
     case PresentMode::Composed_Copy_CPU_GDI: return "Composed: Copy with CPU GDI";
-    case PresentMode::Composed_Composition_Atlas: return "Composed: Composition Atlas";
     case PresentMode::Hardware_Composed_Independent_Flip: return "Hardware Composed: Independent Flip";
     default: return "Other";
     }

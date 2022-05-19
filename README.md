@@ -168,7 +168,6 @@ The following values are used in the PresentMode column:
 | Hardware Composed: Independent Flip   | Indicates the app is using ["flip model" swapchains](https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-flip-model), and has been granted a hardware overlay plane.                    |
 | Composed: Copy with GPU GDI           | Indicates the app is windowed, and is copying contents into a surface that's shared with GDI.                                                                                                        |
 | Composed: Copy with CPU GDI           | Indicates the app is windowed, and is copying contents into a dedicated DirectX window surface. GDI contents are stored separately, and are composed together with DX contents by the DWM.           |
-| Composed: Composition Atlas           | Indicates use of DirectComposition.                                                                                                                                                                  |
 
 For more information on the performance implications of these, see:
 

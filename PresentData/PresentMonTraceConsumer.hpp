@@ -23,6 +23,8 @@
 #include "TraceConsumer.hpp"
 #include "ETW/Intel_Graphics_D3D10.h"
 
+#include "ETW/Microsoft_Windows_DxgKrnl.h"
+
 // PresentMode represents the different paths a present can take on windows.
 //
 // Hardware_Legacy_Flip:
@@ -38,9 +40,6 @@
 //     -> QueueSubmit (by thread, for submit sequence)
 //     -> QueueComplete (by submit sequence, indicates ready and screen time)
 // Distinction between FS and windowed blt is done by the lack of other events.
-//
-// Hardware_Direct_Flip:
-//     N/A, not currently uniquely detectable (follows the same path as Composed_Flip)
 //
 // Hardware_Independent_Flip:
 //     Follows same path as Composed_Flip, but TokenStateChanged indicates IndependentFlip
@@ -74,27 +73,29 @@
 //     -> DWM FlipChain (by legacy blit token, for hWnd and marks hWnd active for composition)
 //     -> Follows the Windowed_Blit path for tracking to screen
 //
+// Hardware_Composed_Independent_Flip:
+//     Identical to hardware independent flip, but VSyncDPCMPO and HSyncDPCMPO contains more than one valid plane and SubmitSequence.
+//
+// The following present modes are not currently detected by PresentMon:
+//
+// Hardware_Direct_Flip:
+//     Not uniquely detectable through ETW (follows the same path as Composed_Flip)
+//
 // Composed Composition Atlas (DirectComposition):
+//     Unable to track composition dependencies, leading to incorrect/misleading metrics.
 //     Runtime PresentStart
 //     -> DxgKrnl_PresentHistory_Start (use model field for classification, get token ptr)
 //     -> DxgKrnl_PresentHistory_Info (by token ptr)
 //     -> Assume DWM will compose this buffer on next present (missing InFrame event), follow windowed blit paths to screen time
-//
-// Hardware_Composed_Independent_Flip:
-//     Identical to hardware independent flip, but VSyncDPCMPO and HSyncDPCMPO contains more than one valid plane and SubmitSequence.
 
 enum class PresentMode {
     Unknown,
     Hardware_Legacy_Flip,
     Hardware_Legacy_Copy_To_Front_Buffer,
-    /* Not detected:
-    Hardware_Direct_Flip,
-    */
     Hardware_Independent_Flip,
     Composed_Flip,
     Composed_Copy_GPU_GDI,
     Composed_Copy_CPU_GDI,
-    Composed_Composition_Atlas,
     Hardware_Composed_Independent_Flip,
 };
 
@@ -506,7 +507,7 @@ struct PMTraceConsumer
     void HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid);
     void HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence);
     void HandleDxgkSyncDPCMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, bool isMultiplane);
-    void HandleDxgkPresentHistory(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, PresentMode knownPresentMode);
+    void HandleDxgkPresentHistory(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, Microsoft_Windows_DxgKrnl::PresentModel presentModel);
     void HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint64_t token);
 
     void CompletePresent(std::shared_ptr<PresentEvent> const& p);
