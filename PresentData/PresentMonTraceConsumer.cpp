@@ -814,12 +814,17 @@ void PMTraceConsumer::AssignFrameInfo(
         auto videoDmaInfo = &frameInfo->mVideoEngines;
 
         DebugModifyPresent(pEvent);
-        pEvent->GPUStartTime = frameDmaInfo->mFirstDmaTime;
-        pEvent->ReadyTime = frameDmaInfo->mLastDmaTime;
-        pEvent->GPUDuration = frameDmaInfo->mAccumulatedDmaTime;
-        frameDmaInfo->mFirstDmaTime = 0;
-        frameDmaInfo->mLastDmaTime = 0;
-        frameDmaInfo->mAccumulatedDmaTime = 0;
+
+        // Update GPUStartTime/ReadyTime/GPUDuration if any DMA packets were
+        // observed.
+        if (frameDmaInfo->mFirstDmaTime != 0) {
+            pEvent->GPUStartTime = frameDmaInfo->mFirstDmaTime;
+            pEvent->ReadyTime = frameDmaInfo->mLastDmaTime;
+            pEvent->GPUDuration = frameDmaInfo->mAccumulatedDmaTime;
+            frameDmaInfo->mFirstDmaTime = 0;
+            frameDmaInfo->mLastDmaTime = 0;
+            frameDmaInfo->mAccumulatedDmaTime = 0;
+        }
 
         pEvent->GPUVideoDuration = videoDmaInfo->mAccumulatedDmaTime;
         videoDmaInfo->mFirstDmaTime = 0;
