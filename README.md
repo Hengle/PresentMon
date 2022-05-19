@@ -96,8 +96,8 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | `-track_gpu_video`     | Track the video encode/decode portion of GPU work separately from other engines. Not supported on Win7. |
 | `-track_input`         | Tracks the time of keyboard/mouse clicks that were used by each frame.                                  |
 | `-track_power`         | Writes PCAT metrics to presentmon_pcat.csv in the working directory.                                    |
-| `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                    |    
-| `-track_memory_residency` | Capture time spent in Residency/Paging operations.                                                   |
+| `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                    |
+| `-track_memory_residency` | Capture CPU time spent in memory residency and paging operations during each frame.                  |
 
 | Internal Options      |                                                            |
 | --------------------- | ---------------------------------------------------------- |
@@ -232,7 +232,11 @@ In this case, PresentTime/TimeInSeconds will represent the first time the presen
 
 ### Measuring input latency
 
-When using `-track_input`, PresentMon will track when keyboard/mouse events are read by the OS and the target application.  Then, for frames where `msSinceInput` is non-zero, `msSinceInput + msUntilDisplayed` can be used to better-understand the latency between user input and the display of the resulting rendered frame.  Note, however, that this is just the OS-visible subset of the full  latency: it does not include any latency incurred within the input/display hardware and drivers.
+When using `-track_input`, PresentMon will track when keyboard/mouse events are read by the OS and the target application.  Then, for frames where `msSinceInput` is non-zero, `msSinceInput + msUntilDisplayed` can be used to better-understand the latency between user input and the display of the resulting rendered frame.  Note, however, that this is just the OS-visible subset of the full input-to-photon latency and doesn't include:
+
+- time spent processing input in the keyboard/controller hardware or drivers (typically a fixed additional overhead),
+- time spent processing the output in the display hardware or drivers (typically a fixed additional overhead), and
+- a combination of display blanking interval and scan time (which varies, depending on timing and tearing).
 
 ### Shutting down PresentMon on Windows 7
 

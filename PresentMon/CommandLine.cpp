@@ -349,10 +349,10 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTrackDebug = false;
     args->mTrackPower = false;
     args->mTrackWMR = false;
-    args->mTrackINTCQueueTimers = false;
+    args->mTrackINTCUmdTimers = false;
     args->mTrackINTCCpuGpuSync = false;
     args->mDebugINTCFramePacing = false;
-	args->mTrackMemoryResidency = false;
+    args->mTrackMemoryResidency = false;
     args->mOutputCsvToFile = true;
     args->mOutputCsvToStdout = false;
     args->mOutputQpcTime = false;
@@ -412,20 +412,19 @@ bool ParseCommandLine(int argc, char** argv)
         else if (ParseArg(argv[i], "terminate_after_timed"))  { args->mTerminateAfterTimer = true; continue; }
 
         // Beta options:
-        else if (ParseArg(argv[i], "date_time"))             { args->mOutputDateTime = true; continue; }
-        else if (ParseArg(argv[i], "track_gpu"))             { args->mTrackGPU       = true; continue; }
-        else if (ParseArg(argv[i], "track_gpu_video"))       { args->mTrackGPUVideo  = true; continue; }
-        else if (ParseArg(argv[i], "track_input"))           { args->mTrackInput     = true; continue; }
-        else if (ParseArg(argv[i], "track_power"))           { args->mTrackPower     = true; continue; }
-        else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR       = true; continue; }
-        else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr        = true; continue; }
-        else if (ParseArg(argv[i], "track_memory_residency")){ args->mTrackMemoryResidency = true; continue; }
+        else if (ParseArg(argv[i], "date_time"))              { args->mOutputDateTime       = true; continue; }
+        else if (ParseArg(argv[i], "track_gpu"))              { args->mTrackGPU             = true; continue; }
+        else if (ParseArg(argv[i], "track_gpu_video"))        { args->mTrackGPUVideo        = true; continue; }
+        else if (ParseArg(argv[i], "track_input"))            { args->mTrackInput           = true; continue; }
+        else if (ParseArg(argv[i], "track_power"))            { args->mTrackPower           = true; continue; }
+        else if (ParseArg(argv[i], "track_mixed_reality"))    { args->mTrackWMR             = true; continue; }
+        else if (ParseArg(argv[i], "include_mixed_reality"))  { DEPRECATED_wmr              = true; continue; }
+        else if (ParseArg(argv[i], "track_memory_residency")) { args->mTrackMemoryResidency = true; continue; }
 
         // Internal options:
-        else if (ParseArg(argv[i], "track_queue_timers" )) { args->mTrackINTCQueueTimers = true; continue; }
+        else if (ParseArg(argv[i], "track_queue_timers" )) { args->mTrackINTCUmdTimers   = true; continue; }
         else if (ParseArg(argv[i], "track_cpu_gpu_sync" )) { args->mTrackINTCCpuGpuSync  = true; continue; }
         else if (ParseArg(argv[i], "debug_frame_pacing" )) { args->mDebugINTCFramePacing = true; continue; }
-
 
         // Provided argument wasn't recognized
         else if (!(ParseArg(argv[i], "?") || ParseArg(argv[i], "h") || ParseArg(argv[i], "help"))) {
@@ -588,7 +587,7 @@ bool ParseCommandLine(int argc, char** argv)
         args->mTrackDebug ||
         args->mTrackPower ||
         args->mTrackWMR ||
-        args->mTrackINTCQueueTimers ||
+        args->mTrackINTCUmdTimers ||
         args->mTrackINTCCpuGpuSync ||
         args->mDebugINTCFramePacing ||
         args->mTerminateOnProcExit ||
@@ -598,7 +597,7 @@ bool ParseCommandLine(int argc, char** argv)
     }
 
     // If the INTC provider is required, check that the manifest is installed.
-    if (args->mEtlFileName == nullptr && (args->mTrackINTCQueueTimers || args->mTrackINTCCpuGpuSync)) {
+    if (args->mEtlFileName == nullptr && (args->mTrackINTCUmdTimers || args->mTrackINTCCpuGpuSync)) {
         ULONG bufferSize = 0;
         auto status = TdhEnumerateManifestProviderEvents((LPGUID) &Intel_Graphics_D3D10::GUID, nullptr, &bufferSize);
         if (status == ERROR_NOT_FOUND) {

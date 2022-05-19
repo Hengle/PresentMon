@@ -159,7 +159,6 @@ ULONG EnableProviders(
     if (pmConsumer->mTrackGPUVideo) {
         provider.AddEvent<Microsoft_Windows_DxgKrnl::NodeMetadata_Info>();
     }
-
     if (pmConsumer->mTrackMemoryResidency) {
         provider.AddEvent<Microsoft_Windows_DxgKrnl::MakeResident_Start>();
         provider.AddEvent<Microsoft_Windows_DxgKrnl::MakeResident_Stop>();
@@ -167,6 +166,15 @@ ULONG EnableProviders(
         provider.AddEvent<Microsoft_Windows_DxgKrnl::PagingQueuePacket_Info>();
         provider.AddEvent<Microsoft_Windows_DxgKrnl::PagingQueuePacket_Stop>();
     }
+
+    // BEGIN WORKAROUND: Don't filter DXGK events using the Performance keyword,
+    // as that can have side-effects with negative performance impact on some
+    // versions of Windows.
+    if (provider.anyKeywordMask_ & (uint64_t) Microsoft_Windows_DxgKrnl::Keyword::Microsoft_Windows_DxgKrnl_Performance) {
+        provider.anyKeywordMask_ &= ~(uint64_t) Microsoft_Windows_DxgKrnl::Keyword::Microsoft_Windows_DxgKrnl_Performance;
+        provider.allKeywordMask_ = 0;
+    }
+    // END WORKAROUND
 
     status = provider.Enable(sessionHandle, sessionGuid, Microsoft_Windows_DxgKrnl::GUID);
     if (status != ERROR_SUCCESS) return status;
@@ -243,10 +251,10 @@ ULONG EnableProviders(
         }
     }
 
-    if (pmConsumer->mTrackINTCQueueTimers || pmConsumer->mTrackINTCCpuGpuSync || pmConsumer->mDebugINTCFramePacing) {
+    if (pmConsumer->mTrackINTCUmdTimers || pmConsumer->mTrackINTCCpuGpuSync || pmConsumer->mDebugINTCFramePacing) {
         // Intel_Graphics_D3D10
         provider.ClearFilter();
-        if (pmConsumer->mTrackINTCQueueTimers) {
+        if (pmConsumer->mTrackINTCUmdTimers) {
             provider.AddEvent<Intel_Graphics_D3D10::QueueTimers_Start>();
             provider.AddEvent<Intel_Graphics_D3D10::QueueTimers_Stop>();
             provider.AddEvent<Intel_Graphics_D3D10::QueueTimers_Info>();
@@ -490,7 +498,7 @@ ULONG TraceSession::Start(
         pmConsumer->mTrackDisplay,
         pmConsumer->mTrackInput,
         mrConsumer != nullptr,
-        pmConsumer->mTrackINTCQueueTimers || pmConsumer->mTrackINTCCpuGpuSync || pmConsumer->mDebugINTCFramePacing,
+        pmConsumer->mTrackINTCUmdTimers || pmConsumer->mTrackINTCCpuGpuSync || pmConsumer->mDebugINTCFramePacing,
         pmConsumer->mTrackPCAT);
 
     // When processing log files, we need to use the buffer callback in case

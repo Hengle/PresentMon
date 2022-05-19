@@ -138,6 +138,8 @@ struct PresentMonCsv
         case Header_ConsumerPresentTime:          return "ConsumerPresentTime";
         case Header_msWaitingOnSyncObject:        return "msWaitingOnSyncObject";
         case Header_msWaitingOnQueryData:         return "msWaitingOnQueryData";
+        case Header_msInMakeResident:             return "msInMakeResident";
+        case Header_msInPagingPackets:            return "msInPagingPackets";
         }
         return "<unknown>";
     }

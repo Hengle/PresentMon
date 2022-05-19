@@ -172,7 +172,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
     switch (hdr.EventDescriptor.Id) {
     case Intel_Graphics_D3D10::QueueTimers_Info::Id:
     {
-        assert(mTrackINTCQueueTimers);
+        assert(mTrackINTCUmdTimers);
 
         auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
 
@@ -197,7 +197,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         case Intel_Graphics_D3D10::QueueTimers_Start::Id:
         case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
         {
-            assert(!mFilteredEvents || mTrackINTCQueueTimers); // Assert that filtering is working if expected
+            assert(!mFilteredEvents || mTrackINTCUmdTimers); // Assert that filtering is working if expected
 
             auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
             switch (Type) {
@@ -826,7 +826,7 @@ void PMTraceConsumer::AssignFrameInfo(
         videoDmaInfo->mLastDmaTime = 0;
         videoDmaInfo->mAccumulatedDmaTime = 0;
 
-        if (mTrackINTCQueueTimers || mTrackINTCCpuGpuSync) {
+        if (mTrackINTCUmdTimers || mTrackINTCCpuGpuSync) {
             pEvent->INTC_ProducerPresentTime = frameInfo->mINTCProducerPresentTime;
             pEvent->INTC_ConsumerPresentTime = frameInfo->mINTCConsumerPresentTime;
             frameInfo->mINTCProducerPresentTime = 0;
@@ -843,9 +843,7 @@ void PMTraceConsumer::AssignFrameInfo(
         }
 
         if (mTrackMemoryResidency) {
-            //Copy & Init all Residency timers
-            for (uint32_t i = DXGK_RESIDENCY_EVENT_MAKE_RESIDENT; i < DXGK_RESIDENCY_EVENT_COUNT; i++)
-            {
+            for (uint32_t i = 0; i < DXGK_RESIDENCY_EVENT_COUNT; i++)  {
                 pEvent->MemoryResidency[i] = frameInfo->mResidencyTimers[i].mAccumulatedTime;
                 frameInfo->mResidencyTimers[i].mAccumulatedTime = 0;
             }
@@ -1152,91 +1150,6 @@ void PMTraceConsumer::HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint
     mPresentByDxgkPresentHistoryToken.erase(eventIter);
 }
 
-
-void PMTraceConsumer::HandleDxgkPagingQueuePacket(EVENT_RECORD* pEventRecord)
-{
-    ResidencyEventTypes EventType = DXGK_RESIDENCY_EVENT_PAGING_QUEUE_PACKET;
-
-    EventDataDesc desc[] = {
-            { L"SequenceId" },
-    };
-    mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-    auto SequenceId = desc[0].GetData<uint64_t>();
-    auto const& hdr = pEventRecord->EventHeader;
-
-    switch (hdr.EventDescriptor.Id) {
-    case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Start::Id:
-    {
-        // On Start - we just add the SequenceId to our map, not starting time yet
-        mPagingSequenceIds[SequenceId] = hdr.ProcessId;
-        break;
-    }
-    case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Info::Id:
-    case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Stop::Id:
-    {
-        auto pagingIter = mPagingSequenceIds.find(SequenceId);
-        if (pagingIter == mPagingSequenceIds.end()) {
-            //We don't handle packets that we don't have start even for
-            return;
-        }
-        
-        auto frameInfo = &mProcessFrameInfo.emplace(pagingIter->second, FrameInfo{}).first->second;
-
-        if (hdr.EventDescriptor.Id == Microsoft_Windows_DxgKrnl::PagingQueuePacket_Info::Id) {
-            // On Info, which indicates start of packet execution, we update start time
-            frameInfo->mResidencyTimers[EventType].mStartTime = hdr.TimeStamp.QuadPart;
-        }
-        else {
-            // On Stop we accumulate
-            if (frameInfo->mResidencyTimers[EventType].mStartTime > 0) {
-                frameInfo->mResidencyTimers[EventType].mAccumulatedTime += hdr.TimeStamp.QuadPart - frameInfo->mResidencyTimers[EventType].mStartTime;
-            }
-            // Remove SequenceId from start map
-            frameInfo->mResidencyTimers[EventType].mStartTime = 0;
-            // Remove SequenceId from global map
-            mPagingSequenceIds.erase(pagingIter);
-        }
-        break;
-    }
-    default:
-        assert(!mFilteredEvents);
-        return;
-    }
-}
-void PMTraceConsumer::HandleDxgkResidencyEvent(EVENT_RECORD* pEventRecord)
-{
-    ResidencyEventTypes eventType = DXGK_RESIDENCY_EVENT_COUNT;
-
-    auto const& hdr = pEventRecord->EventHeader;
-    auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
-
-
-    switch (hdr.EventDescriptor.Id) {
-    case Microsoft_Windows_DxgKrnl::MakeResident_Start::Id:
-    case Microsoft_Windows_DxgKrnl::MakeResident_Stop::Id:
-    {
-        eventType = DXGK_RESIDENCY_EVENT_MAKE_RESIDENT;
-        break;
-    }
-    default: assert(!mFilteredEvents); break;
-    }
-
-    auto timer = &frameInfo->mResidencyTimers[eventType];
-
-    switch (hdr.EventDescriptor.Id) {
-    case Microsoft_Windows_DxgKrnl::MakeResident_Start::Id:
-        timer->mStartTime = hdr.TimeStamp.QuadPart;
-        break;
-
-    case Microsoft_Windows_DxgKrnl::MakeResident_Stop::Id:
-        if (timer->mStartTime > 0) {
-            timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime;
-            timer->mStartTime = 0;
-        }
-        break;
-    }
-}
-
 void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 {
     DebugEvent(pEventRecord, &mMetadata);
@@ -1471,7 +1384,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         return;
     }
 
-    if (mTrackGPU || mTrackINTCQueueTimers) {
+    if (mTrackGPU || mTrackINTCUmdTimers) {
         switch (hdr.EventDescriptor.Id) {
 
         // We need a mapping from hContext to GPU node.
@@ -1812,21 +1725,89 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             }
             return;
         }
+        }
+    }
+
+    if (mTrackMemoryResidency) {
+        switch (hdr.EventDescriptor.Id) {
+
+        // Memory residency tracking.
         case Microsoft_Windows_DxgKrnl::MakeResident_Start::Id:
+        {
+            auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
+            auto timer = &frameInfo->mResidencyTimers[DXGK_RESIDENCY_EVENT_MAKE_RESIDENT];
+            timer->mStartTime = hdr.TimeStamp.QuadPart;
+            return;
+        }
         case Microsoft_Windows_DxgKrnl::MakeResident_Stop::Id:
         {
-            HandleDxgkResidencyEvent(pEventRecord);
+            auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
+            auto timer = &frameInfo->mResidencyTimers[DXGK_RESIDENCY_EVENT_MAKE_RESIDENT];
+            if (timer->mStartTime > 0) {
+                timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime;
+                timer->mStartTime = 0;
+            }
             return;
         }
+
+        // Paging queue packet tracking.
+        //
+        // PagingQueuePacket_Start is called from the target process, and we
+        // use it to track the association of process id to paging packet
+        // sequence id.
+        //
+        // PagingQueuePacket_Info indicates the start of packet processing on
+        // the CPU.
+        //
+        // PagingQueuePacket_Stop indicates the end of packet processing on the
+        // CPU.
         case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Start::Id:
+        {
+            auto SequenceId = mMetadata.GetEventData<uint64_t>(pEventRecord, L"SequenceId");
+            mPagingSequenceIds[SequenceId] = hdr.ProcessId;
+            return;
+        }
         case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Info::Id:
+        {
+            auto SequenceId = mMetadata.GetEventData<uint64_t>(pEventRecord, L"SequenceId");
+            auto pagingIter = mPagingSequenceIds.find(SequenceId);
+            if (pagingIter != mPagingSequenceIds.end()) {
+                auto frameInfo = &mProcessFrameInfo.emplace(pagingIter->second, FrameInfo{}).first->second;
+                auto timer = &frameInfo->mResidencyTimers[DXGK_RESIDENCY_EVENT_PAGING_QUEUE_PACKET];
+
+                // If this fires, then either a PagingQueuePacket_Stop event
+                // was missed (which is expected but should be rare) or
+                // multiple paging packets can execute in parallel (which
+                // violates the assumption we're making).  If the latter, this
+                // needs to be fixed.
+                assert(timer->mStartTime == 0);
+
+                timer->mStartTime = hdr.TimeStamp.QuadPart;
+            }
+            return;
+        }
         case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Stop::Id:
         {
-            HandleDxgkPagingQueuePacket(pEventRecord);
+            auto SequenceId = mMetadata.GetEventData<uint64_t>(pEventRecord, L"SequenceId");
+            auto pagingIter = mPagingSequenceIds.find(SequenceId);
+            if (pagingIter != mPagingSequenceIds.end()) {
+                auto frameInfo = &mProcessFrameInfo.emplace(pagingIter->second, FrameInfo{}).first->second;
+                auto timer = &frameInfo->mResidencyTimers[DXGK_RESIDENCY_EVENT_PAGING_QUEUE_PACKET];
+
+                if (timer->mStartTime > 0) {
+                    timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime;
+                    timer->mStartTime = 0;
+                }
+
+                // Stop tracking this SequenceId
+                //
+                // TODO: If we miss a PagingQueuePacket_Stop, then this will stay
+                // in the map.  When we get a PagingQueuePacket_Stop, we should
+                // probably also remove any stored sequence id <= SequenceId.
+                mPagingSequenceIds.erase(pagingIter);
+            }
             return;
         }
-
-
         }
     }
 
