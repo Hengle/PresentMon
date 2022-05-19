@@ -22,7 +22,15 @@ goto args_ok
 :args_ok
 set already_exists=0
 
-set pmargs=-no_top -stop_existing_session -qpc_time -track_debug -track_gpu -track_gpu_video -track_input
+set pmargs=-no_top -stop_existing_session -qpc_time -track_debug
+:: BEGIN internal-only
+set pmargs=%pmargs% -track_gpu
+set pmargs=%pmargs% -track_gpu_video
+set pmargs=%pmargs% -track_input
+set pmargs=%pmargs% -track_memory_residency
+set pmargs=%pmargs% -track_queue_timers
+set pmargs=%pmargs% -track_cpu_gpu_sync
+:: END internal-only
 for /f "tokens=*" %%a in ('dir /s /b /a-d "%rootdir%\*.etl"') do call :create_csv "%%a"
 
 if %already_exists% neq 0 echo Use 'force' command line argument to overwrite.
