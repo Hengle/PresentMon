@@ -102,7 +102,7 @@ static void WriteCsvHeader(FILE* fp)
             ",msWaitingOnQueryData");
     }
     if (args.mTrackMemoryResidency) {
-        fprintf(fp, ",msMakeResident,msPagingPackets");
+        fprintf(fp, ",msInMakeResident,msInPagingPackets");
     }
     if (args.mOutputQpcTime) {
         fprintf(fp, ",QPCTime");

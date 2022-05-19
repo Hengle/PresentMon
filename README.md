@@ -96,7 +96,8 @@ If PresentMon is not run with administrator privilege, it will not have complete
 | `-track_gpu_video`     | Track the video encode/decode portion of GPU work separately from other engines. Not supported on Win7. |
 | `-track_input`         | Tracks the time of keyboard/mouse clicks that were used by each frame.                                  |
 | `-track_power`         | Writes PCAT metrics to presentmon_pcat.csv in the working directory.                                    |
-| `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                    |
+| `-track_mixed_reality` | Capture Windows Mixed Reality data to a CSV file with "_WMR" suffix.                                    |    
+| `-track_memory_residency` | Capture time spent in Residency/Paging operations.                                                   |
 
 | Internal Options      |                                                            |
 | --------------------- | ---------------------------------------------------------- |
@@ -143,8 +144,8 @@ If `-hotkey` is used, then one CSV is created for each time recording is started
 | msGPUVideoActive       | The time the GPU spent encoding/decoding video during this frame, in milliseconds.                                                                                                                                                                                        | `-track_gpu_video`           |
 | WasBatched             | Whether the frame was submitted by the driver on a different thread than the app (1) or not (0).                                                                                                                                                                          | `-track_debug`               |
 | DwmNotified            | Whether the desktop compositor was notified about the frame (1) or not (0).                                                                                                                                                                                               | `-track_debug`               |
-| msStalledOnFullQueue       | How long the producer thread was stalled on a full queue, in milliseconds.                  | `-track_queue_timers` |
-| msStalledOnEmptyQueue      | How long the consumer thread was stalled on an empty queue, in milliseconds.                | `-track_queue_timers` |
+| msStalledOnQueueFull       | How long the producer thread was stalled on a full queue, in milliseconds.                  | `-track_queue_timers` |
+| msStalledOnQueueEmpty      | How long the consumer thread was stalled on an empty queue, in milliseconds.                | `-track_queue_timers` |
 | msWaitingOnQueueSync       | How long the driver waited for the queue to empty due to synchronization, in milliseconds.  | `-track_queue_timers` |
 | msWaitingOnQueueDrain      | How long the driver waited for the queue to drain, in milliseconds.                         | `-track_queue_timers` |
 | msWaitingOnFence           | How long the driver waited for consumer fences, in milliseconds.                            | `-track_queue_timers` |
@@ -153,6 +154,8 @@ If `-hotkey` is used, then one CSV is created for each time recording is started
 | ConsumerPresentTime        | The time of the present operation on the consumer thread, in seconds since capture started. | `-track_queue_timers` |
 | msWaitingOnSyncObject      | How much time was spent waiting for a sync object from the CPU, in milliseconds.            | `-track_cpu_gpu_sync` |
 | msWaitingOnQueryData       | How much time the driver spent polling for query data, in milliseconds.                     | `-track_cpu_gpu_sync` |
+| msInMakeResident           | How much time was spent inside MakeResident calls, in milliseconds.                         | `-track_memory_residency` |
+| msInPagingPackets          | How much time was spent exectuing Paging packets, in milliseconds.                          | `-track_memory_residency` |
 
 The following values are used in the PresentMode column:
 

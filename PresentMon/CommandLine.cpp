@@ -419,7 +419,7 @@ bool ParseCommandLine(int argc, char** argv)
         else if (ParseArg(argv[i], "track_power"))           { args->mTrackPower     = true; continue; }
         else if (ParseArg(argv[i], "track_mixed_reality"))   { args->mTrackWMR       = true; continue; }
         else if (ParseArg(argv[i], "include_mixed_reality")) { DEPRECATED_wmr        = true; continue; }
-		else if (ParseArg(argv[i], "track_memory_residency")){ args->mTrackMemoryResidency = true; continue; }
+        else if (ParseArg(argv[i], "track_memory_residency")){ args->mTrackMemoryResidency = true; continue; }
 
         // Internal options:
         else if (ParseArg(argv[i], "track_queue_timers" )) { args->mTrackINTCQueueTimers = true; continue; }

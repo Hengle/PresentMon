@@ -78,6 +78,10 @@ struct PresentMonCsv
         Header_msWaitingOnSyncObject,
         Header_msWaitingOnQueryData,
 
+        // Required headers when -track_memory_residency is used:
+        Header_msInMakeResident,
+        Header_msInPagingPackets,
+
         // Special values:
         KnownHeaderCount,
         UnknownHeader,
