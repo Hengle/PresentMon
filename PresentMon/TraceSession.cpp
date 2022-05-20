@@ -59,7 +59,7 @@ bool StartTraceSession()
     gPMConsumer->mTrackGPU = args.mTrackGPU;
     gPMConsumer->mTrackGPUVideo = args.mTrackGPUVideo;
     gPMConsumer->mTrackInput = args.mTrackInput;
-    gPMConsumer->mTrackINTCUmdTimers = args.mTrackINTCUmdTimers;
+    gPMConsumer->mTrackINTCTimers = args.mTrackINTCTimers;
     gPMConsumer->mTrackINTCCpuGpuSync = args.mTrackINTCCpuGpuSync;
     gPMConsumer->mDebugINTCFramePacing = args.mDebugINTCFramePacing;
     gPMConsumer->mTrackPCAT = args.mTrackPower;

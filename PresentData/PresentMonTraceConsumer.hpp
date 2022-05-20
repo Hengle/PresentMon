@@ -20,10 +20,8 @@
 #include <evntcons.h> // must include after windows.h
 
 #include "Debug.hpp"
+#include "GpuTrace.hpp"
 #include "TraceConsumer.hpp"
-#include "ETW/Intel_Graphics_D3D10.h"
-
-#include "ETW/Microsoft_Windows_DxgKrnl.h"
 
 // PresentMode represents the different paths a present can take on windows.
 //
@@ -123,25 +121,6 @@ struct InputEvent {
     InputDeviceType Type;
 };
 
-enum INTCUmdTimer {
-    INTC_TIMER_WAIT_IF_FULL,
-    INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC,
-    INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN,
-    INTC_TIMER_WAIT_FOR_FENCE,
-    INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED,
-    INTC_TIMER_WAIT_IF_EMPTY,
-    INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU,
-    INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA,
-    INTC_TIMER_COUNT
-};
-
-enum ResidencyEventTypes {
-    DXGK_RESIDENCY_EVENT_MAKE_RESIDENT,
-    DXGK_RESIDENCY_EVENT_PAGING_QUEUE_PACKET,
-
-    DXGK_RESIDENCY_EVENT_COUNT
-};
-
 // A ProcessEvent occurs whenever a Process starts or stops.
 struct ProcessEvent {
     std::string ImageFileName;
@@ -163,18 +142,18 @@ struct PresentEvent {
     uint64_t ScreenTime;        // QPC value when the present was displayed on screen
     uint64_t InputTime;         // Earliest QPC value when the keyboard/mouse was clicked and used by this frame
 
-    // INTC metrics
-    uint64_t INTC_ProducerPresentTime;
-    uint64_t INTC_ConsumerPresentTime;
-    uint64_t INTC_UmdTimers[INTC_TIMER_COUNT];
-
     // Extra present parameters obtained through DXGI or D3D9 present
     uint64_t SwapChainAddress;
     int32_t SyncInterval;
     uint32_t PresentFlags;
 
     // Memory Residency tracking
-    uint64_t MemoryResidency[DXGK_RESIDENCY_EVENT_COUNT];   // MemoryResidency array
+    uint64_t MemoryResidency[DXGK_RESIDENCY_EVENT_COUNT];
+
+    // Intel UMD metrics
+    uint64_t INTC_ProducerPresentTime;
+    uint64_t INTC_ConsumerPresentTime;
+    uint64_t INTC_Timers[INTC_TIMER_COUNT];
 
     // Intel frame-pacing data
     uint64_t INTC_FrameID;
@@ -264,7 +243,7 @@ struct PMTraceConsumer
     bool mTrackGPU = false;             // Whether the analysis should track GPU work
     bool mTrackGPUVideo = false;        // Whether the analysis should track GPU video work separately
     bool mTrackInput = false;           // Whether to track keyboard/mouse click times
-    bool mTrackINTCUmdTimers = false;   // Whether the analysis should track Intel D3D11 driver producer/consumer queue timers
+    bool mTrackINTCTimers = false;      // Whether the analysis should track Intel D3D11 driver producer/consumer queue timers
     bool mTrackINTCCpuGpuSync = false;  // Whether the analysis should track Intel driver CPU/GPU synchronizations
     bool mDebugINTCFramePacing = false; // Whether to report Intel driver metrics related to frame pacing
     bool mTrackMemoryResidency = false; // Whether the analysis should track Memory Residency
@@ -287,9 +266,6 @@ struct PMTraceConsumer
     uint32_t DwmPresentThreadId = 0;
 
     std::deque<std::shared_ptr<PresentEvent>> mPresentsWaitingForDWM;
-
-    // The process id of the first identified cloud streaming process.
-    uint32_t mCloudStreamingProcessId = 0;
 
     // Limit tracking to specified processes
     std::set<uint32_t> mTrackedProcessFilter;
@@ -405,6 +381,7 @@ struct PMTraceConsumer
     std::unordered_map<uint64_t, std::shared_ptr<PresentEvent>> mPresentByDxgkPresentHistoryTokenData;  // DxgkPresentHistoryTokenData -> PresentEvent
     std::unordered_map<uint64_t, std::shared_ptr<PresentEvent>> mPresentByDxgkContext;                  // DxgkContex -> PresentEvent
     std::unordered_map<uint64_t, std::shared_ptr<PresentEvent>> mLastPresentByWindow;                   // HWND -> PresentEvent
+    std::unordered_map<uint32_t, std::string>                   mNTProcessNames;                        // ProcessID -> Process name (if NT_Process events)
 
 
     // Once an in-progress present becomes lost, discarded, or displayed, it is
@@ -431,63 +408,8 @@ struct PMTraceConsumer
                                         DeferredCompletions>> mDeferredCompletions;   // ProcessId -> SwapChainAddress -> DeferredCompletions
 
 
-    // FrameDmaInfo is the execution information for each process' frame.
-    struct FrameDmaInfo {
-        uint64_t mFirstDmaTime;         // QPC when the first DMA packet started for the current frame
-        uint64_t mLastDmaTime;          // QPC when the last DMA packet completed for the current frame
-        uint64_t mAccumulatedDmaTime;   // QPC duration while at least one DMA packet was running during the current frame
-        uint64_t mRunningDmaStartTime;  // QPC when the oldest currently-running DMA packet started
-        uint32_t mRunningDmaCount;      // Number of currently-running DMA packets
-    };
-
-    // Node is information about a particular GPU node, including any DMA
-    // packets currently running/queued to it.
-    struct Node {
-        enum { MAX_QUEUE_SIZE = 9 };                    // MAX_QUEUE_SIZE=9 for 2 full cachelines (one is not enough).
-        FrameDmaInfo* mFrameDmaInfo[MAX_QUEUE_SIZE];    // Frame state for enqueued packets
-        uint32_t mSequenceId[MAX_QUEUE_SIZE];           // Sequence IDs for enqueued packets
-        uint32_t mQueueIndex;                           // Index into mFrameDmaInfo and mSequenceId for currently-running packet
-        uint32_t mQueueCount;                           // Number of enqueued packets
-        bool mIsVideo;
-        bool mIsVideoDecode;
-    };
-
-    // Context is a process gpu context, mapping a FrameDmaInfo to a particular
-    // Node.
-    struct Context {
-        FrameDmaInfo* mFrameDmaInfo;
-        Node* mNode;
-        bool mIsVideoEncoderForCloudStreamingApp;
-    };
-
-    // Depending on mTrackGPUVideo, we may track video engines separately
-    struct FrameInfo {
-        FrameDmaInfo mVideoEngines;
-        FrameDmaInfo mOtherEngines;
-
-        // Internal timers:
-        uint64_t mINTCProducerPresentTime;  // QPC of the present operation on the producer thread
-        uint64_t mINTCConsumerPresentTime;  // QPC of the present operation on the consumer thread
-        struct {
-            uint64_t mStartTime;            // QPC of the start event for this timer, or 0 if no start event
-            uint64_t mAccumulatedTime;      // QPC duration of all processed timer durations
-            uint32_t mStartCount;           // The number of timers started
-        } mINTCUmdTimers[INTC_TIMER_COUNT];
-
-        struct {
-            uint64_t mStartTime;            // Memory Residency array for start time maps: SequenceId -> StartTime
-            uint64_t mAccumulatedTime;      // QPC duration of all processed timer durations
-        } mResidencyTimers[DXGK_RESIDENCY_EVENT_COUNT];
-    };
-
-    std::unordered_map<uint64_t, std::unordered_map<uint32_t, Node> > mNodes;   // pDxgAdapter -> NodeOrdinal -> Node
-    std::unordered_map<uint64_t, uint64_t> mDevices;                            // hDevice -> pDxgAdapter
-    std::unordered_map<uint64_t, Context> mContexts;                            // hContext -> Context
-    std::unordered_map<uint32_t, FrameInfo> mProcessFrameInfo;                  // ProcessID -> FrameInfo
-    std::unordered_map<uint64_t, uint32_t> mPagingSequenceIds;                  // SequenceID -> ProcessID
-
-    void CreateFrameDmaInfo(uint32_t processId, Context* context);
-    void AssignFrameInfo(PresentEvent* pEvent, LONGLONG timestamp);
+    // mGpuTrace tracks work executed on the GPU.
+    GpuTrace mGpuTrace;
 
 
     // State for tracking keyboard/mouse click times
@@ -501,7 +423,7 @@ struct PMTraceConsumer
     void HandleDxgkBltCancel(EVENT_HEADER const& hdr);
     void HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterval, bool mmio);
     template<bool Win7>
-    void HandleDxgkQueueSubmit(EVENT_HEADER const& hdr, uint32_t packetType, uint32_t submitSequence, uint64_t context, bool isPresentPacket);
+    void HandleDxgkQueueSubmit(EVENT_HEADER const& hdr, uint64_t hContext, uint32_t submitSequence, uint32_t packetType, bool isPresentPacket);
     void HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t submitSequence);
     void HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flags);
     void HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid);

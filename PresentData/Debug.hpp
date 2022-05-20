@@ -32,11 +32,9 @@ void DebugCreatePresent(PresentEvent const& p);
 // Call before modifying any PresentEvent member
 void DebugModifyPresent(PresentEvent const* p);
 
-// Call whenever a Dma starts on an idle engine 
-void DebugFirstDmaStart();
-
-// Call whenever Dma time is added to a queue
-void DebugDmaAccumulated(uint64_t currentTime, uint64_t addedTime);
+// Print a time or time range
+void DebugPrintTime(uint64_t value);
+void DebugPrintTimeDelta(uint64_t value);
 
 #define DebugAssert(condition) while (!(condition)) { printf("ASSERTION FAILED: %s(%d): %s\n", __FILE__, __LINE__, #condition); break; }
 
@@ -47,8 +45,6 @@ void DebugDmaAccumulated(uint64_t currentTime, uint64_t addedTime);
 #define DebugEvent(eventRecord, metadata)                   (void) eventRecord, metadata
 #define DebugCreatePresent(p)                               (void) p
 #define DebugModifyPresent(p)                               (void) p
-#define DebugFirstDmaStart()
-#define DebugDmaAccumulated(currentTime, addedTime)         (void) currentTime, addedTime
 #define DebugAssert(condition)                              assert(condition)
 
 #endif

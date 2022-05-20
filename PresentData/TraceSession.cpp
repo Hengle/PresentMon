@@ -251,10 +251,10 @@ ULONG EnableProviders(
         }
     }
 
-    if (pmConsumer->mTrackINTCUmdTimers || pmConsumer->mTrackINTCCpuGpuSync || pmConsumer->mDebugINTCFramePacing) {
+    if (pmConsumer->mTrackINTCTimers || pmConsumer->mTrackINTCCpuGpuSync || pmConsumer->mDebugINTCFramePacing) {
         // Intel_Graphics_D3D10
         provider.ClearFilter();
-        if (pmConsumer->mTrackINTCUmdTimers) {
+        if (pmConsumer->mTrackINTCTimers) {
             provider.AddEvent<Intel_Graphics_D3D10::QueueTimers_Start>();
             provider.AddEvent<Intel_Graphics_D3D10::QueueTimers_Stop>();
             provider.AddEvent<Intel_Graphics_D3D10::QueueTimers_Info>();
@@ -498,7 +498,7 @@ ULONG TraceSession::Start(
         pmConsumer->mTrackDisplay,
         pmConsumer->mTrackInput,
         mrConsumer != nullptr,
-        pmConsumer->mTrackINTCUmdTimers || pmConsumer->mTrackINTCCpuGpuSync || pmConsumer->mDebugINTCFramePacing,
+        pmConsumer->mTrackINTCTimers || pmConsumer->mTrackINTCCpuGpuSync || pmConsumer->mDebugINTCFramePacing,
         pmConsumer->mTrackPCAT);
 
     // When processing log files, we need to use the buffer callback in case

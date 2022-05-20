@@ -84,7 +84,7 @@ static void WriteCsvHeader(FILE* fp)
     if (args.mTrackInput) {
         fprintf(fp, ",msSinceInput");
     }
-    if (args.mTrackINTCUmdTimers) {
+    if (args.mTrackINTCTimers) {
         fprintf(fp,
             ",msStalledOnQueueFull"
             ",msWaitingOnQueueSync"
@@ -300,21 +300,21 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     if (args.mTrackInput) {
         fprintf(fp, ",%.*lf", DBL_DIG - 1, msSinceInput);
     }
-    if (args.mTrackINTCUmdTimers) {
+    if (args.mTrackINTCTimers) {
         fprintf(fp, ",%.*lf,%.*lf,%.*lf,%.*lf,%.*lf,%.*lf,%.*lf,%.*lf",
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_UmdTimers[INTC_TIMER_WAIT_IF_FULL]),
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_UmdTimers[INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC]),
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_UmdTimers[INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN]),
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_UmdTimers[INTC_TIMER_WAIT_FOR_FENCE]),
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_UmdTimers[INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED]),
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_UmdTimers[INTC_TIMER_WAIT_IF_EMPTY]),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_IF_FULL]),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC]),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN]),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_FOR_FENCE]),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED]),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_IF_EMPTY]),
             DBL_DIG - 1, p.INTC_ProducerPresentTime == 0 ? 0.0 : QpcToSeconds(p.INTC_ProducerPresentTime), //TODO - broken, need to be fixed
             DBL_DIG - 1, p.INTC_ConsumerPresentTime == 0 ? 0.0 : QpcToSeconds(p.INTC_ConsumerPresentTime));//TODO - broken, need to be fixed
     }
     if (args.mTrackINTCCpuGpuSync) {
         fprintf(fp, ",%.*lf,%.*lf",
-            DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_UmdTimers[INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU]),
-            DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_UmdTimers[INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA]));
+            DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU]),
+            DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA]));
     }
     if (args.mTrackMemoryResidency) {
         fprintf(fp, ",%.*lf,%.*lf",

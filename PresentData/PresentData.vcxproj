@@ -307,6 +307,7 @@
     <ClInclude Include="ETW\Microsoft_Windows_Win32k.h" />
     <ClInclude Include="ETW\NT_Process.h" />
     <ClInclude Include="Debug.hpp" />
+    <ClInclude Include="GpuTrace.hpp" />
     <ClInclude Include="MixedRealityTraceConsumer.hpp" />
     <ClInclude Include="PresentMonTraceConsumer.hpp" />
     <ClInclude Include="TraceConsumer.hpp" />
@@ -314,6 +315,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Debug.cpp" />
+    <ClCompile Include="GpuTrace.cpp" />
     <ClCompile Include="MixedRealityTraceConsumer.cpp" />
     <ClCompile Include="PresentMonTraceConsumer.cpp" />
     <ClCompile Include="TraceConsumer.cpp" />

@@ -33,6 +33,7 @@
     <ClInclude Include="ETW\Intel_PCAT_Metrics.h">
       <Filter>ETW</Filter>
     </ClInclude>
+    <ClInclude Include="GpuTrace.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Debug.cpp" />
@@ -40,6 +41,7 @@
     <ClCompile Include="PresentMonTraceConsumer.cpp" />
     <ClCompile Include="TraceConsumer.cpp" />
     <ClCompile Include="TraceSession.cpp" />
+    <ClCompile Include="GpuTrace.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="ETW">

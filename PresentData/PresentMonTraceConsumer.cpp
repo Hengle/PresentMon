@@ -87,12 +87,12 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , ScreenTime(0)
     , InputTime(0)
 
-    , INTC_ProducerPresentTime(0)
-    , INTC_ConsumerPresentTime(0)
-
     , SwapChainAddress(0)
     , SyncInterval(-1)
     , PresentFlags(0)
+
+    , INTC_ProducerPresentTime(0)
+    , INTC_ConsumerPresentTime(0)
 
     , INTC_FrameID(0)
     , INTC_AppWorkStart(0)
@@ -153,12 +153,13 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     Id = presentCount;
 #endif
 
-    memset(INTC_UmdTimers, 0, sizeof(INTC_UmdTimers));
+    memset(INTC_Timers, 0, sizeof(INTC_Timers));
     memset(MemoryResidency, 0, sizeof(MemoryResidency));
 }
 
 PMTraceConsumer::PMTraceConsumer()
     : mAllPresents(PRESENTEVENT_CIRCULAR_BUFFER_SIZE)
+    , mGpuTrace(this)
     , mLastInputDeviceReadTime(0)
     , mLastInputDeviceType(InputDeviceType::Unknown)
 {
@@ -172,14 +173,10 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
     switch (hdr.EventDescriptor.Id) {
     case Intel_Graphics_D3D10::QueueTimers_Info::Id:
     {
-        DebugAssert(mTrackINTCUmdTimers);
-
-        auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
-
         auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
         switch (Type) {
-        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_APP:    frameInfo->mINTCProducerPresentTime = hdr.TimeStamp.QuadPart; break;
-        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_DRIVER: frameInfo->mINTCConsumerPresentTime = hdr.TimeStamp.QuadPart; break;
+        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_APP:    mGpuTrace.SetINTCProducerPresentTime(hdr.ProcessId, hdr.TimeStamp.QuadPart); break;
+        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_DRIVER: mGpuTrace.SetINTCConsumerPresentTime(hdr.ProcessId, hdr.TimeStamp.QuadPart); break;
         default: DebugAssert(false); break;
         }
         break;
@@ -190,23 +187,20 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
     case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
     case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
     {
-        auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
-        uint32_t timerIndex = 0;
+        INTCTimer timer = INTC_TIMER_COUNT;
 
         switch (hdr.EventDescriptor.Id) {
         case Intel_Graphics_D3D10::QueueTimers_Start::Id:
         case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
         {
-            DebugAssert(!mFilteredEvents || mTrackINTCUmdTimers); // Assert that filtering is working if expected
-
             auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
             switch (Type) {
-            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_FULL_TIMER:           timerIndex = INTC_TIMER_WAIT_IF_FULL; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_EMPTY_TIMER:          timerIndex = INTC_TIMER_WAIT_IF_EMPTY; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_SYNC_TIMER:  timerIndex = INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_DRAIN_TIMER: timerIndex = INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_FOR_FENCE:               timerIndex = INTC_TIMER_WAIT_FOR_FENCE; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_FENCE_SUBMITTED:   timerIndex = INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_FULL_TIMER:           timer = INTC_TIMER_WAIT_IF_FULL; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_EMPTY_TIMER:          timer = INTC_TIMER_WAIT_IF_EMPTY; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_SYNC_TIMER:  timer = INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_DRAIN_TIMER: timer = INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_FOR_FENCE:               timer = INTC_TIMER_WAIT_FOR_FENCE; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_FENCE_SUBMITTED:   timer = INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED; break;
             default: DebugAssert(false); break;
             }
             break;
@@ -215,44 +209,28 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
         {
-            DebugAssert(!mFilteredEvents || mTrackINTCCpuGpuSync); // Assert that filtering is working if expected
-
             auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mSyncType>(pEventRecord, L"value");
             switch (Type) {
-            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU:   timerIndex = INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; break;
-            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_POLL_ON_QUERY_GET_DATA: timerIndex = INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA; break;
+            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU:   timer = INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; break;
+            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_POLL_ON_QUERY_GET_DATA: timer = INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA; break;
             default: DebugAssert(false); break;
             }
             break;
         }
         }
 
-        auto timer = &frameInfo->mINTCUmdTimers[timerIndex];
-
         switch (hdr.EventDescriptor.Id) {
         case Intel_Graphics_D3D10::QueueTimers_Start::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
-            timer->mStartCount += 1;
-            if (timer->mStartCount == 1) {
-                timer->mStartTime = hdr.TimeStamp.QuadPart;
-            }
+            mGpuTrace.StartINTCTimer(timer, hdr.ProcessId, hdr.TimeStamp.QuadPart);
             break;
-
         case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
-            if (timer->mStartCount >= 1) {
-                timer->mStartCount -= 1;
-                if (timer->mStartCount == 0) {
-                    timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime;
-                    timer->mStartTime = 0;
-                }
-            }
+            mGpuTrace.StopINTCTimer(timer, hdr.ProcessId, hdr.TimeStamp.QuadPart);
             break;
         }
-
         break;
     }
-
 
     // Provides a driver frame ID used to associate task_FramePacer_Info events
     // which occur some time after display.
@@ -644,74 +622,17 @@ void PMTraceConsumer::HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterv
     }
 }
 
-static std::unordered_map<uint32_t, std::string> gNTProcessNames;
-
-void PMTraceConsumer::CreateFrameDmaInfo(uint32_t processId, Context* context)
-{
-    auto p = mProcessFrameInfo.emplace(processId, FrameInfo{});
-
-    if (!mTrackGPUVideo) {
-        context->mFrameDmaInfo = &p.first->second.mOtherEngines;
-        return;
-    }
-
-    context->mFrameDmaInfo = context->mNode->mIsVideo || context->mNode->mIsVideoDecode
-        ? &p.first->second.mVideoEngines
-        : &p.first->second.mOtherEngines;
-
-    if (p.second) {
-        if (mCloudStreamingProcessId == 0) {
-            std::string processName;
-
-            auto ii = gNTProcessNames.find(processId);
-            if (ii != gNTProcessNames.end()) {
-                processName = ii->second;
-            } else {
-                auto handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
-                if (handle != nullptr) {
-                    char path[MAX_PATH] = {};
-                    DWORD numChars = sizeof(path);
-                    if (QueryFullProcessImageNameA(handle, 0, path, &numChars)) {
-                        for (; numChars > 0; --numChars) {
-                            if (path[numChars - 1] == '/' ||
-                                path[numChars - 1] == '\\') {
-                                break;
-                            }
-                        }
-                        processName = path + numChars;
-                    }
-                    CloseHandle(handle);
-                }
-            }
-
-            if (_stricmp(processName.c_str(), "parsecd.exe") == 0 ||
-                _stricmp(processName.c_str(), "intel-cloud-screen-capture.exe") == 0 ||
-                _stricmp(processName.c_str(), "nvEncDXGIOutputDuplicationSample.exe") == 0) {
-                mCloudStreamingProcessId = processId;
-            }
-        }
-    }
-
-    if (context->mNode->mIsVideoDecode && processId == mCloudStreamingProcessId) {
-        context->mIsVideoEncoderForCloudStreamingApp = true;
-    }
-}
-
 template<bool Win7>
 void PMTraceConsumer::HandleDxgkQueueSubmit(
     EVENT_HEADER const& hdr,
-    uint32_t packetType,
+    uint64_t hContext,
     uint32_t submitSequence,
-    uint64_t context,
+    uint32_t packetType,
     bool isPresentPacket)
 {
-    // Create a FrameDmaInfo for this context (for cases where the context
-    // was created before the capture was started)
-    //
-    // mContexts should be empty if mTrackGPU==false.
-    auto contextIter = mContexts.find(context);
-    if (contextIter != mContexts.end() && contextIter->second.mFrameDmaInfo == nullptr) {
-        CreateFrameDmaInfo(hdr.ProcessId, &contextIter->second);
+    // Track GPU execution
+    if (mTrackGPU) {
+        mGpuTrace.EnqueueQueuePacket(hdr.ProcessId, hContext);
     }
 
     // For blt presents on Win7, the only way to distinguish between DWM-off
@@ -722,7 +643,7 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
     // its work is done.
     #pragma warning(suppress: 4984) // C++17 language extension
     if constexpr (Win7) {
-        auto eventIter = mPresentByDxgkContext.find(context);
+        auto eventIter = mPresentByDxgkContext.find(hContext);
         if (eventIter != mPresentByDxgkContext.end()) {
             auto present = eventIter->second;
 
@@ -767,94 +688,11 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
                 #pragma warning(suppress: 4984) // C++17 language extension
                 if constexpr (Win7) {
                     if (present->PresentMode == PresentMode::Hardware_Legacy_Copy_To_Front_Buffer) {
-                        mPresentByDxgkContext[context] = present;
-                        present->DxgkContext = context;
+                        mPresentByDxgkContext[hContext] = present;
+                        present->DxgkContext = hContext;
                     }
                 }
             }
-        }
-    }
-}
-
-void PMTraceConsumer::AssignFrameInfo(
-    PresentEvent* pEvent,
-    LONGLONG timestamp)
-{
-    // mProcessFrameInfo should be empty if mTrackGPU==false.
-    //
-    // Note: there is a potential race here because QueuePacket_Info occurs
-    // sometime after DmaPacket_Info it's possible that some small portion of
-    // the next frame's GPU work has both started and completed before
-    // QueuePacket_Info and will be attributed to this frame.  However, this is
-    // necessarily a small amount of work, and we can't use DMA packets as not
-    // all present types create them.
-    auto ii = mProcessFrameInfo.find(pEvent->ProcessId);
-    if (ii != mProcessFrameInfo.end()) {
-        auto frameInfo = &ii->second;
-        auto frameDmaInfo = &frameInfo->mOtherEngines;
-        auto videoDmaInfo = &frameInfo->mVideoEngines;
-
-        DebugModifyPresent(pEvent);
-
-        // Update GPUStartTime/ReadyTime/GPUDuration if any DMA packets were
-        // observed.
-        if (frameDmaInfo->mFirstDmaTime != 0) {
-            pEvent->GPUStartTime = frameDmaInfo->mFirstDmaTime;
-            pEvent->ReadyTime = frameDmaInfo->mLastDmaTime;
-            pEvent->GPUDuration = frameDmaInfo->mAccumulatedDmaTime;
-            frameDmaInfo->mFirstDmaTime = 0;
-            frameDmaInfo->mLastDmaTime = 0;
-            frameDmaInfo->mAccumulatedDmaTime = 0;
-        }
-
-        pEvent->GPUVideoDuration = videoDmaInfo->mAccumulatedDmaTime;
-        videoDmaInfo->mFirstDmaTime = 0;
-        videoDmaInfo->mLastDmaTime = 0;
-        videoDmaInfo->mAccumulatedDmaTime = 0;
-
-        if (mTrackINTCUmdTimers || mTrackINTCCpuGpuSync) {
-            pEvent->INTC_ProducerPresentTime = frameInfo->mINTCProducerPresentTime;
-            pEvent->INTC_ConsumerPresentTime = frameInfo->mINTCConsumerPresentTime;
-            frameInfo->mINTCProducerPresentTime = 0;
-            frameInfo->mINTCConsumerPresentTime = 0;
-
-            for (uint32_t i = 0; i < INTC_TIMER_COUNT; ++i) {
-                if (frameInfo->mINTCUmdTimers[i].mStartTime != 0) {
-                    frameInfo->mINTCUmdTimers[i].mAccumulatedTime += timestamp - frameInfo->mINTCUmdTimers[i].mStartTime;
-                    frameInfo->mINTCUmdTimers[i].mStartTime = timestamp;
-                }
-                pEvent->INTC_UmdTimers[i] = frameInfo->mINTCUmdTimers[i].mAccumulatedTime;
-                frameInfo->mINTCUmdTimers[i].mAccumulatedTime = 0;
-            }
-        }
-
-        if (mTrackMemoryResidency) {
-            for (uint32_t i = 0; i < DXGK_RESIDENCY_EVENT_COUNT; i++)  {
-                pEvent->MemoryResidency[i] = frameInfo->mResidencyTimers[i].mAccumulatedTime;
-                frameInfo->mResidencyTimers[i].mAccumulatedTime = 0;
-            }
-        }
-
-        // There are some cases where the QueuePacket_Stop timestamp is before
-        // the previous dma packet completes.  e.g., this seems to be typical
-        // of DWM present packets.  In these cases, instead of loosing track of
-        // the previous dma work, we split it at this time and assign portions
-        // to both frames.  Note this is incorrect, as the dma's full cost
-        // should be fully attributed to the previous frame.
-        if (frameDmaInfo->mRunningDmaCount > 0) {
-            auto accumulatedTime = timestamp - frameDmaInfo->mRunningDmaStartTime;
-            DebugDmaAccumulated(pEvent->GPUDuration, accumulatedTime);
-
-            pEvent->ReadyTime = timestamp;
-            pEvent->GPUDuration += accumulatedTime;
-            frameDmaInfo->mFirstDmaTime = timestamp;
-            frameDmaInfo->mRunningDmaStartTime = timestamp;
-            DebugFirstDmaStart();
-        }
-        if (videoDmaInfo->mRunningDmaCount > 0) {
-            pEvent->GPUVideoDuration += timestamp - videoDmaInfo->mRunningDmaStartTime;
-            videoDmaInfo->mFirstDmaTime = timestamp;
-            videoDmaInfo->mRunningDmaStartTime = timestamp;
         }
     }
 }
@@ -871,7 +709,9 @@ void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t 
     TRACK_PRESENT_PATH_SAVE_GENERATED_ID(pEvent);
 
     // Assign any tracked accumulated GPU work to the present.
-    AssignFrameInfo(pEvent.get(), hdr.TimeStamp.QuadPart);
+    if (mTrackGPU) {
+        mGpuTrace.CompleteFrame(pEvent.get(), hdr.TimeStamp.QuadPart);
+    }
 
     // If this is one of the present modes for which packet completion implies
     // display, then complete the present now.
@@ -1013,10 +853,12 @@ void PMTraceConsumer::HandleDxgkSyncDPCMPO(EVENT_HEADER const& hdr, uint32_t fli
         pEvent->PresentMode = PresentMode::Hardware_Composed_Independent_Flip;
     }
 
-    // VSyncDPC and VSyncDPCMultiPlaneOverlay are both sent, with VSyncDPC only including flipSubmitSequence for one layer.
-    // VSyncDPCMultiPlaneOverlay is sent afterward and contains info on whether this vsync/hsync contains an overlay.
-    // So we should avoid updating ScreenTime and FinalState with the second event, but update isMultiPlane with the 
-    // correct information when we have them.
+    // VSyncDPC and VSyncDPCMultiPlaneOverlay are both sent, with VSyncDPC only
+    // including flipSubmitSequence for one layer.  VSyncDPCMultiPlaneOverlay
+    // is sent afterward and contains info on whether this vsync/hsync contains
+    // an overlay.  So we should avoid updating ScreenTime and FinalState with
+    // the second event, but update isMultiPlane with the correct information
+    // when we have them.
     if (pEvent->FinalState != PresentResult::Presented) {
         DebugModifyPresent(pEvent.get());
         pEvent->ScreenTime = hdr.TimeStamp.QuadPart;
@@ -1206,7 +1048,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         auto hContext       = desc[2].GetData<uint64_t>();
         auto bPresent       = desc[3].GetData<BOOL>() != 0;
 
-        HandleDxgkQueueSubmit<false>(hdr, PacketType, SubmitSequence, hContext, bPresent);
+        HandleDxgkQueueSubmit<false>(hdr, hContext, SubmitSequence, PacketType, bPresent);
         return;
     }
     case Microsoft_Windows_DxgKrnl::QueuePacket_Stop::Id:
@@ -1373,7 +1215,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         return;
     }
 
-    if (mTrackGPU || mTrackINTCUmdTimers) {
+    if (mTrackGPU || mTrackINTCTimers) {
         switch (hdr.EventDescriptor.Id) {
 
         // We need a mapping from hContext to GPU node.
@@ -1397,9 +1239,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             auto pDxgAdapter = desc[0].GetData<uint64_t>();
             auto hDevice     = desc[1].GetData<uint64_t>();
 
-            // Sometimes there are duplicate start events
-            DebugAssert(mDevices.find(hDevice) == mDevices.end() || mDevices.find(hDevice)->second == pDxgAdapter);
-            mDevices.emplace(hDevice, pDxgAdapter);
+            mGpuTrace.RegisterDevice(hDevice, pDxgAdapter);
             return;
         }
         // Sometimes a trace will miss a Device_Start, so we also check
@@ -1418,9 +1258,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             auto hDevice     = desc[1].GetData<uint64_t>();
 
             if (hDevice != 0) {
-                // Sometimes there are duplicate start events
-                DebugAssert(mDevices.find(hDevice) == mDevices.end() || mDevices.find(hDevice)->second == pDxgAdapter);
-                mDevices.emplace(hDevice, pDxgAdapter);
+                mGpuTrace.RegisterDevice(hDevice, pDxgAdapter);
             }
             return;
         }
@@ -1428,8 +1266,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         {
             auto hDevice = mMetadata.GetEventData<uint64_t>(pEventRecord, L"hDevice");
 
-            // Sometimes there are duplicate stop events so it's ok if it's already removed
-            mDevices.erase(hDevice);
+            mGpuTrace.UnregisterDevice(hDevice);
             return;
         }
         case Microsoft_Windows_DxgKrnl::Context_DCStart::Id:
@@ -1445,35 +1282,20 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             auto hDevice     = desc[1].GetData<uint64_t>();
             auto NodeOrdinal = desc[2].GetData<uint32_t>();
 
-            auto deviceIter = mDevices.find(hDevice);
-            if (deviceIter == mDevices.end()) {
-                DebugAssert(false);
-                return;
-            }
-            auto pDxgAdapter = deviceIter->second;
-            auto node = &mNodes[pDxgAdapter].emplace(NodeOrdinal, Node{}).first->second;
+            // If this is a DCStart, then it was generated by xperf instead of
+            // the context's process.
+            uint32_t processId = hdr.EventDescriptor.Id == Microsoft_Windows_DxgKrnl::Context_DCStart::Id
+                ? 0
+                : hdr.ProcessId;
 
-            // Sometimes there are duplicate start events, make sure that they say the same thing
-            DebugAssert(mContexts.find(hDevice) == mContexts.end() || mContexts.find(hDevice)->second.mNode == node);
-
-            auto context = &mContexts.emplace(hContext, Context()).first->second;
-            context->mFrameDmaInfo = nullptr;
-            context->mNode = node;
-            context->mIsVideoEncoderForCloudStreamingApp = false;
-
-            // Create a FrameDmaInfo unless this was a DCStart (in which case
-            // it's generated by xperf)
-            if (hdr.EventDescriptor.Id == Microsoft_Windows_DxgKrnl::Context_Start::Id) {
-                CreateFrameDmaInfo(hdr.ProcessId, context);
-            }
+            mGpuTrace.RegisterContext(hContext, hDevice, NodeOrdinal, processId);
             return;
         }
         case Microsoft_Windows_DxgKrnl::Context_Stop::Id:
         {
             auto hContext = mMetadata.GetEventData<uint64_t>(pEventRecord, L"hContext");
 
-            // Sometimes there are duplicate stop events so it's ok if it's already removed
-            mContexts.erase(hContext);
+            mGpuTrace.UnregisterContext(hContext);
             return;
         }
 
@@ -1487,25 +1309,18 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
             auto pDxgAdapter = desc[0].GetData<uint64_t>();
             auto NodeOrdinal = desc[1].GetData<uint32_t>();
-            auto EngineType  = desc[2].GetData<uint32_t>();
+            auto EngineType  = desc[2].GetData<Microsoft_Windows_DxgKrnl::DXGK_ENGINE>();
 
-            // Node should already be created (DxgKrnl::Context_Start comes
-            // first) but just to be sure...
-            auto node = &mNodes[pDxgAdapter].emplace(NodeOrdinal, Node{}).first->second;
-
-            if (EngineType == (uint32_t) Microsoft_Windows_DxgKrnl::DXGK_ENGINE::VIDEO_DECODE ||
-                EngineType == (uint32_t) Microsoft_Windows_DxgKrnl::DXGK_ENGINE::VIDEO_ENCODE ||
-                EngineType == (uint32_t) Microsoft_Windows_DxgKrnl::DXGK_ENGINE::VIDEO_PROCESSING) {
-                node->mIsVideo = true;
-            }
-
-            if (EngineType == (uint32_t) Microsoft_Windows_DxgKrnl::DXGK_ENGINE::VIDEO_DECODE) {
-                node->mIsVideoDecode = true;
-            }
+            mGpuTrace.SetEngineType(pDxgAdapter, NodeOrdinal, EngineType);
             return;
         }
 
         // DmaPacket_Start occurs when a packet is enqueued onto a node.
+        // 
+        // There are certain DMA packets that don't result in GPU work.
+        // Examples are preemption packets or notifications for
+        // VIDSCH_QUANTUM_EXPIRED.  These will have a sequence id of zero (also
+        // DmaBuffer will be null).
         case Microsoft_Windows_DxgKrnl::DmaPacket_Start::Id:
         {
             EventDataDesc desc[] = {
@@ -1516,60 +1331,8 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             auto hContext   = desc[0].GetData<uint64_t>();
             auto SequenceId = desc[1].GetData<uint32_t>();
 
-            // There are certain DMA packets that don't result in GPU work.
-            // Examples are preemption packets or notifications for
-            // VIDSCH_QUANTUM_EXPIRED.  These will have a sequence id of zero
-            // (also DmaBuffer will be null).
-            if (SequenceId == 0) {
-                return;
-            }
-
-            // Lookup the context to figure out which node it's running on;
-            // this can fail sometimes e.g. if parsing the beginning of an ETL
-            // file where we can get packet events before the context mapping.
-            auto ii = mContexts.find(hContext);
-            if (ii != mContexts.end()) {
-                auto context = &ii->second;
-                auto frameDmaInfo = context->mFrameDmaInfo;
-                auto node = context->mNode;
-
-                // A very rare (never observed) race exists where frameDmaInfo
-                // can still be nullptr here.  The context must have been
-                // created and this packet must have been submitted to the
-                // queue before the capture started.
-                //
-                // In this case, we have to ignore the DMA packet otherwise the
-                // node and process tracking will become out of sync.
-                if (frameDmaInfo == nullptr) {
-                    return;
-                }
-
-                if (node->mQueueCount == Node::MAX_QUEUE_SIZE) {
-                    // mFrameInfo/mSequenceId arrays are too small (or,
-                    // DmaPacket_Info events didn't fire for some reason).
-                    // This seems to always hit when an application closes...
-                    return;
-                }
-
-                // Enqueue the packet
-                auto queueIndex = (node->mQueueIndex + node->mQueueCount) % Node::MAX_QUEUE_SIZE;
-                node->mFrameDmaInfo[queueIndex] = frameDmaInfo;
-                node->mSequenceId[queueIndex] = SequenceId;
-                node->mQueueCount += 1;
-
-                // If the queue was empty, the packet starts running right
-                // away, otherwise it is just enqueued and will start running
-                // after all previous packets complete.
-                if (node->mQueueCount == 1) {
-                    frameDmaInfo->mRunningDmaCount += 1;
-                    if (frameDmaInfo->mRunningDmaCount == 1) {
-                        frameDmaInfo->mRunningDmaStartTime = hdr.TimeStamp.QuadPart;
-                        if (frameDmaInfo->mFirstDmaTime == 0) {
-                            frameDmaInfo->mFirstDmaTime = hdr.TimeStamp.QuadPart;
-                            DebugFirstDmaStart();
-                        }
-                    }
-                }
+            if (SequenceId != 0) {
+                mGpuTrace.EnqueueDmaPacket(hContext, SequenceId, hdr.TimeStamp.QuadPart);
             }
             return;
         }
@@ -1587,124 +1350,17 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             auto hContext   = desc[0].GetData<uint64_t>();
             auto SequenceId = desc[1].GetData<uint32_t>();
 
-            // There are certain DMA packets that don't result in GPU work.
-            // Examples are preemption packets or notifications for
-            // VIDSCH_QUANTUM_EXPIRED.  These will have a sequence id of zero
-            // (also DmaBuffer will be null).
-            if (SequenceId == 0) {
-                return;
-            }
-
-            // Lookup the context to figure out which node it's running on;
-            // this can fail sometimes e.g. if parsing the beginning of an ETL
-            // file where we can get packet events before the context mapping.
-            auto ii = mContexts.find(hContext);
-            if (ii != mContexts.end()) {
-                auto context = &ii->second;
-                auto frameDmaInfo = context->mFrameDmaInfo;
-                auto node = context->mNode;
-
-                // It's possible to miss DmaPacket events during realtime
-                // analysis, so try to handle it gracefully here.
-                //
-                // If we get a DmaPacket_Info event for a packet that we didn't
-                // get a DmaPacket_Start event for (or that we ignored because
-                // we didn't know the process yet) then SequenceId will be
-                // smaller than expected.  If this happens, we ignore the
-                // DmaPacket_Info event which means that, if there was idle
-                // time before the missing DmaPacket_Start event,
-                // mAccumulatedDmaTime will be too large.
-                //
-                // measured: ----------------  -------     ---------------------
-                //                                            [---   [--
-                // actual:   [-----]  [-----]  [-----]     [-----]-----]-------]
-                //           ^     ^  x     ^  ^     ^        x  ^   ^
-                //           s1    i1 s2    i2 s3    i3       s2 i1  s3
-                auto runningSequenceId = node->mSequenceId[node->mQueueIndex];
-                if (frameDmaInfo == nullptr || node->mQueueCount == 0 || SequenceId < runningSequenceId) {
-                    return;
-                }
-
-                // If we get a DmaPacket_Start event with no corresponding
-                // DmaPacket_Info, then SequenceId will be larger than
-                // expected.  If this happens, we seach through the queue for a
-                // match and if no match was found then we ignore this event
-                // (we missed both the DmaPacket_Start and DmaPacket_Info for
-                // the packet).  In this case, both the missing packet's
-                // execution time as well as any idle time afterwards will be
-                // associated with the previous packet.
-                //
-                // If a match is found, then we don't know when the pre-match
-                // packets ended (nor when the matched packet started).  We
-                // treat this case as if the first packet with a missed
-                // DmaPacket_Info ran the whole time, and all other packets up
-                // to the match executed with zero time.  Any idle time during
-                // this range is ignored, and the correct association of gpu
-                // work to process will not be correct (unless all these
-                // contexts come from the same process).
-                //
-                // measured: -------  ----------------     ---------------------
-                //                                            [---   [--
-                // actual:   [-----]  [-----]  [-----]     [-----]-----]-------]
-                //           ^     ^  ^     x  ^     ^        ^  ^     x
-                //           s1    i1 s2    i2 s3    i3       s2 i1    i2
-                if (SequenceId > runningSequenceId) {
-                    for (uint32_t missingCount = 1; ; ++missingCount) {
-                        if (missingCount == node->mQueueCount) {
-                            return;
-                        }
-
-                        uint32_t queueIndex = (node->mQueueIndex + missingCount) % Node::MAX_QUEUE_SIZE;
-                        if (node->mSequenceId[queueIndex] == SequenceId) {
-                            // Move current packet into this slot
-                            node->mFrameDmaInfo[queueIndex] = node->mFrameDmaInfo[node->mQueueIndex];
-                            node->mSequenceId[queueIndex] = node->mSequenceId[node->mQueueIndex];
-                            node->mQueueIndex = queueIndex;
-                            node->mQueueCount -= missingCount;
-
-                            frameDmaInfo = node->mFrameDmaInfo[node->mQueueIndex];
-                            break;
-                        }
-                    }
-                }
-
-                // Pop the completed packet from the queue
-                node->mQueueCount -= 1;
-                frameDmaInfo->mRunningDmaCount -= 1;
-
-                // If this was the process' last executing packet, accumulate
-                // the execution duration into the process' count.
-                DebugAssert(frameDmaInfo == node->mFrameDmaInfo[node->mQueueIndex]);
-                if (frameDmaInfo->mRunningDmaCount == 0) {
-                    auto accumulatedTime = hdr.TimeStamp.QuadPart - frameDmaInfo->mRunningDmaStartTime;
-                    DebugDmaAccumulated(frameDmaInfo->mAccumulatedDmaTime, accumulatedTime);
-                    frameDmaInfo->mLastDmaTime = hdr.TimeStamp.QuadPart;
-                    frameDmaInfo->mAccumulatedDmaTime += accumulatedTime;
-                    frameDmaInfo->mRunningDmaStartTime = 0;
-                }
-
-                // If there was another queued packet, start it
-                if (node->mQueueCount > 0) {
-                    node->mQueueIndex = (node->mQueueIndex + 1) % Node::MAX_QUEUE_SIZE;
-                    frameDmaInfo = node->mFrameDmaInfo[node->mQueueIndex];
-                    frameDmaInfo->mRunningDmaCount += 1;
-                    if (frameDmaInfo->mRunningDmaCount == 1) {
-                        frameDmaInfo->mRunningDmaStartTime = hdr.TimeStamp.QuadPart;
-                        if (frameDmaInfo->mFirstDmaTime == 0) {
-                            frameDmaInfo->mFirstDmaTime = hdr.TimeStamp.QuadPart;
-                            DebugFirstDmaStart();
-                        }
-                    }
-                }
+            if (SequenceId != 0) {
+                auto cloudStreamingProcessId = mGpuTrace.CompleteDmaPacket(hContext, SequenceId, hdr.TimeStamp.QuadPart);
 
                 // If this is the end of an identified video encode packet on a context
-                // used for cloud streaming, treat it like a present
-                if (context->mIsVideoEncoderForCloudStreamingApp) {
+                // used for cloud streaming, treat it like a present.
+                if (cloudStreamingProcessId != 0) {
                     auto videoPresent = std::make_shared<PresentEvent>(hdr, Runtime::CloudStreaming);
-                    videoPresent->ProcessId = mCloudStreamingProcessId;
+                    videoPresent->ProcessId = cloudStreamingProcessId;
                     videoPresent->IsCompleted = true;
 
-                    AssignFrameInfo(videoPresent.get(), hdr.TimeStamp.QuadPart);
+                    mGpuTrace.CompleteFrame(videoPresent.get(), hdr.TimeStamp.QuadPart);
 
                     {
                         std::lock_guard<std::mutex> lock(mPresentEventMutex);
@@ -1722,22 +1378,11 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 
         // Memory residency tracking.
         case Microsoft_Windows_DxgKrnl::MakeResident_Start::Id:
-        {
-            auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
-            auto timer = &frameInfo->mResidencyTimers[DXGK_RESIDENCY_EVENT_MAKE_RESIDENT];
-            timer->mStartTime = hdr.TimeStamp.QuadPart;
+            mGpuTrace.StartMakeResident(hdr.ProcessId, hdr.TimeStamp.QuadPart);
             return;
-        }
         case Microsoft_Windows_DxgKrnl::MakeResident_Stop::Id:
-        {
-            auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
-            auto timer = &frameInfo->mResidencyTimers[DXGK_RESIDENCY_EVENT_MAKE_RESIDENT];
-            if (timer->mStartTime > 0) {
-                timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime;
-                timer->mStartTime = 0;
-            }
+            mGpuTrace.StopMakeResident(hdr.ProcessId, hdr.TimeStamp.QuadPart);
             return;
-        }
 
         // Paging queue packet tracking.
         //
@@ -1751,166 +1396,28 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         // PagingQueuePacket_Stop indicates the end of packet processing on the
         // CPU.
         case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Start::Id:
-        {
-            auto SequenceId = mMetadata.GetEventData<uint64_t>(pEventRecord, L"SequenceId");
-            mPagingSequenceIds[SequenceId] = hdr.ProcessId;
+            mGpuTrace.RegisterPagingQueuePacket(hdr.ProcessId, mMetadata.GetEventData<uint64_t>(pEventRecord, L"SequenceId"));
             return;
-        }
         case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Info::Id:
-        {
-            auto SequenceId = mMetadata.GetEventData<uint64_t>(pEventRecord, L"SequenceId");
-            auto pagingIter = mPagingSequenceIds.find(SequenceId);
-            if (pagingIter != mPagingSequenceIds.end()) {
-                auto frameInfo = &mProcessFrameInfo.emplace(pagingIter->second, FrameInfo{}).first->second;
-                auto timer = &frameInfo->mResidencyTimers[DXGK_RESIDENCY_EVENT_PAGING_QUEUE_PACKET];
-
-                // If this fires, then either a PagingQueuePacket_Stop event
-                // was missed (which is expected but should be rare) or
-                // multiple paging packets can execute in parallel (which
-                // violates the assumption we're making).  If the latter, this
-                // needs to be fixed.
-                DebugAssert(timer->mStartTime == 0);
-
-                timer->mStartTime = hdr.TimeStamp.QuadPart;
-            }
+            mGpuTrace.StartPagingQueuePacket(mMetadata.GetEventData<uint64_t>(pEventRecord, L"SequenceId"), hdr.TimeStamp.QuadPart);
             return;
-        }
         case Microsoft_Windows_DxgKrnl::PagingQueuePacket_Stop::Id:
-        {
-            auto SequenceId = mMetadata.GetEventData<uint64_t>(pEventRecord, L"SequenceId");
-            auto pagingIter = mPagingSequenceIds.find(SequenceId);
-            if (pagingIter != mPagingSequenceIds.end()) {
-                auto frameInfo = &mProcessFrameInfo.emplace(pagingIter->second, FrameInfo{}).first->second;
-                auto timer = &frameInfo->mResidencyTimers[DXGK_RESIDENCY_EVENT_PAGING_QUEUE_PACKET];
-
-                if (timer->mStartTime > 0) {
-                    timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime;
-                    timer->mStartTime = 0;
-                }
-
-                // Stop tracking this SequenceId
-                //
-                // TODO: If we miss a PagingQueuePacket_Stop, then this will stay
-                // in the map.  When we get a PagingQueuePacket_Stop, we should
-                // probably also remove any stored sequence id <= SequenceId.
-                mPagingSequenceIds.erase(pagingIter);
-            }
+            mGpuTrace.StopPagingQueuePacket(mMetadata.GetEventData<uint64_t>(pEventRecord, L"SequenceId"), hdr.TimeStamp.QuadPart);
             return;
-        }
         }
     }
 
     assert(!mFilteredEvents); // Assert that filtering is working if expected
 }
 
-namespace Win7 {
-
-typedef LARGE_INTEGER PHYSICAL_ADDRESS;
-
-#pragma pack(push)
-#pragma pack(1)
-
-typedef struct _DXGKETW_BLTEVENT {
-    ULONGLONG                  hwnd;
-    ULONGLONG                  pDmaBuffer;
-    ULONGLONG                  PresentHistoryToken;
-    ULONGLONG                  hSourceAllocation;
-    ULONGLONG                  hDestAllocation;
-    BOOL                       bSubmit;
-    BOOL                       bRedirectedPresent;
-    UINT                       Flags; // DXGKETW_PRESENTFLAGS
-    RECT                       SourceRect;
-    RECT                       DestRect;
-    UINT                       SubRectCount; // followed by variable number of ETWGUID_DXGKBLTRECT events
-} DXGKETW_BLTEVENT;
-
-typedef struct _DXGKETW_FLIPEVENT {
-    ULONGLONG                  pDmaBuffer;
-    ULONG                      VidPnSourceId;
-    ULONGLONG                  FlipToAllocation;
-    UINT                       FlipInterval; // D3DDDI_FLIPINTERVAL_TYPE
-    BOOLEAN                    FlipWithNoWait;
-    BOOLEAN                    MMIOFlip;
-} DXGKETW_FLIPEVENT;
-
-typedef struct _DXGKETW_PRESENTHISTORYEVENT {
-    ULONGLONG             hAdapter;
-    ULONGLONG             Token;
-    ULONG                 Model;     // available only for _STOP event type.
-    UINT                  TokenSize; // available only for _STOP event type.
-} DXGKETW_PRESENTHISTORYEVENT;
-
-typedef struct _DXGKETW_QUEUESUBMITEVENT {
-    ULONGLONG                  hContext;
-    ULONG                      PacketType; // DXGKETW_QUEUE_PACKET_TYPE
-    ULONG                      SubmitSequence;
-    ULONGLONG                  DmaBufferSize;
-    UINT                       AllocationListSize;
-    UINT                       PatchLocationListSize;
-    BOOL                       bPresent;
-    ULONGLONG                  hDmaBuffer;
-} DXGKETW_QUEUESUBMITEVENT;
-
-typedef struct _DXGKETW_QUEUECOMPLETEEVENT {
-    ULONGLONG                  hContext;
-    ULONG                      PacketType;
-    ULONG                      SubmitSequence;
-    union {
-        BOOL                   bPreempted;
-        BOOL                   bTimeouted; // PacketType is WaitCommandBuffer.
-    };
-} DXGKETW_QUEUECOMPLETEEVENT;
-
-typedef struct _DXGKETW_SCHEDULER_VSYNC_DPC {
-    ULONGLONG                 pDxgAdapter;
-    UINT                      VidPnTargetId;
-    PHYSICAL_ADDRESS          ScannedPhysicalAddress;
-    UINT                      VidPnSourceId;
-    UINT                      FrameNumber;
-    LONGLONG                  FrameQPCTime;
-    ULONGLONG                 hFlipDevice;
-    UINT                      FlipType; // DXGKETW_FLIPMODE_TYPE
-    union
-    {
-        ULARGE_INTEGER        FlipFenceId;
-        PHYSICAL_ADDRESS      FlipToAddress;
-    };
-} DXGKETW_SCHEDULER_VSYNC_DPC;
-
-typedef struct _DXGKETW_SCHEDULER_MMIO_FLIP_32 {
-    ULONGLONG        pDxgAdapter;
-    UINT             VidPnSourceId;
-    ULONG            FlipSubmitSequence; // ContextUserSubmissionId
-    UINT             FlipToDriverAllocation;
-    PHYSICAL_ADDRESS FlipToPhysicalAddress;
-    UINT             FlipToSegmentId;
-    UINT             FlipPresentId;
-    UINT             FlipPhysicalAdapterMask;
-    ULONG            Flags;
-} DXGKETW_SCHEDULER_MMIO_FLIP_32;
-
-typedef struct _DXGKETW_SCHEDULER_MMIO_FLIP_64 {
-    ULONGLONG        pDxgAdapter;
-    UINT             VidPnSourceId;
-    ULONG            FlipSubmitSequence; // ContextUserSubmissionId
-    ULONGLONG        FlipToDriverAllocation;
-    PHYSICAL_ADDRESS FlipToPhysicalAddress;
-    UINT             FlipToSegmentId;
-    UINT             FlipPresentId;
-    UINT             FlipPhysicalAdapterMask;
-    ULONG            Flags;
-} DXGKETW_SCHEDULER_MMIO_FLIP_64;
-
-#pragma pack(pop)
-
-} // namespace Win7
-
 void PMTraceConsumer::HandleWin7DxgkBlt(EVENT_RECORD* pEventRecord)
 {
+    using namespace Microsoft_Windows_DxgKrnl::Win7;
+
     DebugEvent(pEventRecord, &mMetadata);
     TRACK_PRESENT_PATH_GENERATE_ID();
 
-    auto pBltEvent = reinterpret_cast<Win7::DXGKETW_BLTEVENT*>(pEventRecord->UserData);
+    auto pBltEvent = reinterpret_cast<DXGKETW_BLTEVENT*>(pEventRecord->UserData);
     HandleDxgkBlt(
         pEventRecord->EventHeader,
         pBltEvent->hwnd,
@@ -1919,10 +1426,12 @@ void PMTraceConsumer::HandleWin7DxgkBlt(EVENT_RECORD* pEventRecord)
 
 void PMTraceConsumer::HandleWin7DxgkFlip(EVENT_RECORD* pEventRecord)
 {
+    using namespace Microsoft_Windows_DxgKrnl::Win7;
+
     DebugEvent(pEventRecord, &mMetadata);
     TRACK_PRESENT_PATH_GENERATE_ID();
 
-    auto pFlipEvent = reinterpret_cast<Win7::DXGKETW_FLIPEVENT*>(pEventRecord->UserData);
+    auto pFlipEvent = reinterpret_cast<DXGKETW_FLIPEVENT*>(pEventRecord->UserData);
     HandleDxgkFlip(
         pEventRecord->EventHeader,
         pFlipEvent->FlipInterval,
@@ -1931,9 +1440,11 @@ void PMTraceConsumer::HandleWin7DxgkFlip(EVENT_RECORD* pEventRecord)
 
 void PMTraceConsumer::HandleWin7DxgkPresentHistory(EVENT_RECORD* pEventRecord)
 {
+    using namespace Microsoft_Windows_DxgKrnl::Win7;
+
     DebugEvent(pEventRecord, &mMetadata);
 
-    auto pPresentHistoryEvent = reinterpret_cast<Win7::DXGKETW_PRESENTHISTORYEVENT*>(pEventRecord->UserData);
+    auto pPresentHistoryEvent = reinterpret_cast<DXGKETW_PRESENTHISTORYEVENT*>(pEventRecord->UserData);
     if (pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_START) {
         TRACK_PRESENT_PATH_GENERATE_ID();
         HandleDxgkPresentHistory(
@@ -1949,18 +1460,20 @@ void PMTraceConsumer::HandleWin7DxgkPresentHistory(EVENT_RECORD* pEventRecord)
 
 void PMTraceConsumer::HandleWin7DxgkQueuePacket(EVENT_RECORD* pEventRecord)
 {
+    using namespace Microsoft_Windows_DxgKrnl::Win7;
+
     DebugEvent(pEventRecord, &mMetadata);
 
     if (pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_START) {
-        auto pSubmitEvent = reinterpret_cast<Win7::DXGKETW_QUEUESUBMITEVENT*>(pEventRecord->UserData);
+        auto pSubmitEvent = reinterpret_cast<DXGKETW_QUEUESUBMITEVENT*>(pEventRecord->UserData);
         HandleDxgkQueueSubmit<true>(
             pEventRecord->EventHeader,
-            pSubmitEvent->PacketType,
-            pSubmitEvent->SubmitSequence,
             pSubmitEvent->hContext,
+            pSubmitEvent->SubmitSequence,
+            pSubmitEvent->PacketType,
             pSubmitEvent->bPresent != 0);
     } else if (pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_STOP) {
-        auto pCompleteEvent = reinterpret_cast<Win7::DXGKETW_QUEUECOMPLETEEVENT*>(pEventRecord->UserData);
+        auto pCompleteEvent = reinterpret_cast<DXGKETW_QUEUECOMPLETEEVENT*>(pEventRecord->UserData);
         TRACK_PRESENT_PATH_GENERATE_ID();
         HandleDxgkQueueComplete(pEventRecord->EventHeader, pCompleteEvent->SubmitSequence);
     }
@@ -1968,10 +1481,12 @@ void PMTraceConsumer::HandleWin7DxgkQueuePacket(EVENT_RECORD* pEventRecord)
 
 void PMTraceConsumer::HandleWin7DxgkVSyncDPC(EVENT_RECORD* pEventRecord)
 {
+    using namespace Microsoft_Windows_DxgKrnl::Win7;
+
     DebugEvent(pEventRecord, &mMetadata);
     TRACK_PRESENT_PATH_GENERATE_ID();
 
-    auto pVSyncDPCEvent = reinterpret_cast<Win7::DXGKETW_SCHEDULER_VSYNC_DPC*>(pEventRecord->UserData);
+    auto pVSyncDPCEvent = reinterpret_cast<DXGKETW_SCHEDULER_VSYNC_DPC*>(pEventRecord->UserData);
 
     // Windows 7 does not support MultiPlaneOverlay.
     HandleDxgkSyncDPC(pEventRecord->EventHeader, (uint32_t)(pVSyncDPCEvent->FlipFenceId.QuadPart >> 32u));
@@ -1979,12 +1494,14 @@ void PMTraceConsumer::HandleWin7DxgkVSyncDPC(EVENT_RECORD* pEventRecord)
 
 void PMTraceConsumer::HandleWin7DxgkMMIOFlip(EVENT_RECORD* pEventRecord)
 {
+    using namespace Microsoft_Windows_DxgKrnl::Win7;
+
     DebugEvent(pEventRecord, &mMetadata);
     TRACK_PRESENT_PATH_GENERATE_ID();
 
     if (pEventRecord->EventHeader.Flags & EVENT_HEADER_FLAG_32_BIT_HEADER)
     {
-        auto pMMIOFlipEvent = reinterpret_cast<Win7::DXGKETW_SCHEDULER_MMIO_FLIP_32*>(pEventRecord->UserData);
+        auto pMMIOFlipEvent = reinterpret_cast<DXGKETW_SCHEDULER_MMIO_FLIP_32*>(pEventRecord->UserData);
         HandleDxgkMMIOFlip(
             pEventRecord->EventHeader,
             pMMIOFlipEvent->FlipSubmitSequence,
@@ -1992,7 +1509,7 @@ void PMTraceConsumer::HandleWin7DxgkMMIOFlip(EVENT_RECORD* pEventRecord)
     }
     else
     {
-        auto pMMIOFlipEvent = reinterpret_cast<Win7::DXGKETW_SCHEDULER_MMIO_FLIP_64*>(pEventRecord->UserData);
+        auto pMMIOFlipEvent = reinterpret_cast<DXGKETW_SCHEDULER_MMIO_FLIP_64*>(pEventRecord->UserData);
         HandleDxgkMMIOFlip(
             pEventRecord->EventHeader,
             pMMIOFlipEvent->FlipSubmitSequence,
@@ -2845,9 +2362,9 @@ void PMTraceConsumer::HandleNTProcessEvent(EVENT_RECORD* pEventRecord)
                               pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_DC_START;
 
         if (event.IsStartEvent) {
-            gNTProcessNames[event.ProcessId] = event.ImageFileName;
+            mNTProcessNames[event.ProcessId] = event.ImageFileName;
         } else {
-            gNTProcessNames.erase(event.ProcessId);
+            mNTProcessNames.erase(event.ProcessId);
         }
 
         std::lock_guard<std::mutex> lock(mProcessEventMutex);
@@ -2871,7 +2388,6 @@ void PMTraceConsumer::RemoveTrackedProcessForFiltering(uint32_t processID)
 {
     std::unique_lock<std::shared_mutex> lock(mTrackedProcessFilterMutex);
     auto iterator = mTrackedProcessFilter.find(processID);
-    DebugAssert(iterator != mTrackedProcessFilter.end());
     if (iterator != mTrackedProcessFilter.end()) {
         mTrackedProcessFilter.erase(iterator);
     }

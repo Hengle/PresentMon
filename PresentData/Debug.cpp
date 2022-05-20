@@ -63,8 +63,6 @@ void PrintFloat(float value) { printf("%g", value); }
 void PrintU32(uint32_t value) { printf("%u", value); }
 void PrintU64(uint64_t value) { printf("%llu", value); }
 void PrintU64x(uint64_t value) { printf("0x%llx", value); }
-void PrintTime(uint64_t value) { printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampToNs(value))); }
-void PrintTimeDelta(uint64_t value) { printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampDeltaToNs(value))); }
 void PrintBool(bool value) { printf("%s", value ? "true" : "false"); }
 void PrintRuntime(Runtime value)
 {
@@ -185,8 +183,8 @@ void PrintEventHeader(EVENT_RECORD* eventRecord, EventMetadata* metadata, char c
              if (propFunc == PrintU32)                  PrintU32(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintU64)                  PrintU64(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintU64x)                 PrintU64x(metadata->GetEventData<uint64_t>(eventRecord, propName));
-        else if (propFunc == PrintTime)                 PrintTime(metadata->GetEventData<uint64_t>(eventRecord, propName));
-        else if (propFunc == PrintTimeDelta)            PrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, propName));
+        else if (propFunc == DebugPrintTime)            DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, propName));
+        else if (propFunc == DebugPrintTimeDelta)       DebugPrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintTokenState)           PrintTokenState(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintQueuePacketType)      PrintQueuePacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintDmaPacketType)        PrintDmaPacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
@@ -215,41 +213,41 @@ void FlushModifiedPresent()
         printf("->"); \
         _Fn(gModifiedPresent->_Name); \
     }
-    FLUSH_MEMBER(PrintTimeDelta,     TimeTaken)
-    FLUSH_MEMBER(PrintTime,          GPUStartTime)
-    FLUSH_MEMBER(PrintTime,          ReadyTime)
-    FLUSH_MEMBER(PrintTime,          ScreenTime)
-    FLUSH_MEMBER(PrintTime,          InputTime)
-    FLUSH_MEMBER(PrintU64x,          SwapChainAddress)
-    FLUSH_MEMBER(PrintU32,           SyncInterval)
-    FLUSH_MEMBER(PrintU32,           PresentFlags)
-    FLUSH_MEMBER(PrintU64,           INTC_FrameID)
-    FLUSH_MEMBER(PrintU64x,          Hwnd)
-    FLUSH_MEMBER(PrintU64x,          DxgkPresentHistoryToken)
-    FLUSH_MEMBER(PrintTimeDelta,     GPUDuration)
-    FLUSH_MEMBER(PrintTimeDelta,     GPUVideoDuration)
-    FLUSH_MEMBER(PrintU32,           QueueSubmitSequence)
-    FLUSH_MEMBER(PrintU32,           DriverBatchThreadId)
-    FLUSH_MEMBER(PrintPresentMode,   PresentMode)
-    FLUSH_MEMBER(PrintPresentResult, FinalState)
-    FLUSH_MEMBER(PrintBool,          SupportsTearing)
-    FLUSH_MEMBER(PrintBool,          MMIO)
-    FLUSH_MEMBER(PrintBool,          SeenDxgkPresent)
-    FLUSH_MEMBER(PrintBool,          SeenWin32KEvents)
-    FLUSH_MEMBER(PrintBool,          DwmNotified)
-    FLUSH_MEMBER(PrintTime,          INTC_ProducerPresentTime)
-    FLUSH_MEMBER(PrintTime,          INTC_ConsumerPresentTime)
-    FLUSH_MEMBER(PrintTimeDelta,     INTC_UmdTimers[INTC_TIMER_WAIT_IF_FULL])
-    FLUSH_MEMBER(PrintTimeDelta,     INTC_UmdTimers[INTC_TIMER_WAIT_IF_EMPTY])
-    FLUSH_MEMBER(PrintTimeDelta,     INTC_UmdTimers[INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC])
-    FLUSH_MEMBER(PrintTimeDelta,     INTC_UmdTimers[INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN])
-    FLUSH_MEMBER(PrintTimeDelta,     INTC_UmdTimers[INTC_TIMER_WAIT_FOR_FENCE])
-    FLUSH_MEMBER(PrintTimeDelta,     INTC_UmdTimers[INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED])
-    FLUSH_MEMBER(PrintTimeDelta,     INTC_UmdTimers[INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU])
-    FLUSH_MEMBER(PrintTimeDelta,     INTC_UmdTimers[INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA])
-    FLUSH_MEMBER(PrintBool,          IsCompleted)
-    FLUSH_MEMBER(PrintBool,          IsLost)
-    FLUSH_MEMBER(PrintU32,           DeferredCompletionWaitCount)
+    FLUSH_MEMBER(DebugPrintTimeDelta, TimeTaken)
+    FLUSH_MEMBER(DebugPrintTime,      ReadyTime)
+    FLUSH_MEMBER(DebugPrintTime,      ScreenTime)
+    FLUSH_MEMBER(DebugPrintTime,      InputTime)
+    FLUSH_MEMBER(DebugPrintTime,      GPUStartTime)
+    FLUSH_MEMBER(DebugPrintTimeDelta, GPUDuration)
+    FLUSH_MEMBER(DebugPrintTimeDelta, GPUVideoDuration)
+    FLUSH_MEMBER(PrintU64x,           SwapChainAddress)
+    FLUSH_MEMBER(PrintU32,            SyncInterval)
+    FLUSH_MEMBER(PrintU32,            PresentFlags)
+    FLUSH_MEMBER(PrintU64x,           Hwnd)
+    FLUSH_MEMBER(PrintU64x,           DxgkPresentHistoryToken)
+    FLUSH_MEMBER(PrintU32,            QueueSubmitSequence)
+    FLUSH_MEMBER(PrintU32,            DriverBatchThreadId)
+    FLUSH_MEMBER(PrintPresentMode,    PresentMode)
+    FLUSH_MEMBER(PrintPresentResult,  FinalState)
+    FLUSH_MEMBER(PrintBool,           SupportsTearing)
+    FLUSH_MEMBER(PrintBool,           MMIO)
+    FLUSH_MEMBER(PrintBool,           SeenDxgkPresent)
+    FLUSH_MEMBER(PrintBool,           SeenWin32KEvents)
+    FLUSH_MEMBER(PrintBool,           DwmNotified)
+    FLUSH_MEMBER(PrintBool,           IsCompleted)
+    FLUSH_MEMBER(PrintBool,           IsLost)
+    FLUSH_MEMBER(PrintU32,            DeferredCompletionWaitCount)
+    FLUSH_MEMBER(DebugPrintTime,      INTC_ProducerPresentTime)
+    FLUSH_MEMBER(DebugPrintTime,      INTC_ConsumerPresentTime)
+    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timers[INTC_TIMER_WAIT_IF_FULL])
+    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timers[INTC_TIMER_WAIT_IF_EMPTY])
+    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timers[INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC])
+    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timers[INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN])
+    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timers[INTC_TIMER_WAIT_FOR_FENCE])
+    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timers[INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED])
+    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timers[INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU])
+    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timers[INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA])
+    FLUSH_MEMBER(PrintU64,            INTC_FrameID)
 #undef FLUSH_MEMBER
     if (changedCount > 0) {
         printf("\n");
@@ -258,6 +256,16 @@ void FlushModifiedPresent()
     gModifiedPresent = nullptr;
 }
 
+}
+
+void DebugPrintTime(uint64_t value)
+{
+    printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampToNs(value)));
+}
+
+void DebugPrintTimeDelta(uint64_t value)
+{
+    printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampDeltaToNs(value)));
 }
 
 void DebugInitialize(LARGE_INTEGER* firstTimestamp, LARGE_INTEGER const& timestampFrequency)
@@ -490,21 +498,21 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
             }
             /* END WORKAROUND */
 #if 0
-            printf(  "%*sAppWorkStart            = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));
-            printf("\n%*sAppSimulationTime       = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime"));
-            printf("\n%*sDriverWorkStart         = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));
-            printf("\n%*sDriverWorkEnd           = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));
-            printf("\n%*sKernelDriverSubmitStart = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitStart"));
-            printf("\n%*sKernelDriverSubmitEnd   = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitEnd"));
-            printf("\n%*sGPUStart                = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));
-            printf("\n%*sGPUEnd                  = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));
-            printf("\n%*sKernelDriverFenceReport = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverFenceReport"));
-            printf("\n%*sPresentAPICall          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
-            printf("\n%*sTargetFrameTime         = ", 29, ""); PrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, L"TargetFrameTime"));
-            printf("\n%*sFlipReceivedTime        = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReceivedTime"));
-            printf("\n%*sFlipReportTime          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReportTime"));
-            printf("\n%*sFlipProgrammingTime     = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipProgrammingTime"));
-            printf("\n%*sActualFlipTime          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
+            printf(  "%*sAppWorkStart            = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));
+            printf("\n%*sAppSimulationTime       = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime"));
+            printf("\n%*sDriverWorkStart         = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));
+            printf("\n%*sDriverWorkEnd           = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));
+            printf("\n%*sKernelDriverSubmitStart = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitStart"));
+            printf("\n%*sKernelDriverSubmitEnd   = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitEnd"));
+            printf("\n%*sGPUStart                = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));
+            printf("\n%*sGPUEnd                  = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));
+            printf("\n%*sKernelDriverFenceReport = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverFenceReport"));
+            printf("\n%*sPresentAPICall          = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
+            printf("\n%*sTargetFrameTime         = ", 29, ""); DebugPrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, L"TargetFrameTime"));
+            printf("\n%*sFlipReceivedTime        = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReceivedTime"));
+            printf("\n%*sFlipReportTime          = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReportTime"));
+            printf("\n%*sFlipProgrammingTime     = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipProgrammingTime"));
+            printf("\n%*sActualFlipTime          = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
 #endif
             printf("\n");
             break;
@@ -546,22 +554,6 @@ void DebugCreatePresent(PresentEvent const& p)
     printf(" SyncInterval=%u", p.SyncInterval);
     printf(" Runtime=");
     PrintRuntime(p.Runtime);
-    printf("\n");
-}
-
-void DebugFirstDmaStart()
-{
-    printf("                             FirstDmaTime\n");
-}
-
-void DebugDmaAccumulated(uint64_t currentTime, uint64_t addedTime)
-{
-    printf("                             DmaTimeAccumulated: ");
-    PrintTimeDelta(currentTime);
-    printf(" + ");
-    PrintTimeDelta(addedTime);
-    printf(" => ");
-    PrintTimeDelta(currentTime + addedTime);
     printf("\n");
 }
 

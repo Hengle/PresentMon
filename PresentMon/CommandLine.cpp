@@ -342,17 +342,17 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTimer = 0;
     args->mHotkeyModifiers = MOD_NOREPEAT;
     args->mHotkeyVirtualKeyCode = 0;
+    args->mTrackDisplay = true;
+    args->mTrackDebug = false;
+    args->mTrackInput = false;
     args->mTrackGPU = false;
     args->mTrackGPUVideo = false;
-    args->mTrackDisplay = true;
-    args->mTrackInput = false;
-    args->mTrackDebug = false;
     args->mTrackPower = false;
-    args->mTrackWMR = false;
-    args->mTrackINTCUmdTimers = false;
+    args->mTrackINTCTimers = false;
     args->mTrackINTCCpuGpuSync = false;
     args->mDebugINTCFramePacing = false;
     args->mTrackMemoryResidency = false;
+    args->mTrackWMR = false;
     args->mOutputCsvToFile = true;
     args->mOutputCsvToStdout = false;
     args->mOutputQpcTime = false;
@@ -422,7 +422,7 @@ bool ParseCommandLine(int argc, char** argv)
         else if (ParseArg(argv[i], "track_memory_residency")) { args->mTrackMemoryResidency = true; continue; }
 
         // Internal options:
-        else if (ParseArg(argv[i], "track_queue_timers" )) { args->mTrackINTCUmdTimers   = true; continue; }
+        else if (ParseArg(argv[i], "track_queue_timers" )) { args->mTrackINTCTimers   = true; continue; }
         else if (ParseArg(argv[i], "track_cpu_gpu_sync" )) { args->mTrackINTCCpuGpuSync  = true; continue; }
         else if (ParseArg(argv[i], "debug_frame_pacing" )) { args->mDebugINTCFramePacing = true; continue; }
 
@@ -563,41 +563,13 @@ bool ParseCommandLine(int argc, char** argv)
 
     // If -terminate_existing, warn about any normal arguments since we'll just
     // be stopping an existing session and then exiting.
-    if (args->mTerminateExisting && (
-        !args->mTargetProcessNames.empty() ||
-        !args->mExcludeProcessNames.empty() ||
-        args->mTargetPid != 0 ||
-        args->mEtlFileName != nullptr ||
-        args->mOutputCsvFileName != nullptr ||
-        args->mOutputCsvToStdout ||
-        args->mMultiCsv ||
-        args->mOutputCsvToFile == false ||
-        args->mConsoleOutputType == ConsoleOutput::Simple ||
-        args->mOutputQpcTime ||
-        args->mOutputQpcTimeInSeconds ||
-        args->mOutputDateTime ||
-        args->mHotkeySupport ||
-        args->mDelay != 0 ||
-        args->mTimer != 0 ||
-        args->mStartTimer ||
-        args->mExcludeDropped ||
-        args->mScrollLockIndicator ||
-        !args->mTrackDisplay ||
-        args->mTrackGPU ||
-        args->mTrackDebug ||
-        args->mTrackPower ||
-        args->mTrackWMR ||
-        args->mTrackINTCUmdTimers ||
-        args->mTrackINTCCpuGpuSync ||
-        args->mDebugINTCFramePacing ||
-        args->mTerminateOnProcExit ||
-        args->mTerminateAfterTimer)) {
+    if (args->mTerminateExisting && argc != 2) {
         PrintWarning("warning: -terminate_existing exits without capturing anything; ignoring all capture,\n"
                      "         output, and recording arguments.\n");
     }
 
     // If the INTC provider is required, check that the manifest is installed.
-    if (args->mEtlFileName == nullptr && (args->mTrackINTCUmdTimers || args->mTrackINTCCpuGpuSync)) {
+    if (args->mEtlFileName == nullptr && (args->mTrackINTCTimers || args->mTrackINTCCpuGpuSync)) {
         ULONG bufferSize = 0;
         auto status = TdhEnumerateManifestProviderEvents((LPGUID) &Intel_Graphics_D3D10::GUID, nullptr, &bufferSize);
         if (status == ERROR_NOT_FOUND) {
