@@ -265,7 +265,13 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         EventDataDesc desc[] = {
             { L"FrameID" },
         };
+        /* BEGIN WORKAROUND: if the manifest isn't installed nor embedded
+         * into the ETL this won't be able to lookup properties
         mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        */
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc), _countof(desc));
+        if ((desc[0].status_ & PROP_STATUS_FOUND) == 0) break;
+        /* END WORKAROUND */
         auto FrameID = desc[0].GetData<uint64_t>();
 
         auto present = FindOrCreatePresent(hdr);
@@ -300,7 +306,13 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             { L"FlipProgrammingTime" },
             { L"ActualFlipTime" },
         };
+        /* BEGIN WORKAROUND: if the manifest isn't installed nor embedded
+         * into the ETL this won't be able to lookup properties
         mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        */
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc), _countof(desc));
+        if ((desc[0].status_ & PROP_STATUS_FOUND) == 0) break;
+        /* END WORKAROUND */
         auto FrameID                 = desc[0].GetData<uint64_t>();
         auto AppWorkStart            = desc[1].GetData<uint64_t>();
         auto AppSimulationTime       = desc[2].GetData<uint64_t>();

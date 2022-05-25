@@ -441,14 +441,43 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
         case CpuGpuSync_Stop::Id:   PrintEventHeader(eventRecord, metadata, "INTC_CpuGpuSync_Stop",   { L"value", PrintU32 }); break;
 
         case task_DdiPresentDXGI_Info::Id:
+            /* BEGIN WORKAROUND: if the manifest isn't installed nor embedded
+             * into the ETL this won't be able to lookup properties
             PrintEventHeader(eventRecord, metadata, "INTC_DdiPresentDXGI_Info", {
                 L"FrameID", PrintU64,
             });
+            */
+            {
+                PrintEventHeader(eventRecord->EventHeader);
+                printf("INTC_DdiPresentDXGI_Info");
+
+                EventDataDesc desc = { L"FrameID" };
+                metadata->GetEventData(eventRecord, &desc, 1, 1);
+                if (desc.status_ & PROP_STATUS_FOUND) {
+                    PrintU32(desc.GetData<uint32_t>());
+                }
+                printf("\n");
+            }
+            /* END WORKAROUND */
             break;
         case task_FramePacer_Info::Id:
+            /* BEGIN WORKAROUND: if the manifest isn't installed nor embedded
+             * into the ETL this won't be able to lookup properties
             PrintEventHeader(eventRecord, metadata, "INTC_FramePacer_Info", {
                 L"FrameID", PrintU64,
             });
+            */
+            {
+                PrintEventHeader(eventRecord->EventHeader);
+                printf("INTC_FramePacer_Info");
+
+                EventDataDesc desc = { L"FrameID" };
+                metadata->GetEventData(eventRecord, &desc, 1, 1);
+                if (desc.status_ & PROP_STATUS_FOUND) {
+                    PrintU32(desc.GetData<uint32_t>());
+                }
+            }
+            /* END WORKAROUND */
 #if 0
             printf(  "%*sAppWorkStart            = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));
             printf("\n%*sAppSimulationTime       = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime"));
@@ -465,8 +494,8 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
             printf("\n%*sFlipReportTime          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReportTime"));
             printf("\n%*sFlipProgrammingTime     = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipProgrammingTime"));
             printf("\n%*sActualFlipTime          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
-            printf("\n");
 #endif
+            printf("\n");
             break;
         }
         return;
