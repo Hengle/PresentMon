@@ -62,7 +62,7 @@ char* AddCommas(uint64_t t)
 void PrintFloat(float value) { printf("%g", value); }
 void PrintU32(uint32_t value) { printf("%u", value); }
 void PrintU64(uint64_t value) { printf("%llu", value); }
-void PrintU64x(uint64_t value) { printf("%llx", value); }
+void PrintU64x(uint64_t value) { printf("0x%llx", value); }
 void PrintTime(uint64_t value) { printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampToNs(value))); }
 void PrintTimeDelta(uint64_t value) { printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampDeltaToNs(value))); }
 void PrintBool(bool value) { printf("%s", value ? "true" : "false"); }
@@ -394,6 +394,17 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
                                                }); break;
         case VSyncDPC_Info::Id:                PrintEventHeader(eventRecord, metadata, "DxgKrnl_VSyncDPC_Info", {
                                                    L"FlipFenceId", PrintU64x,
+                                               }); break;
+        case MakeResident_Start::Id:           PrintEventHeader(hdr, "DxgKrnl_MakeResident_Start"); break;
+        case MakeResident_Stop::Id:            PrintEventHeader(hdr, "DxgKrnl_MakeResident_Stop"); break;
+        case PagingQueuePacket_Start::Id:      PrintEventHeader(eventRecord, metadata, "DxgKrnl_PagingQueuePacket_Start", {
+                                                   L"SequenceId", PrintU64x,
+                                               }); break;
+        case PagingQueuePacket_Info::Id:       PrintEventHeader(eventRecord, metadata, "DxgKrnl_PagingQueuePacket_Info", {
+                                                   L"SequenceId", PrintU64x,
+                                               }); break;
+        case PagingQueuePacket_Stop::Id:       PrintEventHeader(eventRecord, metadata, "DxgKrnl_PagingQueuePacket_Stop", {
+                                                   L"SequenceId", PrintU64x,
                                                }); break;
         }
         return;

@@ -172,7 +172,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
     switch (hdr.EventDescriptor.Id) {
     case Intel_Graphics_D3D10::QueueTimers_Info::Id:
     {
-        assert(mTrackINTCUmdTimers);
+        DebugAssert(mTrackINTCUmdTimers);
 
         auto frameInfo = &mProcessFrameInfo.emplace(hdr.ProcessId, FrameInfo{}).first->second;
 
@@ -180,7 +180,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         switch (Type) {
         case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_APP:    frameInfo->mINTCProducerPresentTime = hdr.TimeStamp.QuadPart; break;
         case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_DRIVER: frameInfo->mINTCConsumerPresentTime = hdr.TimeStamp.QuadPart; break;
-        default: assert(false); break;
+        default: DebugAssert(false); break;
         }
         break;
     }
@@ -197,7 +197,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         case Intel_Graphics_D3D10::QueueTimers_Start::Id:
         case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
         {
-            assert(!mFilteredEvents || mTrackINTCUmdTimers); // Assert that filtering is working if expected
+            DebugAssert(!mFilteredEvents || mTrackINTCUmdTimers); // Assert that filtering is working if expected
 
             auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
             switch (Type) {
@@ -207,7 +207,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_DRAIN_TIMER: timerIndex = INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN; break;
             case Intel_Graphics_D3D10::mTimerType::WAIT_FOR_FENCE:               timerIndex = INTC_TIMER_WAIT_FOR_FENCE; break;
             case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_FENCE_SUBMITTED:   timerIndex = INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED; break;
-            default: assert(false); break;
+            default: DebugAssert(false); break;
             }
             break;
         }
@@ -215,13 +215,13 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
         {
-            assert(!mFilteredEvents || mTrackINTCCpuGpuSync); // Assert that filtering is working if expected
+            DebugAssert(!mFilteredEvents || mTrackINTCCpuGpuSync); // Assert that filtering is working if expected
 
             auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mSyncType>(pEventRecord, L"value");
             switch (Type) {
             case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU:   timerIndex = INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; break;
             case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_POLL_ON_QUERY_GET_DATA: timerIndex = INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA; break;
-            default: assert(false); break;
+            default: DebugAssert(false); break;
             }
             break;
         }
@@ -261,7 +261,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
     // Microsoft_Windows_DXGI::Present_Stop on the same thread.
     case Intel_Graphics_D3D10::task_DdiPresentDXGI_Info::Id:
     {
-        assert(mDebugINTCFramePacing);
+        DebugAssert(mDebugINTCFramePacing);
         EventDataDesc desc[] = {
             { L"FrameID" },
         };
@@ -287,7 +287,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
     // Microsoft_Windows_DXGI::Present_Stop on the same thread.
     case Intel_Graphics_D3D10::task_FramePacer_Info::Id:
     {
-        assert(mDebugINTCFramePacing);
+        DebugAssert(mDebugINTCFramePacing);
         EventDataDesc desc[] = {
             { L"FrameID" },
             { L"AppWorkStart" },
@@ -558,7 +558,7 @@ void PMTraceConsumer::HandleDxgkBlt(EVENT_HEADER const& hdr, uint64_t hwnd, bool
         if (presentEvent == nullptr) {
             return;
         }
-        assert(presentEvent->PresentMode == PresentMode::Unknown);
+        DebugAssert(presentEvent->PresentMode == PresentMode::Unknown);
     }
 
     TRACK_PRESENT_PATH_SAVE_GENERATED_ID(presentEvent);
@@ -1050,7 +1050,7 @@ void PMTraceConsumer::HandleDxgkPresentHistory(
             return;
         }
 
-        assert(presentEvent->DxgkPresentHistoryToken == 0);
+        DebugAssert(presentEvent->DxgkPresentHistoryToken == 0);
     }
 
     TRACK_PRESENT_PATH_SAVE_GENERATED_ID(presentEvent);
@@ -1066,12 +1066,12 @@ void PMTraceConsumer::HandleDxgkPresentHistory(
     if (iter != mPresentByDxgkPresentHistoryToken.end()) {
         RemoveLostPresent(iter->second);
     }
-    assert(mPresentByDxgkPresentHistoryToken.find(token) == mPresentByDxgkPresentHistoryToken.end());
+    DebugAssert(mPresentByDxgkPresentHistoryToken.find(token) == mPresentByDxgkPresentHistoryToken.end());
     mPresentByDxgkPresentHistoryToken[token] = presentEvent;
 
     if (presentEvent->PresentMode == PresentMode::Hardware_Legacy_Copy_To_Front_Buffer) {
-        assert(presentModel == Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_UNINITIALIZED ||
-               presentModel == Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_BLT);
+        DebugAssert(presentModel == Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_UNINITIALIZED ||
+                    presentModel == Microsoft_Windows_DxgKrnl::PresentModel::D3DKMT_PM_REDIRECTED_BLT);
         presentEvent->PresentMode = PresentMode::Composed_Copy_GPU_GDI;
 
     } else if (presentEvent->PresentMode == PresentMode::Unknown) {
@@ -1089,7 +1089,7 @@ void PMTraceConsumer::HandleDxgkPresentHistory(
             // When there's no Win32K events, we'll assume PHTs that aren't after a blt, and aren't composition tokens
             // are flip tokens and that they're displayed. There are no Win32K events on Win7, and they might not be
             // present in some traces - don't let presents get stuck/dropped just because we can't track them perfectly.
-            assert(!presentEvent->SeenWin32KEvents);
+            DebugAssert(!presentEvent->SeenWin32KEvents);
             presentEvent->PresentMode = PresentMode::Composed_Flip;
         }
     } else if (presentEvent->PresentMode == PresentMode::Composed_Copy_CPU_GDI) {
@@ -1098,7 +1098,7 @@ void PMTraceConsumer::HandleDxgkPresentHistory(
             mPresentsWaitingForDWM.emplace_back(presentEvent);
             presentEvent->PresentInDwmWaitingStruct = true;
         } else {
-            assert(mPresentByDxgkPresentHistoryTokenData.find(tokenData) == mPresentByDxgkPresentHistoryTokenData.end());
+            DebugAssert(mPresentByDxgkPresentHistoryTokenData.find(tokenData) == mPresentByDxgkPresentHistoryTokenData.end());
             mPresentByDxgkPresentHistoryTokenData[tokenData] = presentEvent;
             presentEvent->DxgkPresentHistoryTokenData = tokenData;
         }
@@ -1181,7 +1181,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 
             // We should not have already identified as hardware_composed - this
             // can only be detected around Vsync/HsyncDPC time.
-            assert(pEvent->PresentMode != PresentMode::Hardware_Composed_Independent_Flip);
+            DebugAssert(pEvent->PresentMode != PresentMode::Hardware_Composed_Independent_Flip);
 
             DebugModifyPresent(pEvent.get());
             pEvent->PresentMode = PresentMode::Hardware_Independent_Flip;
@@ -1398,7 +1398,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             auto hDevice     = desc[1].GetData<uint64_t>();
 
             // Sometimes there are duplicate start events
-            assert(mDevices.find(hDevice) == mDevices.end() || mDevices.find(hDevice)->second == pDxgAdapter);
+            DebugAssert(mDevices.find(hDevice) == mDevices.end() || mDevices.find(hDevice)->second == pDxgAdapter);
             mDevices.emplace(hDevice, pDxgAdapter);
             return;
         }
@@ -1419,7 +1419,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 
             if (hDevice != 0) {
                 // Sometimes there are duplicate start events
-                assert(mDevices.find(hDevice) == mDevices.end() || mDevices.find(hDevice)->second == pDxgAdapter);
+                DebugAssert(mDevices.find(hDevice) == mDevices.end() || mDevices.find(hDevice)->second == pDxgAdapter);
                 mDevices.emplace(hDevice, pDxgAdapter);
             }
             return;
@@ -1447,14 +1447,14 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 
             auto deviceIter = mDevices.find(hDevice);
             if (deviceIter == mDevices.end()) {
-                assert(false);
+                DebugAssert(false);
                 return;
             }
             auto pDxgAdapter = deviceIter->second;
             auto node = &mNodes[pDxgAdapter].emplace(NodeOrdinal, Node{}).first->second;
 
             // Sometimes there are duplicate start events, make sure that they say the same thing
-            assert(mContexts.find(hDevice) == mContexts.end() || mContexts.find(hDevice)->second.mNode == node);
+            DebugAssert(mContexts.find(hDevice) == mContexts.end() || mContexts.find(hDevice)->second.mNode == node);
 
             auto context = &mContexts.emplace(hContext, Context()).first->second;
             context->mFrameDmaInfo = nullptr;
@@ -1674,7 +1674,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 
                 // If this was the process' last executing packet, accumulate
                 // the execution duration into the process' count.
-                assert(frameDmaInfo == node->mFrameDmaInfo[node->mQueueIndex]);
+                DebugAssert(frameDmaInfo == node->mFrameDmaInfo[node->mQueueIndex]);
                 if (frameDmaInfo->mRunningDmaCount == 0) {
                     auto accumulatedTime = hdr.TimeStamp.QuadPart - frameDmaInfo->mRunningDmaStartTime;
                     DebugDmaAccumulated(frameDmaInfo->mAccumulatedDmaTime, accumulatedTime);
@@ -1769,7 +1769,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
                 // multiple paging packets can execute in parallel (which
                 // violates the assumption we're making).  If the latter, this
                 // needs to be fixed.
-                assert(timer->mStartTime == 0);
+                DebugAssert(timer->mStartTime == 0);
 
                 timer->mStartTime = hdr.TimeStamp.QuadPart;
             }
@@ -2046,7 +2046,7 @@ void PMTraceConsumer::HandleWin32kEvent(EVENT_RECORD* pEventRecord)
                 return;
             }
 
-            assert(!PresentEvent->SeenWin32KEvents);
+            DebugAssert(!PresentEvent->SeenWin32KEvents);
         }
 
         TRACK_PRESENT_PATH(PresentEvent);
@@ -2060,7 +2060,7 @@ void PMTraceConsumer::HandleWin32kEvent(EVENT_RECORD* pEventRecord)
         }
 
         Win32KPresentHistoryToken key(CompositionSurfaceLuid, PresentCount, BindId);
-        assert(mPresentByWin32KPresentHistoryToken.find(key) == mPresentByWin32KPresentHistoryToken.end());
+        DebugAssert(mPresentByWin32KPresentHistoryToken.find(key) == mPresentByWin32KPresentHistoryToken.end());
         mPresentByWin32KPresentHistoryToken[key] = PresentEvent;
         PresentEvent->CompositionSurfaceLuid = CompositionSurfaceLuid;
         PresentEvent->Win32KPresentCount = PresentCount;
@@ -2417,7 +2417,7 @@ void PMTraceConsumer::CompletePresentHelper(std::shared_ptr<PresentEvent> const&
     //
     // The exact pattern causing this has not yet been identified, so is the
     // best fix for now.
-    assert(p->IsCompleted == false);
+    DebugAssert(p->IsCompleted == false);
     if (p->IsCompleted) return;
 
     // Complete the present.
@@ -2557,17 +2557,17 @@ void PMTraceConsumer::EnqueueDeferredCompletions(DeferredCompletions* deferredCo
 
         // Assert the present is complete and has been removed from all
         // internal tracking structures.
-        assert(present->IsCompleted);
-        assert(present->CompositionSurfaceLuid == 0);
-        assert(present->Win32KPresentCount == 0);
-        assert(present->Win32KBindId == 0);
-        assert(present->DxgkPresentHistoryToken == 0);
-        assert(present->DxgkPresentHistoryTokenData == 0);
-        assert(present->DxgkContext == 0);
-        assert(present->Hwnd == 0);
-        assert(present->mAllPresentsTrackingIndex == UINT32_MAX);
-        assert(present->QueueSubmitSequence == 0);
-        assert(present->PresentInDwmWaitingStruct == false);
+        DebugAssert(present->IsCompleted);
+        DebugAssert(present->CompositionSurfaceLuid == 0);
+        DebugAssert(present->Win32KPresentCount == 0);
+        DebugAssert(present->Win32KBindId == 0);
+        DebugAssert(present->DxgkPresentHistoryToken == 0);
+        DebugAssert(present->DxgkPresentHistoryTokenData == 0);
+        DebugAssert(present->DxgkContext == 0);
+        DebugAssert(present->Hwnd == 0);
+        DebugAssert(present->mAllPresentsTrackingIndex == UINT32_MAX);
+        DebugAssert(present->QueueSubmitSequence == 0);
+        DebugAssert(present->PresentInDwmWaitingStruct == false);
 
         // If later presents have already be enqueued for the user, mark this
         // present as lost.
@@ -2632,7 +2632,7 @@ std::shared_ptr<PresentEvent> PMTraceConsumer::FindOrCreatePresent(EVENT_HEADER 
     for (auto const& tuple : *presentsByThisProcess) {
         auto presentEvent = tuple.second;
         if (presentEvent->PresentMode == PresentMode::Unknown) {
-            assert(presentEvent->DriverBatchThreadId == 0);
+            DebugAssert(presentEvent->DriverBatchThreadId == 0);
             DebugModifyPresent(presentEvent.get());
             presentEvent->DriverBatchThreadId = hdr.ThreadId;
             mPresentByThreadId.emplace(hdr.ThreadId, presentEvent);
@@ -2725,11 +2725,11 @@ void PMTraceConsumer::RuntimePresentStop(Runtime runtime, EVENT_HEADER const& hd
             auto present = eventIter->second;
 
             // Check expected state (a new Present() that has only been started).
-            assert(present->TimeTaken                   == 0);
-            assert(present->IsCompleted                 == false);
-            assert(present->IsLost                      == false);
-            assert(present->DeferredCompletionWaitCount == 0);
-            assert(present->DependentPresents.empty());
+            DebugAssert(present->TimeTaken                   == 0);
+            DebugAssert(present->IsCompleted                 == false);
+            DebugAssert(present->IsLost                      == false);
+            DebugAssert(present->DeferredCompletionWaitCount == 0);
+            DebugAssert(present->DependentPresents.empty());
 
             // Remove the present from any tracking structures.
             DebugModifyPresent(nullptr); // Prevent debug reporting of tracking removal
@@ -2871,12 +2871,9 @@ void PMTraceConsumer::RemoveTrackedProcessForFiltering(uint32_t processID)
 {
     std::unique_lock<std::shared_mutex> lock(mTrackedProcessFilterMutex);
     auto iterator = mTrackedProcessFilter.find(processID);
-    
+    DebugAssert(iterator != mTrackedProcessFilter.end());
     if (iterator != mTrackedProcessFilter.end()) {
-        mTrackedProcessFilter.erase(processID);
-    }
-    else {
-        assert(false);
+        mTrackedProcessFilter.erase(iterator);
     }
 
     // Completion events will remove any currently tracked events for this process

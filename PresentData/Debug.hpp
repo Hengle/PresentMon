@@ -38,6 +38,8 @@ void DebugFirstDmaStart();
 // Call whenever Dma time is added to a queue
 void DebugDmaAccumulated(uint64_t currentTime, uint64_t addedTime);
 
+#define DebugAssert(condition) while (!(condition)) { printf("ASSERTION FAILED: %s(%d): %s\n", __FILE__, __LINE__, #condition); break; }
+
 #else
 
 #define DebugInitialize(firstTimestamp, timestampFrequency) (void) firstTimestamp, timestampFrequency
@@ -47,5 +49,6 @@ void DebugDmaAccumulated(uint64_t currentTime, uint64_t addedTime);
 #define DebugModifyPresent(p)                               (void) p
 #define DebugFirstDmaStart()
 #define DebugDmaAccumulated(currentTime, addedTime)         (void) currentTime, addedTime
+#define DebugAssert(condition)                              assert(condition)
 
 #endif
