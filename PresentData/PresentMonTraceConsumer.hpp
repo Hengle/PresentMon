@@ -515,11 +515,11 @@ struct PMTraceConsumer
     void EnqueueDeferredCompletions(DeferredCompletions* deferredCompletions);
     void EnqueueDeferredPresent(std::shared_ptr<PresentEvent> const& p);
     std::shared_ptr<PresentEvent> FindOrCreatePresent(EVENT_HEADER const& hdr);
-    void TrackPresentOnThread(std::shared_ptr<PresentEvent> present);
     void TrackPresent(std::shared_ptr<PresentEvent> present, OrderedPresents* presentsByThisProcess);
     void RemoveLostPresent(std::shared_ptr<PresentEvent> present);
     void RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> present);
-    void RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPresentBatching, ::Runtime runtime);
+    void RuntimePresentStart(Runtime runtime, EVENT_HEADER const& hdr, uint64_t swapchainAddr, uint32_t dxgiPresentFlags, int32_t syncInterval);
+    void RuntimePresentStop(Runtime runtime, EVENT_HEADER const& hdr, uint32_t result);
 
     void HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord);
     void HandleIntelPCATEvent(EVENT_RECORD* pEventRecord);

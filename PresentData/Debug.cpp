@@ -85,7 +85,6 @@ void PrintPresentMode(PresentMode value)
     case PresentMode::Composed_Flip:                        printf("Composed_Flip"); break;
     case PresentMode::Composed_Copy_GPU_GDI:                printf("Composed_Copy_GPU_GDI"); break;
     case PresentMode::Composed_Copy_CPU_GDI:                printf("Composed_Copy_CPU_GDI"); break;
-    case PresentMode::Composed_Composition_Atlas:           printf("Composed_Composition_Atlas"); break;
     case PresentMode::Hardware_Composed_Independent_Flip:   printf("Hardware_Composed_Independent_Flip"); break;
     default:                                                printf("Unknown (%u)", value); assert(false); break;
     }
@@ -501,6 +500,7 @@ void DebugCreatePresent(PresentEvent const& p)
     FlushModifiedPresent();
     PrintUpdateHeader(p.Id);
     printf(" CreatePresent");
+    printf(" ProcessId=%u", p.ProcessId);
     printf(" SwapChainAddress=%llx", p.SwapChainAddress);
     printf(" PresentFlags=%x", p.PresentFlags);
     printf(" SyncInterval=%u", p.SyncInterval);

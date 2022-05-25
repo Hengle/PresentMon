@@ -467,31 +467,24 @@ void PMTraceConsumer::HandleD3D9Event(EVENT_RECORD* pEventRecord)
         auto pSwapchain = desc[0].GetData<uint64_t>();
         auto Flags      = desc[1].GetData<uint32_t>();
 
-        auto present = std::make_shared<PresentEvent>(hdr, Runtime::D3D9);
-        present->SwapChainAddress = pSwapchain;
-        present->PresentFlags =
-            ((Flags & D3DPRESENT_DONOTFLIP) ? DXGI_PRESENT_DO_NOT_SEQUENCE : 0) |
-            ((Flags & D3DPRESENT_DONOTWAIT) ? DXGI_PRESENT_DO_NOT_WAIT : 0) |
-            ((Flags & D3DPRESENT_FLIPRESTART) ? DXGI_PRESENT_RESTART : 0);
-        if ((Flags & D3DPRESENT_FORCEIMMEDIATE) != 0) {
-            present->SyncInterval = 0;
+        uint32_t dxgiPresentFlags = 0;
+        if (Flags & D3DPRESENT_DONOTFLIP)   dxgiPresentFlags |= DXGI_PRESENT_DO_NOT_SEQUENCE;
+        if (Flags & D3DPRESENT_DONOTWAIT)   dxgiPresentFlags |= DXGI_PRESENT_DO_NOT_WAIT;
+        if (Flags & D3DPRESENT_FLIPRESTART) dxgiPresentFlags |= DXGI_PRESENT_RESTART;
+
+        int32_t syncInterval = -1;
+        if (Flags & D3DPRESENT_FORCEIMMEDIATE) {
+            syncInterval = 0;
         }
 
-        TrackPresentOnThread(present);
-        TRACK_PRESENT_PATH(present);
+        TRACK_PRESENT_PATH_GENERATE_ID();
+
+        RuntimePresentStart(Runtime::D3D9, hdr, pSwapchain, dxgiPresentFlags, syncInterval);
         break;
     }
     case Microsoft_Windows_D3D9::Present_Stop::Id:
-    {
-        auto result = mMetadata.GetEventData<uint32_t>(pEventRecord, L"Result");
-
-        bool AllowBatching =
-            SUCCEEDED(result) &&
-            result != S_PRESENT_OCCLUDED;
-
-        RuntimePresentStop(hdr, AllowBatching, Runtime::D3D9);
+        RuntimePresentStop(Runtime::D3D9, hdr, mMetadata.GetEventData<uint32_t>(pEventRecord, L"Result"));
         break;
-    }
     default:
         assert(!mFilteredEvents); // Assert that filtering is working if expected
         break;
@@ -518,44 +511,19 @@ void PMTraceConsumer::HandleDXGIEvent(EVENT_RECORD* pEventRecord)
             { L"SyncInterval" },
         };
         mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-        auto pIDXGISwapChain = desc[0].GetData<uint64_t>();
-        auto Flags           = desc[1].GetData<uint32_t>();
-        auto SyncInterval    = desc[2].GetData<int32_t>();
+        auto pSwapChain   = desc[0].GetData<uint64_t>();
+        auto Flags        = desc[1].GetData<uint32_t>();
+        auto SyncInterval = desc[2].GetData<int32_t>();
 
-        // Ignore PRESENT_TEST: it's just to check if you're still fullscreen
-        if ((Flags & DXGI_PRESENT_TEST) != 0) {
-            // mPresentByThreadId isn't cleaned up properly when non-runtime
-            // presents (e.g. created by Dxgk via FindOrCreatePresent())
-            // complete.  So we need to clear mPresentByThreadId here to
-            // prevent the corresponding Present_Stop event from modifying
-            // anything.
-            mPresentByThreadId.erase(hdr.ThreadId);
-            break;
-        }
+        TRACK_PRESENT_PATH_GENERATE_ID();
 
-        auto present = std::make_shared<PresentEvent>(hdr, Runtime::DXGI);
-        present->SwapChainAddress = pIDXGISwapChain;
-        present->PresentFlags     = Flags;
-        present->SyncInterval     = SyncInterval;
-
-        TrackPresentOnThread(present);
-        TRACK_PRESENT_PATH(present);
+        RuntimePresentStart(Runtime::DXGI, hdr, pSwapChain, Flags, SyncInterval);
         break;
     }
     case Microsoft_Windows_DXGI::Present_Stop::Id:
     case Microsoft_Windows_DXGI::PresentMultiplaneOverlay_Stop::Id:
-    {
-        auto result = mMetadata.GetEventData<uint32_t>(pEventRecord, L"Result");
-
-        bool AllowBatching =
-            SUCCEEDED(result) &&
-            result != DXGI_STATUS_OCCLUDED &&
-            result != DXGI_STATUS_MODE_CHANGE_IN_PROGRESS &&
-            result != DXGI_STATUS_NO_DESKTOP_ACCESS;
-
-        RuntimePresentStop(hdr, AllowBatching, Runtime::DXGI);
+        RuntimePresentStop(Runtime::DXGI, hdr, mMetadata.GetEventData<uint32_t>(pEventRecord, L"Result"));
         break;
-    }
     default:
         assert(!mFilteredEvents); // Assert that filtering is working if expected
         break;
@@ -643,6 +611,7 @@ void PMTraceConsumer::HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterv
         return;
     }
 
+    DebugModifyPresent(presentEvent.get());
     presentEvent->MMIO = mmio;
     presentEvent->PresentMode = PresentMode::Hardware_Legacy_Flip;
 
@@ -2701,14 +2670,30 @@ void PMTraceConsumer::TrackPresent(
     }
 }
 
-void PMTraceConsumer::TrackPresentOnThread(std::shared_ptr<PresentEvent> present)
+void PMTraceConsumer::RuntimePresentStart(Runtime runtime, EVENT_HEADER const& hdr, uint64_t swapchainAddr,
+                                          uint32_t dxgiPresentFlags, int32_t syncInterval)
 {
     // If there is an in-flight present on this thread already, then something
     // has gone wrong with it's tracking so consider it lost.
-    auto iter = mPresentByThreadId.find(present->ThreadId);
+    auto iter = mPresentByThreadId.find(hdr.ThreadId);
     if (iter != mPresentByThreadId.end()) {
         RemoveLostPresent(iter->second);
     }
+
+    // Ignore PRESENT_TEST as it doesn't present, it's used to check if you're
+    // fullscreen.
+    if (dxgiPresentFlags & DXGI_PRESENT_TEST) {
+        return;
+    }
+
+    auto present = std::make_shared<PresentEvent>(hdr, runtime);
+
+    DebugModifyPresent(present.get());
+    present->SwapChainAddress = swapchainAddr;
+    present->PresentFlags     = dxgiPresentFlags;
+    present->SyncInterval     = syncInterval;
+
+    TRACK_PRESENT_PATH_SAVE_GENERATED_ID(present);
 
     TrackPresent(present, &mOrderedPresentsByProcessId[present->ProcessId]);
 }
@@ -2716,8 +2701,31 @@ void PMTraceConsumer::TrackPresentOnThread(std::shared_ptr<PresentEvent> present
 // No TRACK_PRESENT instrumentation here because each runtime Present::Start
 // event is instrumented and we assume we'll see the corresponding Stop event
 // for any completed present.
-void PMTraceConsumer::RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPresentBatching, Runtime runtime)
+void PMTraceConsumer::RuntimePresentStop(Runtime runtime, EVENT_HEADER const& hdr, uint32_t result)
 {
+    // If the Present() call failed, lookup the PresentEvent as the one
+    // most-recently operated on by the same thread.  If not found, ignore the
+    // Present() stop event.  If found, we throw it away (i.e., it isn't
+    // returned as either a completed nor lost present).
+    if (FAILED(result)) {
+        auto eventIter = mPresentByThreadId.find(hdr.ThreadId);
+        if (eventIter != mPresentByThreadId.end()) {
+            auto present = eventIter->second;
+
+            // Check expected state (a new Present() that has only been started).
+            assert(present->TimeTaken                   == 0);
+            assert(present->IsCompleted                 == false);
+            assert(present->IsLost                      == false);
+            assert(present->DeferredCompletionWaitCount == 0);
+            assert(present->DependentPresents.empty());
+
+            // Remove the present from any tracking structures.
+            DebugModifyPresent(nullptr); // Prevent debug reporting of tracking removal
+            RemovePresentFromTemporaryTrackingCollections(present);
+        }
+        return;
+    }
+
     // If there are any deferred presents for this process, decrement their
     // DeferredCompletionWaitCount and enqueue any that reach
     // DeferredCompletionWaitCount==0.
@@ -2777,13 +2785,29 @@ void PMTraceConsumer::RuntimePresentStop(EVENT_HEADER const& hdr, bool AllowPres
         present->Runtime   = runtime;
         present->TimeTaken = *(uint64_t*) &hdr.TimeStamp - present->QpcTime;
 
-        if (AllowPresentBatching && mTrackDisplay) {
+        bool allowBatching = false;
+        switch (runtime) {
+        case Runtime::DXGI:
+            if (result != DXGI_STATUS_OCCLUDED &&
+                result != DXGI_STATUS_MODE_CHANGE_IN_PROGRESS &&
+                result != DXGI_STATUS_NO_DESKTOP_ACCESS) {
+                allowBatching = true;
+            }
+            break;
+        case Runtime::D3D9:
+            if (result != S_PRESENT_OCCLUDED) {
+                allowBatching = true;
+            }
+            break;
+        }
+
+        if (allowBatching && mTrackDisplay) {
             // We now remove this present from mPresentByThreadId because any future
             // event related to it (e.g., from DXGK/Win32K/etc.) is not expected to
             // come from this thread.
             mPresentByThreadId.erase(eventIter);
         } else {
-            present->FinalState = AllowPresentBatching ? PresentResult::Presented : PresentResult::Discarded;
+            present->FinalState = allowBatching ? PresentResult::Presented : PresentResult::Discarded;
             CompletePresent(present);
         }
     }

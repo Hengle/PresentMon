@@ -703,6 +703,8 @@ void PrintEnum(
         nameWithoutTYPE.resize(nameLength - 5);
     }
 
+    std::map<std::wstring, uint32_t> entryNameCount;
+
     printf("\nenum class %ls : uint32_t {\n", nameWithoutTYPE.c_str());
     for (ULONG i = 0; i < mapInfo->EntryCount; ++i) {
         auto const& entry = mapInfo->MapEntryArray[i];
@@ -712,9 +714,14 @@ void PrintEnum(
         else if (wcsncmp(nameWithoutTYPE.c_str(), str, nameLength - 5) == 0) str += nameLength - 5;
         if (*str == L'_') str += 1;
 
-        printf("    %ls = %lu,\n",
-            CppCondition(str).c_str(), // str can have spaces, parenthesis, etc..
-            entry.Value);
+        auto entryName = CppCondition(str); // str can have spaces, parenthesis, etc..
+        auto count = &entryNameCount.emplace(entryName, 0).first->second;
+        *count += 1;
+        if (*count == 1) {
+            printf("    %ls = %lu,\n", entryName.c_str(), entry.Value);
+        } else {
+            printf("    %ls_%u = %lu,\n", entryName.c_str(), *count, entry.Value);
+        }
     }
     printf("};\n");
 
