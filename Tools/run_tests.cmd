@@ -8,6 +8,7 @@ set only_x64_platform=0
 set use_debug_config=1
 set use_release_config=1
 set do_build=1
+set do_realtime_tests=1
 set do_default_gtests=1
 set do_full_csv_tests=0
 set errorcount=0
@@ -17,6 +18,7 @@ set errorcount=0
     if "%~1"=="debug" ( set use_release_config=0 ) else (
     if "%~1"=="release" ( set use_debug_config=0 ) else (
     if "%~1"=="nobuild" ( set do_build=0 ) else (
+    if "%~1"=="norealtime" ( set do_realtime_tests=0 ) else (
     if "%~1"=="nogtests" ( set do_default_gtests=0 ) else (
     if "%~1"=="fullcsvs" ( set do_full_csv_tests=1 ) else (
         echo usage: run_tests.cmd [options]
@@ -25,10 +27,11 @@ set errorcount=0
         echo     debug        Only test the debug build
         echo     release      Only test the release build
         echo     nobuild      Don't build any configurations
+        echo     norealtime   Don't run tests for realtime collection
         echo     nogtests     Don't run default test suite
         echo     fullcsvs     Test Full\ CSV test suite
         exit /b 1
-    ))))))
+    )))))))
     shift
     goto args_begin
 :args_end
@@ -107,13 +110,21 @@ echo.
 echo [96mTesting functionality...[0m
 
 if %use_release_config% EQU 1 (
-    set pmtest=build\Release\PresentMonTests-%version%-x64.exe
+    set test_config=Release
 ) else (
-    set pmtest=build\Debug\PresentMonTests-%version%-x64.exe
+    set test_config=Debug
+)
+
+if %do_realtime_tests% EQU 1 (
+    echo [90mRealtime collection tests...[0m
+    call :realtime_test "DX12" "DXGI"
+    call :realtime_test "DX9"  "D3D9"
+    call :realtime_test "VK"   "Other"
+    echo.
 )
 
 if %do_default_gtests% EQU 1 (
-    call :start_target_app
+    call :start_target_app /width=320 /height=240 /api=dx12
 
     for %%a in (%test_platforms%) do for %%b in (%build_configs%) do (
         call :gtests --presentmon="%pmdir%\build\%%b\PresentMon-%version%-%%a.exe" --golddir="%pmdir%\Tests\Gold"
@@ -205,8 +216,8 @@ exit /b 0
 
 :: -----------------------------------------------------------------------------
 :gtests
-    echo [90m"%pmdir%\%pmtest%" %*[0m
-    "%pmdir%\%pmtest%" %*
+    echo [90m"%pmdir%\build\%test_config%\PresentMonTests-%version%-x64.exe" %*[0m
+    "%pmdir%\build\%test_config%\PresentMonTests-%version%-x64.exe" %*
     if not "%errorlevel%"=="0" set /a errorcount=%errorcount%+1
     exit /b 0
 
@@ -214,26 +225,81 @@ exit /b 0
 :start_target_app
     set started_target_app_pid=0
 
-    :: Check if there's already one running, if so just leave it running and don't kill it after
-    for /f "tokens=1,2 delims=:" %%a in ('tasklist /fi "imagename eq d3d12_triangle.exe" /fo list') do (
-        if "%%a" EQU "PID" exit /b 0
-    )
+    call :is_app_running /fi "imagename eq PresentBench.exe"
+    if %errorlevel% NEQ 0 exit /b 1
 
-    if not exist "%~dp0d3d12_triangle.exe" (
-        echo [31mwarning: dependency not found: %~dp0d3d12_triangle.exe[0m
+    if not exist "%~dp0PresentBench.exe" (
+        echo [31mwarning: dependency not found: %~dp0PresentBench.exe[0m
         echo [31m         continuing, but tests requiring presents may fail[0m
         exit /b 0
     )
 
-    start "" "%~dp0d3d12_triangle.exe"
-    for /f "tokens=1,2 delims=:" %%a in ('tasklist /fi "imagename eq d3d12_triangle.exe" /fo list') do (
+    start /b "" "%~dp0PresentBench.exe" %* >NUL
+    for /f "tokens=1,2 delims=:" %%a in ('tasklist /fi "imagename eq PresentBench.exe" /fo list') do (
         if "%%a" EQU "PID" (
-            set started_target_app_pid=%%b
+            set /a started_target_app_pid=%%b
             exit /b 0
         )
     )
     exit /b 0
 
 :stop_target_app
-    if %started_target_app_pid% NEQ 0 taskkill /PID %started_target_app_pid%
+    if %started_target_app_pid% EQU 0 exit /b 0
+    taskkill /PID %started_target_app_pid% >NUL
+    :until_killed
+        call :is_app_running /fi "imagename eq PresentBench.exe" /fi "pid eq %started_target_app_pid%"
+        if %errorlevel% NEQ 0 goto until_killed
+    set started_target_app_pid=0
     exit /b 0
+
+:is_app_running
+    for /f "tokens=1,2 delims=:" %%a in ('tasklist %* /fo list') do (
+        if "%%a" EQU "PID" exit /b 1
+    )
+    exit /b 0
+
+:: -----------------------------------------------------------------------------
+:realtime_test
+    set test_api=%~1
+    set expected_runtime=%~2
+
+    call :start_target_app /width=320 /height=240 /api=%test_api%
+    if %errorlevel% NEQ 0 (
+        echo [31merror: realtime tests cannot run with a process named PresentBench.exe already running[0m
+        set /a errorcount=%errorcount%+1
+        exit /b 0
+    )
+
+    set saw_row=0
+    set saw_error=0
+    set present_mode=
+    for /f "tokens=4,12 delims=," %%a in ('"%pmdir%\build\%test_config%\PresentMon-%version%-x64.exe" -process_id %started_target_app_pid% -output_stdout -timed 2 -terminate_after_timed 2^>NUL') do (
+        if "%%a" NEQ "Runtime" (
+            if !saw_row! EQU 0 (
+                set present_mode=%%b
+                set saw_row=1
+            )
+            if "%%a" NEQ "%expected_runtime%" (
+                if !saw_error! EQU 0 (
+                    echo [31merror: expecting runtime "%expected_runtime%", but got "%%a"[0m
+                    set saw_error=1
+                )
+            )
+        )
+    )
+
+    call :stop_target_app
+
+    if %saw_error% NEQ 0 (
+        set /a errorcount=%errorcount%+1
+        exit /b 0
+    )
+    if %saw_row% EQU 0 (
+        echo [31merror: realtime tests did not record any presents[0m
+        set /a errorcount=%errorcount%+1
+        exit /b 0
+    )
+
+    echo.   [90m%test_api%: %expected_runtime%, %present_mode%[0m
+    exit /b 0
+

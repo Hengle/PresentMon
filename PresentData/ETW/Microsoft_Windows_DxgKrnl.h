@@ -157,6 +157,10 @@ enum class Keyword : uint64_t {
     AdapterLock                           = 0x1000000,
     MixedReality                          = 0x2000000,
     HardwareSchedulingLog                 = 0x4000000,
+    Present                               = 0x8000000,
+    DxgKrnl_Int                           = 0x10000000,
+    PerfData                              = 0x20000000,
+    AzureTriageLogging                    = 0x40000000,
     win_ResponseTime                      = 0x1000000000000,
     Microsoft_Windows_DxgKrnl_Diagnostic  = 0x8000000000000000,
     Microsoft_Windows_DxgKrnl_Performance = 0x4000000000000000,
@@ -195,6 +199,8 @@ enum class Channel : uint8_t {
 EVENT_DESCRIPTOR_DECL(AdapterAllocation_DCStart     , 0x0023, 0x03, 0x11, 0x00, 0x03, 0x0015, 0x4000000000000040)
 EVENT_DESCRIPTOR_DECL(AdapterAllocation_Start       , 0x0021, 0x03, 0x11, 0x00, 0x01, 0x0015, 0x4000000000000040)
 EVENT_DESCRIPTOR_DECL(AdapterAllocation_Stop        , 0x0022, 0x03, 0x11, 0x00, 0x02, 0x0015, 0x4000000000000040)
+// BlitCancel needs to be added manually if etw_list run on <Win11:
+EVENT_DESCRIPTOR_DECL(BlitCancel_Info               , 0x01f5, 0x00, 0x11, 0x04, 0x00, 0x0135, 0x4000000000000001)
 EVENT_DESCRIPTOR_DECL(Blit_Info                     , 0x00a6, 0x00, 0x11, 0x04, 0x00, 0x0067, 0x4000000000000001)
 EVENT_DESCRIPTOR_DECL(Context_DCStart               , 0x0020, 0x00, 0x11, 0x00, 0x03, 0x0014, 0x4000000000000840)
 EVENT_DESCRIPTOR_DECL(Context_Start                 , 0x001e, 0x00, 0x11, 0x00, 0x01, 0x0014, 0x4000000000000840)
@@ -224,9 +230,6 @@ EVENT_DESCRIPTOR_DECL(QueuePacket_Start             , 0x00b2, 0x01, 0x11, 0x00, 
 EVENT_DESCRIPTOR_DECL(QueuePacket_Stop              , 0x00b4, 0x01, 0x11, 0x00, 0x02, 0x0009, 0x4000000000000001)
 EVENT_DESCRIPTOR_DECL(VSyncDPCMultiPlane_Info       , 0x0111, 0x02, 0x11, 0x00, 0x00, 0x009f, 0x4000000000000001)
 EVENT_DESCRIPTOR_DECL(VSyncDPC_Info                 , 0x0011, 0x00, 0x11, 0x00, 0x00, 0x000b, 0x4000000000000001)
-
-// These events added manually:
-EVENT_DESCRIPTOR_DECL(Blit_Cancel                   , 0x01f5, 0x00, 0x11, 0x04, 0x00, 0x0135, 0x4000000000000001)
 
 #undef EVENT_DESCRIPTOR_DECL
 

@@ -334,6 +334,7 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
         using namespace Microsoft_Windows_DxgKrnl;
         switch (id) {
         case Blit_Info::Id:                     PrintEventHeader(hdr, "DxgKrnl_Blit_Info"); break;
+        case BlitCancel_Info::Id:               PrintEventHeader(hdr, "DxgKrnl_BlitCancel_Info"); break;
         case Context_DCStart::Id:
         case Context_Start::Id:                 PrintEventHeader(eventRecord, metadata, "DxgKrnl_Context_Start", {
                                                     L"hContext", PrintU64x,
