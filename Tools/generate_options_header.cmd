@@ -44,7 +44,7 @@ exit /b 0
     for /f "tokens=*" %%a in ('echo^| set /p^=%a1% ^| awk "{$1=$1};1"') do set c1="%%a"
     for /f "tokens=*" %%a in ('echo^| set /p^=%a2% ^| awk "{$1=$1};1"') do set c2="%%a"
 
-    if %c1% equ "PresentMode" (
+    if %c1% equ "Column Header" (
         set done=1
         exit /b 0
     )

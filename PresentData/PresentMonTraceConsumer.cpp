@@ -605,7 +605,7 @@ void PMTraceConsumer::HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterv
     presentEvent->MMIO = mmio;
     presentEvent->PresentMode = PresentMode::Hardware_Legacy_Flip;
 
-    if (presentEvent->SyncInterval == -1) {
+    if (flipInterval != -1) {
         presentEvent->SyncInterval = flipInterval;
     }
     if (!mmio) {
@@ -1013,11 +1013,13 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
     {
         EventDataDesc desc[] = {
             { L"SubmitSequence" },
+            { L"FlipInterval" },
         };
         mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-        auto flipSubmitSequence = desc[0].GetData<uint32_t>();
+        auto SubmitSequence = desc[0].GetData<uint32_t>();
+        auto FlipInterval   = desc[1].GetData<uint32_t>();
 
-        auto eventIter = mPresentBySubmitSequence.find(flipSubmitSequence);
+        auto eventIter = mPresentBySubmitSequence.find(SubmitSequence);
         if (eventIter != mPresentBySubmitSequence.end()) {
             auto pEvent = eventIter->second;
 
@@ -1027,6 +1029,7 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 
             DebugModifyPresent(pEvent.get());
             pEvent->PresentMode = PresentMode::Hardware_Independent_Flip;
+            pEvent->SyncInterval = FlipInterval;
         }
         return;
     }

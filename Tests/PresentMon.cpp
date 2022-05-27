@@ -229,7 +229,7 @@ bool PresentMonCsv::ReadRow()
 size_t PresentMonCsv::GetColumnIndex(char const* header) const
 {
     auto h = FindHeader(header);
-    return h == UnknownHeader ? SIZE_MAX : headerColumnIndex_[h];
+    return h < KnownHeaderCount ? headerColumnIndex_[h] : SIZE_MAX;
 }
 
 PresentMon::PresentMon()

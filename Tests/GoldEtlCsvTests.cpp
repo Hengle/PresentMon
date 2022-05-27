@@ -141,6 +141,7 @@ public:
             if (CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, TRUE, 0, nullptr, nullptr, &si, &pi) == 0) {
                 printf("error: failed to execute diff request: %ls\n", cmd.c_str());
             } else {
+                CloseHandle(pi.hThread);
                 CloseHandle(pi.hProcess);
             }
         }

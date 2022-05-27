@@ -88,9 +88,12 @@ void QpcTimeTest(wchar_t const* qpcTimeArg)
     auto idxProcessID     = csv.GetColumnIndex("ProcessID");
     auto idxTimeInSeconds = csv.GetColumnIndex("TimeInSeconds");
     auto idxQPCTime       = csv.GetColumnIndex("QPCTime");
-    ASSERT_NE(idxProcessID,     SIZE_MAX) << "    Output missing required column: ProcessID";
-    ASSERT_NE(idxTimeInSeconds, SIZE_MAX) << "    Output missing required column: TimeInSeconds";
-    ASSERT_NE(idxQPCTime,       SIZE_MAX) << "    Output missing required column: QPCTime";
+    if (idxProcessID     == SIZE_MAX) AddTestFailure(__FILE__, __LINE__, "    Output missing required column: ProcessID");
+    if (idxTimeInSeconds == SIZE_MAX) AddTestFailure(__FILE__, __LINE__, "    Output missing required column: TimeInSeconds");
+    if (idxQPCTime       == SIZE_MAX) AddTestFailure(__FILE__, __LINE__, "    Output missing required column: QPCTime");
+    if (::testing::Test::HasFailure()) {
+        return;
+    }
 
     // TimeInSeconds is only ordered per-process, so we track each process separately
     std::unordered_map<uint32_t, std::pair<double, T>> firstMeasurement;
@@ -119,9 +122,10 @@ void QpcTimeTest(wchar_t const* qpcTimeArg)
     }
     csv.Close();
 
-    ASSERT_GT(csv.line_, 1u)
-        << "    PresentMon didn't capture any presents during the test.\n"
-           "    Re-run the test with a graphics application running.";
+    if (csv.line_ <= 1u) {
+        AddTestFailure(__FILE__, __LINE__, "    PresentMon didn't capture any presents during the test.\n"
+                                           "    Re-run the test with a graphics application running.");
+    }
 
     if (::testing::Test::HasFailure()) {
         printf("%ls\n", csvPath.c_str());
