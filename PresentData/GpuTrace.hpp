@@ -36,8 +36,8 @@ class GpuTrace {
         uint64_t mFirstPacketTime;         // QPC when the first packet started for the current frame
         uint64_t mLastPacketTime;          // QPC when the last packet completed for the current frame
         uint64_t mAccumulatedPacketTime;   // QPC duration while at least one packet was running during the current frame
-        uint64_t mRunningPacketStartTime;  // QPC when the oldest, currently-running packet started
-        uint32_t mRunningPacketCount;      // Number of currently-running packets
+        uint64_t mRunningPacketStartTime;  // QPC when the oldest, currently-running packet started on any node
+        uint32_t mRunningPacketCount;      // Number of currently-running packets on any node
     };
 
     // Node is information about a particular GPU parallel node, including any
@@ -57,6 +57,7 @@ class GpuTrace {
     struct Context {
         PacketTrace* mPacketTrace;
         Node* mNode;
+        uint64_t mParentDxgHwQueue;
         bool mIsVideoEncoderForCloudStreamingApp;
     };
 
@@ -98,6 +99,9 @@ class GpuTrace {
     void StartPacket(PacketTrace* packetTrace, uint64_t timestamp) const;
     void CompletePacket(PacketTrace* packetTrace, uint64_t timestamp) const;
 
+    void EnqueueWork(Context* context, uint32_t sequenceId, uint64_t timestamp);
+    bool CompleteWork(Context* context, uint32_t sequenceId, uint64_t timestamp);
+
     #if DEBUG_VERBOSE
     uint32_t LookupPacketTraceProcessId(PacketTrace* packetTrace) const;
     void DebugPrintRunningContexts() const;
@@ -110,11 +114,13 @@ public:
     void UnregisterDevice(uint64_t hDevice);
 
     void RegisterContext(uint64_t hContext, uint64_t hDevice, uint32_t nodeOrdinal, uint32_t processId);
+    void RegisterHwQueueContext(uint64_t hContext, uint64_t parentDxgHwQueue);
     void UnregisterContext(uint64_t hContext);
 
     void SetEngineType(uint64_t pDxgAdapter, uint32_t nodeOrdinal, Microsoft_Windows_DxgKrnl::DXGK_ENGINE engineType);
 
-    void EnqueueQueuePacket(uint32_t processId, uint64_t hContext);
+    void EnqueueQueuePacket(uint32_t processId, uint64_t hContext, uint32_t sequenceId, uint64_t timestamp);
+    void CompleteQueuePacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp);
 
     void EnqueueDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp);
     uint32_t CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp);

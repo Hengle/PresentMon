@@ -255,6 +255,12 @@ When using `-track_input`, PresentMon will track when keyboard/mouse events are 
 - time spent processing the output in the display hardware or drivers (typically a fixed additional overhead), and
 - a combination of display blanking interval and scan time (which varies, depending on timing and tearing).
 
+### Tracking GPU work with Hardware-Accelerated GPU Scheduling enabled
+
+When using `-track_gpu` on a system that uses Hardware-Accelerated GPU Scheduling (HWS), the GPU execution metrics are less accurate than when HWS is disabled resulting in `msUntilRenderStart`, `msUntilRenderCompete`, `msGPUActive`, and `msGPUVideoActive` measurements that are later/larger than they should be.  For example, in a GPU-bound scenario the frame's `msGPUActive` may be reported ~0.5ms larger than the true GPU work duration, though the specific amount of the inaccuracy will be workload- and GPU-dependent.
+
+An improved solution is WIP.
+
 ### Shutting down PresentMon on Windows 7
 
 Some users have observed system stability issues when forcibly shutting down PresentMon on Windows 7.  If you are having similar issues, they can be avoided by using Ctrl+C in the PresentMon window to shut it down.

@@ -111,6 +111,7 @@ void GpuTrace::RegisterContext(uint64_t hContext, uint64_t hDevice, uint32_t nod
     auto context = &mContexts.emplace(hContext, Context()).first->second;
     context->mPacketTrace = nullptr;
     context->mNode = node;
+    context->mParentDxgHwQueue = 0;
     context->mIsVideoEncoderForCloudStreamingApp = false;
 
     if (processId != 0) {
@@ -118,11 +119,47 @@ void GpuTrace::RegisterContext(uint64_t hContext, uint64_t hDevice, uint32_t nod
     }
 }
 
+// HwQueue's are similar to Contexts, but are used with HWS nodes and use the
+// following pattern:
+//     Context_Start hContext=C hDevice=D NodeOrdinal=N
+//     HwQueue_Start hContext=C hHwQueue=0x0 ParentDxgHwQueue=Q1
+//     HwQueue_Start hContext=C hHwQueue=H   ParentDxgHwQueue=Q2
+//     ...
+//     DxgKrnl_QueuePacket_Start hContext=Q2 SubmitSequence=S ...
+//     ...
+//     DxgKrnl_QueuePacket_Stop hContext=Q2 SubmitSequence=S
+//     ...
+//     HwQueue_Stop hContext=C hHwQueue=0x0 ParentDxgHwQueue=Q2
+//     HwQueue_Stop hContext=C hHwQueue=0x0 ParentDxgHwQueue=Q1
+//     Context_Stop hContext=C
+void GpuTrace::RegisterHwQueueContext(uint64_t hContext, uint64_t parentDxgHwQueue)
+{
+    DebugAssert(mContexts.find(hContext)         != mContexts.end());
+    DebugAssert(mContexts.find(parentDxgHwQueue) == mContexts.end());
+
+    auto ii = mContexts.find(hContext);
+    if (ii != mContexts.end()) {
+        auto context = &ii->second;
+        DebugAssert(context->mParentDxgHwQueue == 0);
+        context->mParentDxgHwQueue = parentDxgHwQueue;
+
+        mContexts.emplace(parentDxgHwQueue, *context);
+    }
+}
+
 void GpuTrace::UnregisterContext(uint64_t hContext)
 {
     // Sometimes there are duplicate stop events so it's ok if it's already
     // removed
-    mContexts.erase(hContext);
+    auto ii = mContexts.find(hContext);
+    if (ii != mContexts.end()) {
+        auto parentDxgHwQueue = ii->second.mParentDxgHwQueue;
+        mContexts.erase(ii);
+
+        if (parentDxgHwQueue != 0) {
+            mContexts.erase(parentDxgHwQueue);
+        }
+    }
 }
 
 void GpuTrace::SetEngineType(uint64_t pDxgAdapter, uint32_t nodeOrdinal, Microsoft_Windows_DxgKrnl::DXGK_ENGINE engineType)
@@ -226,17 +263,8 @@ void GpuTrace::CompletePacket(PacketTrace* packetTrace, uint64_t timestamp) cons
     packetTrace->mRunningPacketStartTime = 0;
 }
 
-void GpuTrace::EnqueueDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp)
+void GpuTrace::EnqueueWork(Context* context, uint32_t sequenceId, uint64_t timestamp)
 {
-    // Lookup the context to figure out which node it's running on; this can
-    // fail sometimes e.g. if parsing the beginning of an ETL file where we can
-    // get packet events before the context mapping.
-    auto ii = mContexts.find(hContext);
-    if (ii == mContexts.end()) {
-        return;
-    }
-
-    auto context = &ii->second;
     auto packetTrace = context->mPacketTrace;
     auto node = context->mNode;
 
@@ -275,17 +303,8 @@ void GpuTrace::EnqueueDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t
     #endif
 }
 
-uint32_t GpuTrace::CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp)
+bool GpuTrace::CompleteWork(Context* context, uint32_t sequenceId, uint64_t timestamp)
 {
-    // Lookup the context to figure out which node it's running on; this can
-    // fail sometimes e.g. if parsing the beginning of an ETL file where we can
-    // get packet events before the context mapping.
-    auto ii = mContexts.find(hContext);
-    if (ii == mContexts.end()) {
-        return 0;
-    }
-
-    auto context = &ii->second;
     auto packetTrace = context->mPacketTrace;
     auto node = context->mNode;
 
@@ -310,7 +329,7 @@ uint32_t GpuTrace::CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uin
     //           s1    i1 s2    i2 s3    i3       s2 i1  s3
     auto runningSequenceId = node->mSequenceId[node->mQueueIndex];
     if (packetTrace == nullptr || node->mQueueCount == 0 || sequenceId < runningSequenceId) {
-        return 0;
+        return false;
     }
 
     // If we get a DmaPacket_Start event with no corresponding DmaPacket_Info,
@@ -337,7 +356,7 @@ uint32_t GpuTrace::CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uin
     if (sequenceId > runningSequenceId) {
         for (uint32_t missingCount = 1; ; ++missingCount) {
             if (missingCount == node->mQueueCount) {
-                return 0;
+                return false;
             }
 
             uint32_t queueIndex = (node->mQueueIndex + missingCount) % Node::MAX_QUEUE_SIZE;
@@ -373,24 +392,86 @@ uint32_t GpuTrace::CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uin
         StartPacket(packetTrace, timestamp);
     }
 
+    return true;
+}
+
+void GpuTrace::EnqueueQueuePacket(uint32_t processId, uint64_t hContext, uint32_t sequenceId, uint64_t timestamp)
+{
+    auto contextIter = mContexts.find(hContext);
+    if (contextIter != mContexts.end()) {
+        auto context = &contextIter->second;
+
+        // Ensure that the process id is registered with this context, for
+        // cases where the context was created before the capture was started
+        // so we didn't see a Context_Start event.
+        if (context->mPacketTrace == nullptr) {
+            SetContextProcessId(context, processId);
+        }
+
+        // Use queue packet duration as a proxy for dma duration for cases we
+        // don't get dma events for (HWS).
+        if (context->mParentDxgHwQueue != 0) {
+            EnqueueWork(context, sequenceId, timestamp);
+        }
+    }
+}
+
+void GpuTrace::CompleteQueuePacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp)
+{
+    auto contextIter = mContexts.find(hContext);
+    if (contextIter != mContexts.end()) {
+        auto context = &contextIter->second;
+
+        // Use queue packet duration as a proxy for dma duration for cases we
+        // don't get dma events for (HWS).
+        if (context->mParentDxgHwQueue != 0) {
+            CompleteWork(context, sequenceId, timestamp);
+        }
+    }
+}
+
+void GpuTrace::EnqueueDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp)
+{
+    // Lookup the context.  This can fail sometimes e.g. if parsing the
+    // beginning of an ETL file where we can get packet events before the
+    // context mapping.
+    auto ii = mContexts.find(hContext);
+    if (ii == mContexts.end()) {
+        return;
+    }
+    auto context = &ii->second;
+
+    // Should not see any dma packets on a HwQueue
+    DebugAssert(context->mParentDxgHwQueue == 0);
+
+    // Start tracking the work
+    EnqueueWork(context, sequenceId, timestamp);
+}
+
+uint32_t GpuTrace::CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp)
+{
+    // Lookup the context.  This can fail sometimes e.g. if parsing the
+    // beginning of an ETL file where we can get packet events before the
+    // context mapping.
+    auto ii = mContexts.find(hContext);
+    if (ii == mContexts.end()) {
+        return 0;
+    }
+    auto context = &ii->second;
+
+    // Should not see any dma packets on a HwQueue
+    DebugAssert(context->mParentDxgHwQueue == 0);
+
+    // Stop tracking the work
+    if (!CompleteWork(context, sequenceId, timestamp)) {
+        return 0;
+    }
+
     // Return the non-zero cloud streaming process id if this is the end of an
     // identified video encode packet on a context used for cloud streaming.
     return context->mIsVideoEncoderForCloudStreamingApp
         ? mCloudStreamingProcessId
         : 0;
-}
-
-void GpuTrace::EnqueueQueuePacket(uint32_t processId, uint64_t hContext)
-{
-    // Create a PacketTrace for this context (for cases where the context was
-    // created before the capture was started)
-    //
-    // mContexts should be empty if mTrackGPU==false.
-    auto contextIter = mContexts.find(hContext);
-    if (contextIter != mContexts.end()) {
-        auto context = &contextIter->second;
-        SetContextProcessId(context, processId);
-    }
 }
 
 void GpuTrace::SetINTCProducerPresentTime(uint32_t processId, uint64_t timestamp)

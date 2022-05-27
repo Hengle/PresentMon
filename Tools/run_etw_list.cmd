@@ -68,6 +68,8 @@ set events=%events% --event=VSyncDPC::Info
 set events=%events% --event=Context::DCStart
 set events=%events% --event=Context::Start
 set events=%events% --event=Context::Stop
+set events=%events% --event=HwQueue::DCStart
+set events=%events% --event=HwQueue::Start
 set events=%events% --event=NodeMetadata::Info
 set events=%events% --event=Device::DCStart
 set events=%events% --event=Device::Start

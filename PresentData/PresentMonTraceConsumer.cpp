@@ -650,7 +650,7 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
 {
     // Track GPU execution
     if (mTrackGPU) {
-        mGpuTrace.EnqueueQueuePacket(hdr.ProcessId, hContext);
+        mGpuTrace.EnqueueQueuePacket(hdr.ProcessId, hContext, submitSequence, hdr.TimeStamp.QuadPart);
     }
 
     // For blt presents on Win7, the only way to distinguish between DWM-off
@@ -715,8 +715,13 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
     }
 }
 
-void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint32_t submitSequence)
+void PMTraceConsumer::HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint64_t hContext, uint32_t submitSequence)
 {
+    // Track GPU execution
+    if (mTrackGPU) {
+        mGpuTrace.CompleteQueuePacket(hContext, submitSequence, hdr.TimeStamp.QuadPart);
+    }
+
     // Check if this is a present Packet being tracked...
     auto eventIter = mPresentBySubmitSequence.find(submitSequence);
     if (eventIter == mPresentBySubmitSequence.end()) {
@@ -1073,9 +1078,19 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         return;
     }
     case Microsoft_Windows_DxgKrnl::QueuePacket_Stop::Id:
+    {
+        EventDataDesc desc[] = {
+            { L"SubmitSequence" },
+            { L"hContext" },
+        };
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        auto SubmitSequence = desc[0].GetData<uint32_t>();
+        auto hContext       = desc[1].GetData<uint64_t>();
+
         TRACK_PRESENT_PATH_GENERATE_ID();
-        HandleDxgkQueueComplete(hdr, mMetadata.GetEventData<uint32_t>(pEventRecord, L"SubmitSequence"));
+        HandleDxgkQueueComplete(hdr, hContext, SubmitSequence);
         return;
+    }
     case Microsoft_Windows_DxgKrnl::MMIOFlip_Info::Id:
     {
         EventDataDesc desc[] = {
@@ -1316,6 +1331,25 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             mGpuTrace.UnregisterContext(mMetadata.GetEventData<uint64_t>(pEventRecord, L"hContext"));
             return;
 
+        case Microsoft_Windows_DxgKrnl::HwQueue_DCStart::Id:
+        case Microsoft_Windows_DxgKrnl::HwQueue_Start::Id:
+        {
+            EventDataDesc desc[] = {
+                { L"hContext" },
+                { L"hHwQueue" },
+                { L"ParentDxgHwQueue" },
+            };
+            mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+            auto hContext        = desc[0].GetData<uint64_t>();
+            auto hHwQueue        = desc[1].GetData<uint64_t>();
+            auto hHwQueueContext = desc[2].GetData<uint64_t>();
+
+            if (hHwQueue != 0) {
+                mGpuTrace.RegisterHwQueueContext(hContext, hHwQueueContext);
+            }
+            return;
+        }
+
         case Microsoft_Windows_DxgKrnl::NodeMetadata_Info::Id:
         {
             EventDataDesc desc[] = {
@@ -1492,7 +1526,7 @@ void PMTraceConsumer::HandleWin7DxgkQueuePacket(EVENT_RECORD* pEventRecord)
     } else if (pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_STOP) {
         auto pCompleteEvent = reinterpret_cast<DXGKETW_QUEUECOMPLETEEVENT*>(pEventRecord->UserData);
         TRACK_PRESENT_PATH_GENERATE_ID();
-        HandleDxgkQueueComplete(pEventRecord->EventHeader, pCompleteEvent->SubmitSequence);
+        HandleDxgkQueueComplete(pEventRecord->EventHeader, pCompleteEvent->hContext, pCompleteEvent->SubmitSequence);
     }
 }
 

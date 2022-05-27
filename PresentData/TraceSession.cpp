@@ -205,6 +205,8 @@ ULONG EnableProviders(
         provider.AddEvent<Microsoft_Windows_DxgKrnl::Device_DCStart>();
         provider.AddEvent<Microsoft_Windows_DxgKrnl::Device_Start>();
         provider.AddEvent<Microsoft_Windows_DxgKrnl::Device_Stop>();
+        provider.AddEvent<Microsoft_Windows_DxgKrnl::HwQueue_DCStart>();
+        provider.AddEvent<Microsoft_Windows_DxgKrnl::HwQueue_Start>();
         provider.AddEvent<Microsoft_Windows_DxgKrnl::DmaPacket_Info>();
         provider.AddEvent<Microsoft_Windows_DxgKrnl::DmaPacket_Start>();
     }

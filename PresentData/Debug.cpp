@@ -373,6 +373,10 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
         case Device_Start::Id:                  PrintEventHeader(eventRecord, metadata, "Device_Start",                 { L"hDevice",        PrintU64x,
                                                                                                                           L"pDxgAdapter",    PrintU64x, }); break;
         case Device_Stop::Id:                   PrintEventHeader(eventRecord, metadata, "Device_Stop",                  { L"hDevice",        PrintU64x, }); break;
+        case HwQueue_DCStart::Id:
+        case HwQueue_Start::Id:                 PrintEventHeader(eventRecord, metadata, "HwQueue_Start",                { L"hContext", PrintU64x,
+                                                                                                                          L"hHwQueue", PrintU64x,
+                                                                                                                          L"ParentDxgHwQueue", PrintU64x, }); break;
         case DmaPacket_Info::Id:                PrintEventHeader(eventRecord, metadata, "DmaPacket_Info",               { L"hContext",       PrintU64x,
                                                                                                                           L"ulQueueSubmitSequence", PrintU32,
                                                                                                                           L"PacketType",     PrintDmaPacketType, }); break;
