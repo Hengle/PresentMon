@@ -33,8 +33,8 @@ void DebugCreatePresent(PresentEvent const& p);
 void DebugModifyPresent(PresentEvent const* p);
 
 // Print a time or time range
-void DebugPrintTime(uint64_t value);
-void DebugPrintTimeDelta(uint64_t value);
+int DebugPrintTime(uint64_t value);
+int DebugPrintTimeDelta(uint64_t value);
 
 #define DebugAssert(condition) while (!(condition)) { printf("ASSERTION FAILED: %s(%d): %s\n", __FILE__, __LINE__, #condition); break; }
 

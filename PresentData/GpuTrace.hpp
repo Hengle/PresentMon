@@ -95,6 +95,14 @@ class GpuTrace {
 
     void SetContextProcessId(Context* context, uint32_t processId);
 
+    void StartPacket(PacketTrace* packetTrace, uint64_t timestamp) const;
+    void CompletePacket(PacketTrace* packetTrace, uint64_t timestamp) const;
+
+    #if DEBUG_VERBOSE
+    uint32_t LookupPacketTraceProcessId(PacketTrace* packetTrace) const;
+    void DebugPrintRunningContexts() const;
+    #endif
+
 public:
     explicit GpuTrace(PMTraceConsumer* pmConsumer);
 

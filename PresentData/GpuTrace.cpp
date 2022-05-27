@@ -3,34 +3,77 @@
 
 #include "PresentMonTraceConsumer.hpp"
 
-namespace {
-
 #if DEBUG_VERBOSE
 
-// Call whenever a Dma starts on an idle engine 
-void DebugFirstDmaStart()
-{
-    printf("                             FirstDmaTime\n");
-}
+namespace {
 
-// Call whenever Dma time is added to a queue
-void DebugDmaAccumulated(uint64_t currentTime, uint64_t addedTime)
+void DebugPrintAccumulatedGpuTime(uint32_t processId, uint64_t accumulatedTime, uint64_t startTime, uint64_t endTime)
 {
-    printf("                             DmaTimeAccumulated: ");
-    DebugPrintTimeDelta(currentTime);
-    printf(" + ");
-    DebugPrintTimeDelta(addedTime);
-    printf(" => ");
-    DebugPrintTimeDelta(currentTime + addedTime);
+    auto addedTime = endTime - startTime;
+
+    printf("                             Accumulated GPU time ProcessId=%u: ", processId);
+    DebugPrintTimeDelta(accumulatedTime);
+    printf(" + [");
+    DebugPrintTime(startTime);
+    printf(", ");
+    DebugPrintTime(endTime);
+    printf("] = ");
+    DebugPrintTimeDelta(accumulatedTime + addedTime);
     printf("\n");
 }
 
-#else
-#define DebugFirstDmaStart()
-#define DebugDmaAccumulated(currentTime, addedTime) (void) currentTime, addedTime
-#endif
-
 }
+
+uint32_t GpuTrace::LookupPacketTraceProcessId(PacketTrace* packetTrace) const
+{
+    for (auto const& pr : mProcessFrameInfo) {
+        if (packetTrace == &pr.second.mVideoEngines ||
+            packetTrace == &pr.second.mOtherEngines) {
+            return pr.first;
+        }
+    }
+    return 0;
+}
+
+void GpuTrace::DebugPrintRunningContexts() const
+{
+    for (auto const& pr1 : mNodes) {
+        auto pDxgAdapter = pr1.first;
+        bool firstActiveNode = true;
+        for (auto const& pr2 : pr1.second) {
+            auto nodeOrdinal = pr2.first;
+            auto const& node = pr2.second;
+
+            for (uint32_t i = 0; i < node.mQueueCount; ++i) {
+                auto queueIdx = (node.mQueueIndex + i) % Node::MAX_QUEUE_SIZE;
+
+                printf("                             ");
+                if (firstActiveNode) {
+                    firstActiveNode = false;
+                    printf("pDxgAdapter=0x%llx", pDxgAdapter);
+                } else {
+                    printf("                              ");
+                }
+
+                if (i == 0) {
+                    printf(" NodeOrdinal=%u [", nodeOrdinal);
+                } else {
+                    printf("                ");
+                }
+
+                printf(" ProcessId=%u", LookupPacketTraceProcessId(node.mPacketTrace[queueIdx]));
+                printf(" SequenceId=%u", node.mSequenceId[queueIdx]);
+
+                if (i == node.mQueueCount - 1) {
+                    printf(" ]");
+                }
+                printf("\n");
+            }
+        }
+    }
+}
+
+#endif
 
 GpuTrace::GpuTrace(PMTraceConsumer* pmConsumer)
     : mPMConsumer(pmConsumer)
@@ -63,7 +106,7 @@ void GpuTrace::RegisterContext(uint64_t hContext, uint64_t hDevice, uint32_t nod
     auto node = &mNodes[pDxgAdapter].emplace(nodeOrdinal, Node{}).first->second;
 
     // Sometimes there are duplicate start events, make sure that they say the same thing
-    DebugAssert(mContexts.find(hDevice) == mContexts.end() || mContexts.find(hDevice)->second.mNode == node);
+    DebugAssert(mContexts.find(hContext) == mContexts.end() || mContexts.find(hContext)->second.mNode == node);
 
     auto context = &mContexts.emplace(hContext, Context()).first->second;
     context->mPacketTrace = nullptr;
@@ -77,7 +120,8 @@ void GpuTrace::RegisterContext(uint64_t hContext, uint64_t hDevice, uint32_t nod
 
 void GpuTrace::UnregisterContext(uint64_t hContext)
 {
-    // Sometimes there are duplicate stop events so it's ok if it's already removed
+    // Sometimes there are duplicate stop events so it's ok if it's already
+    // removed
     mContexts.erase(hContext);
 }
 
@@ -151,6 +195,37 @@ void GpuTrace::SetContextProcessId(Context* context, uint32_t processId)
     }
 }
 
+void GpuTrace::StartPacket(PacketTrace* packetTrace, uint64_t timestamp) const
+{
+    packetTrace->mRunningPacketCount += 1;
+    if (packetTrace->mRunningPacketCount == 1) {
+        packetTrace->mRunningPacketStartTime = timestamp;
+        if (packetTrace->mFirstPacketTime == 0) {
+            packetTrace->mFirstPacketTime = timestamp;
+
+            #if DEBUG_VERBOSE
+            printf("                             GPU: pid=%u frame's first work\n", LookupPacketTraceProcessId(packetTrace));
+            #endif
+        }
+    }
+}
+
+void GpuTrace::CompletePacket(PacketTrace* packetTrace, uint64_t timestamp) const
+{
+    #if DEBUG_VERBOSE
+    DebugPrintAccumulatedGpuTime(LookupPacketTraceProcessId(packetTrace),
+                                 packetTrace->mAccumulatedPacketTime,
+                                 packetTrace->mRunningPacketStartTime,
+                                 timestamp);
+    #endif
+
+    auto accumulatedTime = timestamp - packetTrace->mRunningPacketStartTime;
+
+    packetTrace->mLastPacketTime = timestamp;
+    packetTrace->mAccumulatedPacketTime += accumulatedTime;
+    packetTrace->mRunningPacketStartTime = 0;
+}
+
 void GpuTrace::EnqueueDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp)
 {
     // Lookup the context to figure out which node it's running on; this can
@@ -192,15 +267,12 @@ void GpuTrace::EnqueueDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t
     // it is just enqueued and will start running after all previous packets
     // complete.
     if (node->mQueueCount == 1) {
-        packetTrace->mRunningPacketCount += 1;
-        if (packetTrace->mRunningPacketCount == 1) {
-            packetTrace->mRunningPacketStartTime = timestamp;
-            if (packetTrace->mFirstPacketTime == 0) {
-                packetTrace->mFirstPacketTime = timestamp;
-                DebugFirstDmaStart();
-            }
-        }
+        StartPacket(packetTrace, timestamp);
     }
+
+    #if DEBUG_VERBOSE
+    DebugPrintRunningContexts();
+    #endif
 }
 
 uint32_t GpuTrace::CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp)
@@ -216,6 +288,10 @@ uint32_t GpuTrace::CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uin
     auto context = &ii->second;
     auto packetTrace = context->mPacketTrace;
     auto node = context->mNode;
+
+    #if DEBUG_VERBOSE
+    DebugPrintRunningContexts();
+    #endif
 
     // It's possible to miss DmaPacket events during realtime analysis, so try
     // to handle it gracefully here.
@@ -286,27 +362,15 @@ uint32_t GpuTrace::CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uin
     // duration into the process' count.
     DebugAssert(packetTrace == node->mPacketTrace[node->mQueueIndex]);
     if (packetTrace->mRunningPacketCount == 0) {
-        auto accumulatedTime = timestamp - packetTrace->mRunningPacketStartTime;
-
-        DebugDmaAccumulated(packetTrace->mAccumulatedPacketTime, accumulatedTime);
-
-        packetTrace->mLastPacketTime = timestamp;
-        packetTrace->mAccumulatedPacketTime += accumulatedTime;
-        packetTrace->mRunningPacketStartTime = 0;
+        CompletePacket(packetTrace, timestamp);
     }
 
     // If there was another queued packet, start it
     if (node->mQueueCount > 0) {
         node->mQueueIndex = (node->mQueueIndex + 1) % Node::MAX_QUEUE_SIZE;
         packetTrace = node->mPacketTrace[node->mQueueIndex];
-        packetTrace->mRunningPacketCount += 1;
-        if (packetTrace->mRunningPacketCount == 1) {
-            packetTrace->mRunningPacketStartTime = timestamp;
-            if (packetTrace->mFirstPacketTime == 0) {
-                packetTrace->mFirstPacketTime = timestamp;
-                DebugFirstDmaStart();
-            }
-        }
+
+        StartPacket(packetTrace, timestamp);
     }
 
     // Return the non-zero cloud streaming process id if this is the end of an
@@ -482,6 +546,10 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
             }
         }
 
+        #if DEBUG_VERBOSE
+        printf("                             GPU: pid=%u completing frame\n", pEvent->ProcessId);
+        #endif
+
         // There are some cases where the QueuePacket_Stop timestamp is before
         // the previous dma packet completes.  e.g., this seems to be typical
         // of DWM present packets.  In these cases, instead of loosing track of
@@ -489,16 +557,23 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
         // to both frames.  Note this is incorrect, as the dma's full cost
         // should be fully attributed to the previous frame.
         if (packetTrace->mRunningPacketCount > 0) {
-            auto accumulatedTime = timestamp - packetTrace->mRunningPacketStartTime;
+            #if DEBUG_VERBOSE
+            DebugPrintAccumulatedGpuTime(pEvent->ProcessId,
+                                         pEvent->GPUDuration,
+                                         packetTrace->mRunningPacketStartTime,
+                                         timestamp);
+            #endif
 
-            DebugDmaAccumulated(pEvent->GPUDuration, accumulatedTime);
+            auto accumulatedTime = timestamp - packetTrace->mRunningPacketStartTime;
 
             pEvent->ReadyTime = timestamp;
             pEvent->GPUDuration += accumulatedTime;
             packetTrace->mFirstPacketTime = timestamp;
             packetTrace->mRunningPacketStartTime = timestamp;
 
-            DebugFirstDmaStart();
+            #if DEBUG_VERBOSE
+            printf("                             GPU: work still running; splitting and considering as new work for next frame\n");
+            #endif
         }
         if (videoTrace->mRunningPacketCount > 0) {
             pEvent->GPUVideoDuration += timestamp - videoTrace->mRunningPacketStartTime;

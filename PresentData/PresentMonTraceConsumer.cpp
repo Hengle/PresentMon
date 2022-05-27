@@ -1313,12 +1313,8 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
             return;
         }
         case Microsoft_Windows_DxgKrnl::Context_Stop::Id:
-        {
-            auto hContext = mMetadata.GetEventData<uint64_t>(pEventRecord, L"hContext");
-
-            mGpuTrace.UnregisterContext(hContext);
+            mGpuTrace.UnregisterContext(mMetadata.GetEventData<uint64_t>(pEventRecord, L"hContext"));
             return;
-        }
 
         case Microsoft_Windows_DxgKrnl::NodeMetadata_Info::Id:
         {

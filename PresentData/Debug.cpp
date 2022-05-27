@@ -258,14 +258,18 @@ void FlushModifiedPresent()
 
 }
 
-void DebugPrintTime(uint64_t value)
+int DebugPrintTime(uint64_t value)
 {
-    printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampToNs(value)));
+    return value == 0
+        ? printf("0")
+        : value < (uint64_t) gFirstTimestamp->QuadPart
+            ? printf("-%s", AddCommas(ConvertTimestampDeltaToNs((uint64_t) gFirstTimestamp->QuadPart - value)))
+            : printf("%s", AddCommas(ConvertTimestampToNs(value)));
 }
 
-void DebugPrintTimeDelta(uint64_t value)
+int DebugPrintTimeDelta(uint64_t value)
 {
-    printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampDeltaToNs(value)));
+    return printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampDeltaToNs(value)));
 }
 
 void DebugInitialize(LARGE_INTEGER* firstTimestamp, LARGE_INTEGER const& timestampFrequency)
@@ -361,18 +365,18 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
                                                                                                                           L"SubmitSequence", PrintU32, }); break;
         case VSyncDPC_Info::Id:                 PrintEventHeader(eventRecord, metadata, "VSyncDPC_Info",                { L"FlipFenceId",    PrintU64x, }); break;
         case Context_DCStart::Id:
-        case Context_Start::Id:                 PrintEventHeader(eventRecord, metadata, "DxgKrnl_Context_Start",        { L"hContext",       PrintU64x,
+        case Context_Start::Id:                 PrintEventHeader(eventRecord, metadata, "Context_Start",                { L"hContext",       PrintU64x,
                                                                                                                           L"hDevice",        PrintU64x,
                                                                                                                           L"NodeOrdinal",    PrintU32, }); break;
-        case Context_Stop::Id:                  PrintEventHeader(eventRecord, metadata, "DxgKrnl_Context_Stop",         { L"hContext",       PrintU64x, }); break;
+        case Context_Stop::Id:                  PrintEventHeader(eventRecord, metadata, "Context_Stop",                 { L"hContext",       PrintU64x, }); break;
         case Device_DCStart::Id:
-        case Device_Start::Id:                  PrintEventHeader(eventRecord, metadata, "DxgKrnl_Device_Start",         { L"hDevice",        PrintU64x,
+        case Device_Start::Id:                  PrintEventHeader(eventRecord, metadata, "Device_Start",                 { L"hDevice",        PrintU64x,
                                                                                                                           L"pDxgAdapter",    PrintU64x, }); break;
-        case Device_Stop::Id:                   PrintEventHeader(eventRecord, metadata, "DxgKrnl_Device_Stop",          { L"hDevice",        PrintU64x, }); break;
-        case DmaPacket_Info::Id:                PrintEventHeader(eventRecord, metadata, "DxgKrnl_DmaPacket_Info",       { L"hContext",       PrintU64x,
+        case Device_Stop::Id:                   PrintEventHeader(eventRecord, metadata, "Device_Stop",                  { L"hDevice",        PrintU64x, }); break;
+        case DmaPacket_Info::Id:                PrintEventHeader(eventRecord, metadata, "DmaPacket_Info",               { L"hContext",       PrintU64x,
                                                                                                                           L"ulQueueSubmitSequence", PrintU32,
                                                                                                                           L"PacketType",     PrintDmaPacketType, }); break;
-        case DmaPacket_Start::Id:               PrintEventHeader(eventRecord, metadata, "DxgKrnl_DmaPacket_Start",      { L"hContext",       PrintU64x,
+        case DmaPacket_Start::Id:               PrintEventHeader(eventRecord, metadata, "DmaPacket_Start",              { L"hContext",       PrintU64x,
                                                                                                                           L"ulQueueSubmitSequence", PrintU32, }); break;
         case PagingQueuePacket_Start::Id:       PrintEventHeader(eventRecord, metadata, "PagingQueuePacket_Start",      { L"SequenceId",     PrintU64 }); break;
         case PagingQueuePacket_Info::Id:        PrintEventHeader(eventRecord, metadata, "PagingQueuePacket_Info",       { L"SequenceId",     PrintU64 }); break;
