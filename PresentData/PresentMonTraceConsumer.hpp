@@ -245,6 +245,7 @@ struct PMTraceConsumer
     bool mTrackInput = false;           // Whether to track keyboard/mouse click times
     bool mTrackINTCTimers = false;      // Whether the analysis should track Intel D3D11 driver producer/consumer queue timers
     bool mTrackINTCCpuGpuSync = false;  // Whether the analysis should track Intel driver CPU/GPU synchronizations
+    bool mTrackINTCShaderCompilation = false;  // Whether the analysis should track Intel driver shader compilation timers
     bool mDebugINTCFramePacing = false; // Whether to report Intel driver metrics related to frame pacing
     bool mTrackMemoryResidency = false; // Whether the analysis should track Memory Residency
     bool mTrackPCAT = false;            // Whether the analysis should track PCAT metrics

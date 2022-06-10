@@ -350,6 +350,7 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTrackPower = false;
     args->mTrackINTCTimers = false;
     args->mTrackINTCCpuGpuSync = false;
+    args->mTrackINTCShaderCompilation = false;
     args->mDebugINTCFramePacing = false;
     args->mTrackMemoryResidency = false;
     args->mTrackWMR = false;
@@ -423,7 +424,8 @@ bool ParseCommandLine(int argc, char** argv)
 
         // Internal options:
         else if (ParseArg(argv[i], "track_queue_timers" )) { args->mTrackINTCTimers   = true; continue; }
-        else if (ParseArg(argv[i], "track_cpu_gpu_sync" )) { args->mTrackINTCCpuGpuSync  = true; continue; }
+        else if (ParseArg(argv[i], "track_cpu_gpu_sync")) { args->mTrackINTCCpuGpuSync = true; continue; }
+        else if (ParseArg(argv[i], "track_shader_compilation")) { args->mTrackINTCShaderCompilation = true; continue; }
         else if (ParseArg(argv[i], "debug_frame_pacing" )) { args->mDebugINTCFramePacing = true; continue; }
 
         // Provided argument wasn't recognized
@@ -569,7 +571,7 @@ bool ParseCommandLine(int argc, char** argv)
     }
 
     // If the INTC provider is required, check that the manifest is installed.
-    if (args->mEtlFileName == nullptr && (args->mTrackINTCTimers || args->mTrackINTCCpuGpuSync)) {
+    if (args->mEtlFileName == nullptr && (args->mTrackINTCTimers || args->mTrackINTCCpuGpuSync || args->mTrackINTCShaderCompilation)) {
         ULONG bufferSize = 0;
         auto status = TdhEnumerateManifestProviderEvents((LPGUID) &Intel_Graphics_D3D10::GUID, nullptr, &bufferSize);
         if (status == ERROR_NOT_FOUND) {
