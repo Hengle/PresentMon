@@ -339,6 +339,8 @@ ULONG EnableProviders(
         if (pmConsumer->mTrackINTCShaderCompilation) {
             provider.AddEvent<Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_3>();
             provider.AddEvent<Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_3>();
+            provider.AddEvent<Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_4>();
+            provider.AddEvent<Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_4>();
         }
         if (pmConsumer->mDebugINTCFramePacing) {
             provider.AddEvent<Intel_Graphics_D3D10::task_FramePacer_Info>();

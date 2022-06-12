@@ -151,9 +151,10 @@ Using `-track_cpu_gpu_sync` will add the following columns:
 
 Using `-track_shader_compilation` will add the following columns:
 
-| Column Header                | Data Description                                                                 |
-| -----------------------------| -------------------------------------------------------------------------------- |
-| *msWaitForCompilationOnDraw* | How much time was spent waiting for shader compilation on draw, in milliseconds. |
+| Column Header                      | Data Description                                                                   |
+| -----------------------------------| ---------------------------------------------------------------------------------- |
+| *msWaitingOnDrawTimeCompilation*   | How much time was spent waiting for shader compilation on draw, in milliseconds.   |
+| *msWaitingOnCreateTimeCompilation* | How much time was spent waiting for shader compilation on create, in milliseconds. |
 
 Using `-track_memory_residency` will add the following columns:
 
