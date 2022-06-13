@@ -38,14 +38,14 @@
     <ProjectGuid>{4EB9794B-1F12-48CE-ADC1-917E9810F29E}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>PresentMon</RootNamespace>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformVersion Condition="'$(Platform)'=='ARM'">10.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformVersion Condition="'$(Platform)'=='ARM64'">10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
@@ -75,7 +75,8 @@
     <ClCompile>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <PreprocessorDefinitions>_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_WIN32_WINNT=0x0601;NTDDI_VERSION=0x06010000;WIN32_LEAN_AND_MEAN;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -139,7 +140,7 @@
   <ItemGroup>
     <CustomBuild Include="..\README.md">
       <FileType>Document</FileType>
-      <Message>Extracting command line options from %(Identity)...</Message>
+      <Message>..\Tools\generate_options_header.cmd %(Identity) ..\build\obj\generated\command_line_options.inl</Message>
       <Command>..\Tools\generate_options_header.cmd %(Identity) ..\build\obj\generated\command_line_options.inl</Command>
       <Outputs>..\build\obj\generated\command_line_options.inl</Outputs>
       <AdditionalInputs>..\Tools\generate_options_header.cmd</AdditionalInputs>

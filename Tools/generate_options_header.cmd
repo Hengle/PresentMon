@@ -10,27 +10,18 @@ goto ok
     exit /b 1
 :ok
 
-where awk > NUL
-if %errorlevel% neq 0 (
-    echo error: dependency missing: awk
-    exit /b 1
-)
-
-where sed > NUL
-if %errorlevel% neq 0 (
-    echo error: dependency missing: sed
-    exit /b 1
-)
-
 if exist %2 echo.>%2
 
 setlocal enabledelayedexpansion
+
+pushd "%~dp0."
+
 set done=0
-for /f "tokens=1,2 delims=|" %%a in ('sed -nr "/^\|[^|]*\|[^|]*\|$/p" %1') do (
-    call :process "%%a" "%%b" %2
-    if !done! neq 0 exit /b 0
+for /f "tokens=1,2 delims=|" %%a in ('sed.exe -nr "/^\|[^|]*\|[^|]*\|$/p" %1') do (
+    if !done! equ 0 call :process "%%a" "%%b" %2
 )
 
+popd
 exit /b 0
 
 :process
@@ -41,8 +32,8 @@ exit /b 0
 
     set c1=""
     set c2=""
-    for /f "tokens=*" %%a in ('echo^| set /p^=%a1% ^| awk "{$1=$1};1"') do set c1="%%a"
-    for /f "tokens=*" %%a in ('echo^| set /p^=%a2% ^| awk "{$1=$1};1"') do set c2="%%a"
+    for /f "tokens=*" %%a in ('echo^| set /p^=%a1% ^| awk.exe "{$1=$1};1"') do set c1="%%a"
+    for /f "tokens=*" %%a in ('echo^| set /p^=%a2% ^| awk.exe "{$1=$1};1"') do set c2="%%a"
 
     if %c1% equ "Column Header" (
         set done=1

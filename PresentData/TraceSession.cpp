@@ -154,7 +154,7 @@ ULONG EnableProviders(
     {
         auto hmodule = LoadLibraryExA("ntdll.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
         if (hmodule != NULL) {
-            auto pRtlGetVersion = (NTSTATUS (WINAPI*)(PRTL_OSVERSIONINFOW)) GetProcAddress(hmodule, "RtlGetVersion");
+            auto pRtlGetVersion = (LONG (WINAPI*)(RTL_OSVERSIONINFOW*)) GetProcAddress(hmodule, "RtlGetVersion");
             if (pRtlGetVersion != nullptr) {
                 RTL_OSVERSIONINFOW info = {};
                 info.dwOSVersionInfoSize = sizeof(info);

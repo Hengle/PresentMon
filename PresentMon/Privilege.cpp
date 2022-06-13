@@ -1,7 +1,6 @@
 // Copyright (C) 2017-2021 Intel Corporation
 // SPDX-License-Identifier: MIT
 
-#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shellapi.h>
 #include <stdio.h>

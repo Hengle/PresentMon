@@ -175,13 +175,15 @@ exit /b 0
     for /f "tokens=*" %%a in ('"%programfiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -legacy -latest -property installationPath') do (
         set vsdir=%%a
     )
-    if not exist "%vsdir%\VC\Tools\MSVC\14.29.30133\bin\Hostx64\%2\dumpbin.exe" (
+    set msvcdir=
+    for /d %%a in ("%vsdir%\VC\Tools\MSVC\*") do set msvcdir=%%a
+    if not exist "%msvcdir%\bin\Hostx64\%2\dumpbin.exe" (
         echo [31merror: missing dependency: dumpbin.exe[0m
         set /a errorcount=%errorcount%+1
         exit /b 1
     )
     set checkdll=0
-    for /f "tokens=1,5" %%a in ('"%vsdir%\VC\Tools\MSVC\14.29.30133\bin\Hostx64\%2\dumpbin.exe" /dependents %~1') do (
+    for /f "tokens=1,5" %%a in ('"%msvcdir%\bin\Hostx64\%2\dumpbin.exe" /dependents %~1') do (
         if "%%a"=="Image" (
             if "%%b"=="dependencies:" (
                 call set checkdll=1
