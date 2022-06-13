@@ -377,6 +377,7 @@ bool ParseCommandLine(int argc, char** argv)
     args->mTrackPower = false;
     args->mTrackINTCTimers = false;
     args->mTrackINTCCpuGpuSync = false;
+    args->mTrackINTCShaderCompilation = false;
     args->mDebugINTCFramePacing = false;
     args->mTrackMemoryResidency = false;
     args->mTrackWMR = false;
@@ -449,9 +450,10 @@ bool ParseCommandLine(int argc, char** argv)
         else if (ParseArg(argv[i], "track_memory_residency")) { args->mTrackMemoryResidency = true; continue; }
 
         // Internal options:
-        else if (ParseArg(argv[i], "track_queue_timers" )) { args->mTrackINTCTimers   = true; continue; }
-        else if (ParseArg(argv[i], "track_cpu_gpu_sync" )) { args->mTrackINTCCpuGpuSync  = true; continue; }
-        else if (ParseArg(argv[i], "debug_frame_pacing" )) { args->mDebugINTCFramePacing = true; continue; }
+        else if (ParseArg(argv[i], "track_queue_timers"))       { args->mTrackINTCTimers            = true; continue; }
+        else if (ParseArg(argv[i], "track_cpu_gpu_sync"))       { args->mTrackINTCCpuGpuSync        = true; continue; }
+        else if (ParseArg(argv[i], "track_shader_compilation")) { args->mTrackINTCShaderCompilation = true; continue; }
+        else if (ParseArg(argv[i], "debug_frame_pacing"))       { args->mDebugINTCFramePacing       = true; continue; }
 
         // Provided argument wasn't recognized
         else if (!(ParseArg(argv[i], "?") || ParseArg(argv[i], "h") || ParseArg(argv[i], "help"))) {
@@ -596,11 +598,16 @@ bool ParseCommandLine(int argc, char** argv)
     }
 
     // If the INTC provider is required, check that the manifest is installed.
-    if (args->mEtlFileName == nullptr && (args->mTrackINTCTimers || args->mTrackINTCCpuGpuSync)) {
+    if (args->mEtlFileName == nullptr && (args->mTrackINTCTimers || args->mTrackINTCCpuGpuSync || args->mTrackINTCShaderCompilation)) {
         if (!CheckINTCProviderManifest() ||
-            !RequireINTCRegDWORD("EnableETW",   1) ||
-            !RequireINTCRegDWORD("QueueTimers", 1)) {
+            !RequireINTCRegDWORD("EnableETW", 1)) {
             return false;
+        }
+
+        if (args->mTrackINTCTimers || args->mTrackINTCCpuGpuSync) {
+            if (!RequireINTCRegDWORD("QueueTimers", 1)) {
+                return false;
+            }
         }
     }
 

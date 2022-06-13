@@ -340,6 +340,8 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
         case VSyncDPCMultiPlane_Info::Id:       PrintEventHeader(hdr, "VSyncDPCMultiPlane_Info"); break;
         case MMIOFlip_Info::Id:                 PrintEventHeader(hdr, "MMIOFlip_Info"); break;
         case Present_Info::Id:                  PrintEventHeader(hdr, "DxgKrnl_Present_Info"); break;
+        case MakeResident_Start::Id:            PrintEventHeader(hdr, "MakeResident_Start"); break;
+        case MakeResident_Stop::Id:             PrintEventHeader(hdr, "MakeResident_Stop"); break;
 
         case Flip_Info::Id:                     PrintEventHeader(eventRecord, metadata, "Flip_Info",                    { L"FlipInterval",   PrintU32,
                                                                                                                           L"MMIOFlip",       PrintBool, }); break;
@@ -372,6 +374,9 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
                                                                                                                           L"PacketType",     PrintDmaPacketType, }); break;
         case DmaPacket_Start::Id:               PrintEventHeader(eventRecord, metadata, "DxgKrnl_DmaPacket_Start",      { L"hContext",       PrintU64x,
                                                                                                                           L"ulQueueSubmitSequence", PrintU32, }); break;
+        case PagingQueuePacket_Start::Id:       PrintEventHeader(eventRecord, metadata, "PagingQueuePacket_Start",      { L"SequenceId",     PrintU64 }); break;
+        case PagingQueuePacket_Info::Id:        PrintEventHeader(eventRecord, metadata, "PagingQueuePacket_Info",       { L"SequenceId",     PrintU64 }); break;
+        case PagingQueuePacket_Stop::Id:        PrintEventHeader(eventRecord, metadata, "PagingQueuePacket_Stop",       { L"SequenceId",     PrintU64 }); break;
 
         case MMIOFlipMultiPlaneOverlay_Info::Id:
             PrintEventHeader(hdr);
@@ -423,6 +428,11 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
         case QueueTimers_Stop::Id:  PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Stop",  { L"value", PrintU32 }); break;
         case CpuGpuSync_Start::Id:  PrintEventHeader(eventRecord, metadata, "INTC_CpuGpuSync_Start",  { L"value", PrintU32 }); break;
         case CpuGpuSync_Stop::Id:   PrintEventHeader(eventRecord, metadata, "INTC_CpuGpuSync_Stop",   { L"value", PrintU32 }); break;
+
+        case ShaderCompilationTrackingEvents_Start_3::Id: PrintEventHeader(hdr, "INTC_ShaderCompilationTrackingEvents_Start_3"); break;
+        case ShaderCompilationTrackingEvents_Stop_3::Id:  PrintEventHeader(hdr, "INTC_ShaderCompilationTrackingEvents_Stop_3"); break;
+        case ShaderCompilationTrackingEvents_Start_4::Id: PrintEventHeader(hdr, "INTC_ShaderCompilationTrackingEvents_Start_4"); break;
+        case ShaderCompilationTrackingEvents_Stop_4::Id:  PrintEventHeader(hdr, "INTC_ShaderCompilationTrackingEvents_Stop_4"); break;
 
         case task_DdiPresentDXGI_Info::Id:
             /* BEGIN WORKAROUND: if the manifest isn't installed nor embedded

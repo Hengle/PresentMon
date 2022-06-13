@@ -132,6 +132,9 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
         HeaderCollection(L"-track_cpu_gpu_sync", { Header_msWaitingOnSyncObject,
                                                    Header_msWaitingOnQueryData }),
 
+        HeaderCollection(L"-track_shader_compilation", { Header_msWaitingOnDrawTimeCompilation,
+                                                         Header_msWaitingOnCreateTimeCompilation }),
+
         HeaderCollection(L"-track_memory_residency", { Header_msInMakeResident,
                                                        Header_msInPagingPackets }),
     };

@@ -91,6 +91,7 @@ See [CONTRIBUTING](https://github.com/intel-innersource/drivers.gpu.tools.presen
 | --------------------- | ---------------------------------------------------------- |
 | `-track_queue_timers` | Capture Intel D3D11 driver producer/consumer queue timers. |
 | `-track_cpu_gpu_sync` | Capture Intel D3D11 driver CPU/GPU syncs.                  |
+| `-track_shader_compilation` | Capture Intel D3D11 driver shader compilation.       |
 | `-debug_frame_pacing` | Report extra driver metrics related to frame pacing.       |
 
 Note: internal options require a release-internal driver, with the GfxEvents manifest installed from its corresponding TestTools package. Some options may also require specific driver feature branches.
@@ -147,6 +148,13 @@ Using `-track_cpu_gpu_sync` will add the following columns:
 | ----------------------- | -------------------------------------------------------------------------------- |
 | *msWaitingOnSyncObject* | How much time was spent waiting for a sync object from the CPU, in milliseconds. |
 | *msWaitingOnQueryData*  | How much time the driver spent polling for query data, in milliseconds.          |
+
+Using `-track_shader_compilation` will add the following columns:
+
+| Column Header                      | Data Description                                                                   |
+| -----------------------------------| ---------------------------------------------------------------------------------- |
+| *msWaitingOnDrawTimeCompilation*   | How much time was spent waiting for shader compilation on draw, in milliseconds.   |
+| *msWaitingOnCreateTimeCompilation* | How much time was spent waiting for shader compilation on create, in milliseconds. |
 
 Using `-track_memory_residency` will add the following columns:
 

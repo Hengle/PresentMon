@@ -57,6 +57,7 @@ struct CommandLineArgs {
     bool mTrackPower;
     bool mTrackINTCTimers;
     bool mTrackINTCCpuGpuSync;
+    bool mTrackINTCShaderCompilation;
     bool mDebugINTCFramePacing;
     bool mTrackMemoryResidency;
     bool mTrackWMR;

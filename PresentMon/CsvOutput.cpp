@@ -100,6 +100,11 @@ static void WriteCsvHeader(FILE* fp)
             ",msWaitingOnSyncObject"
             ",msWaitingOnQueryData");
     }
+    if (args.mTrackINTCShaderCompilation) {
+        fprintf(fp,
+            ",msWaitingOnDrawTimeCompilation"
+            ",msWaitingOnCreateTimeCompilation");
+    }
     if (args.mTrackMemoryResidency) {
         fprintf(fp,
             ",msInMakeResident"
@@ -315,6 +320,11 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
         fprintf(fp, ",%.*lf,%.*lf",
             DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU]),
             DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA]));
+    }
+    if (args.mTrackINTCShaderCompilation) {
+        fprintf(fp, ",%.*lf,%.*lf",
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_FOR_COMPILATION_ON_DRAW]),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_FOR_COMPILATION_ON_CREATE]));
     }
     if (args.mTrackMemoryResidency) {
         fprintf(fp, ",%.*lf,%.*lf",

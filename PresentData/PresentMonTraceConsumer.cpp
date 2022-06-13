@@ -186,6 +186,10 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
     case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
     case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
     case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
+    case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_3::Id:
+    case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_3::Id:
+    case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_4::Id:
+    case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_4::Id:
     {
         INTCTimer timer = INTC_TIMER_COUNT;
 
@@ -217,15 +221,29 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             }
             break;
         }
+
+        case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_3::Id:
+        case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_3::Id:
+            timer = INTC_TIMER_WAIT_FOR_COMPILATION_ON_DRAW;
+            break;
+
+        case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_4::Id:
+        case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_4::Id:
+            timer = INTC_TIMER_WAIT_FOR_COMPILATION_ON_CREATE;
+            break;
         }
 
         switch (hdr.EventDescriptor.Id) {
         case Intel_Graphics_D3D10::QueueTimers_Start::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
+        case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_3::Id:
+        case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_4::Id:
             mGpuTrace.StartINTCTimer(timer, hdr.ProcessId, hdr.TimeStamp.QuadPart);
             break;
         case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
+        case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_3::Id:
+        case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_4::Id:
             mGpuTrace.StopINTCTimer(timer, hdr.ProcessId, hdr.TimeStamp.QuadPart);
             break;
         }

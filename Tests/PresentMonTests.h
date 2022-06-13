@@ -78,6 +78,10 @@ struct PresentMonCsv
         Header_msWaitingOnSyncObject,
         Header_msWaitingOnQueryData,
 
+        // Required headers when -track_shader_compilation is used:
+        Header_msWaitingOnDrawTimeCompilation,
+        Header_msWaitingOnCreateTimeCompilation,
+
         // Required headers when -track_memory_residency is used:
         Header_msInMakeResident,
         Header_msInPagingPackets,
@@ -112,34 +116,36 @@ struct PresentMonCsv
         case Header_msGPUActive:            return "msGPUActive";
         case Header_msGPUVideoActive:       return "msGPUVideoActive";
         case Header_msSinceInput:           return "msSinceInput";
-        case Header_INTC_FrameID:                 return "INTC_FrameID";
-        case Header_INTC_AppWorkStart:            return "INTC_AppWorkStart";
-        case Header_INTC_AppSimulationTime:       return "INTC_AppSimulationTime";
-        case Header_INTC_DriverWorkStart:         return "INTC_DriverWorkStart";
-        case Header_INTC_DriverWorkEnd:           return "INTC_DriverWorkEnd";
-        case Header_INTC_KernelDriverSubmitStart: return "INTC_KernelDriverSubmitStart";
-        case Header_INTC_KernelDriverSubmitEnd:   return "INTC_KernelDriverSubmitEnd";
-        case Header_INTC_GPUStart:                return "INTC_GPUStart";
-        case Header_INTC_GPUEnd:                  return "INTC_GPUEnd";
-        case Header_INTC_KernelDriverFenceReport: return "INTC_KernelDriverFenceReport";
-        case Header_INTC_PresentAPICall:          return "INTC_PresentAPICall";
-        case Header_INTC_ScheduledFlipTime:       return "INTC_ScheduledFlipTime";
-        case Header_INTC_FlipReceivedTime:        return "INTC_FlipReceivedTime";
-        case Header_INTC_FlipReportTime:          return "INTC_FlipReportTime";
-        case Header_INTC_FlipProgrammingTime:     return "INTC_FlipProgrammingTime";
-        case Header_INTC_ActualFlipTime:          return "INTC_ActualFlipTime";
-        case Header_msStalledOnQueueFull:         return "msStalledOnQueueFull";
-        case Header_msStalledOnQueueEmpty:        return "msStalledOnQueueEmpty";
-        case Header_msWaitingOnQueueSync:         return "msWaitingOnQueueSync";
-        case Header_msWaitingOnQueueDrain:        return "msWaitingOnQueueDrain";
-        case Header_msWaitingOnFence:             return "msWaitingOnFence";
-        case Header_msWaitingOnFenceSubmission:   return "msWaitingOnFenceSubmission";
-        case Header_ProducerPresentTime:          return "ProducerPresentTime";
-        case Header_ConsumerPresentTime:          return "ConsumerPresentTime";
-        case Header_msWaitingOnSyncObject:        return "msWaitingOnSyncObject";
-        case Header_msWaitingOnQueryData:         return "msWaitingOnQueryData";
-        case Header_msInMakeResident:             return "msInMakeResident";
-        case Header_msInPagingPackets:            return "msInPagingPackets";
+        case Header_INTC_FrameID:                     return "INTC_FrameID";
+        case Header_INTC_AppWorkStart:                return "INTC_AppWorkStart";
+        case Header_INTC_AppSimulationTime:           return "INTC_AppSimulationTime";
+        case Header_INTC_DriverWorkStart:             return "INTC_DriverWorkStart";
+        case Header_INTC_DriverWorkEnd:               return "INTC_DriverWorkEnd";
+        case Header_INTC_KernelDriverSubmitStart:     return "INTC_KernelDriverSubmitStart";
+        case Header_INTC_KernelDriverSubmitEnd:       return "INTC_KernelDriverSubmitEnd";
+        case Header_INTC_GPUStart:                    return "INTC_GPUStart";
+        case Header_INTC_GPUEnd:                      return "INTC_GPUEnd";
+        case Header_INTC_KernelDriverFenceReport:     return "INTC_KernelDriverFenceReport";
+        case Header_INTC_PresentAPICall:              return "INTC_PresentAPICall";
+        case Header_INTC_ScheduledFlipTime:           return "INTC_ScheduledFlipTime";
+        case Header_INTC_FlipReceivedTime:            return "INTC_FlipReceivedTime";
+        case Header_INTC_FlipReportTime:              return "INTC_FlipReportTime";
+        case Header_INTC_FlipProgrammingTime:         return "INTC_FlipProgrammingTime";
+        case Header_INTC_ActualFlipTime:              return "INTC_ActualFlipTime";
+        case Header_msStalledOnQueueFull:             return "msStalledOnQueueFull";
+        case Header_msStalledOnQueueEmpty:            return "msStalledOnQueueEmpty";
+        case Header_msWaitingOnQueueSync:             return "msWaitingOnQueueSync";
+        case Header_msWaitingOnQueueDrain:            return "msWaitingOnQueueDrain";
+        case Header_msWaitingOnFence:                 return "msWaitingOnFence";
+        case Header_msWaitingOnFenceSubmission:       return "msWaitingOnFenceSubmission";
+        case Header_ProducerPresentTime:              return "ProducerPresentTime";
+        case Header_ConsumerPresentTime:              return "ConsumerPresentTime";
+        case Header_msWaitingOnSyncObject:            return "msWaitingOnSyncObject";
+        case Header_msWaitingOnQueryData:             return "msWaitingOnQueryData";
+        case Header_msWaitingOnDrawTimeCompilation:   return "msWaitingOnDrawTimeCompilation";
+        case Header_msWaitingOnCreateTimeCompilation: return "msWaitingOnCreateTimeCompilation";
+        case Header_msInMakeResident:                 return "msInMakeResident";
+        case Header_msInPagingPackets:                return "msInPagingPackets";
         }
         return "<unknown>";
     }

@@ -30,6 +30,7 @@ set pmargs=%pmargs% -track_input
 set pmargs=%pmargs% -track_memory_residency
 set pmargs=%pmargs% -track_queue_timers
 set pmargs=%pmargs% -track_cpu_gpu_sync
+set pmargs=%pmargs% -track_shader_compilation
 :: END internal-only
 for /f "tokens=*" %%a in ('dir /s /b /a-d "%rootdir%\*.etl"') do call :create_csv "%%a"
 

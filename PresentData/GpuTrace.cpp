@@ -459,7 +459,7 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
         videoTrace->mLastPacketTime = 0;
         videoTrace->mAccumulatedPacketTime = 0;
 
-        if (mPMConsumer->mTrackINTCTimers || mPMConsumer->mTrackINTCCpuGpuSync) {
+        if (mPMConsumer->mTrackINTCTimers || mPMConsumer->mTrackINTCCpuGpuSync || mPMConsumer->mTrackINTCShaderCompilation) {
             pEvent->INTC_ProducerPresentTime = frameInfo->mINTCProducerPresentTime;
             pEvent->INTC_ConsumerPresentTime = frameInfo->mINTCConsumerPresentTime;
             frameInfo->mINTCProducerPresentTime = 0;
