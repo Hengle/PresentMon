@@ -225,8 +225,8 @@ int main(int argc, char** argv)
 
         PrintWarning(
             "warning: PresentMon requires elevated privilege in order to query processes started\n"
-            "    on another account.  Without it, those processes will be listed as '<error>'\n"
-            "    and they can't be targeted by -process_name nor trigger -terminate_on_proc_exit.\n");
+            "         on another account.  Without it, those processes will be listed as '<error>'\n"
+            "         and they can't be targeted by -process_name nor trigger -terminate_on_proc_exit.\n");
     }
 
     // Create a message queue to handle the input messages.

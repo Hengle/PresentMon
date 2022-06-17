@@ -321,7 +321,7 @@ bool CheckINTCProviderManifest()
         if (pTdhEnumerateManifestProviderEvents != nullptr) {
             ULONG bufferSize = 0;
             auto status = (*pTdhEnumerateManifestProviderEvents)((LPGUID) &Intel_Graphics_D3D10::GUID, nullptr, &bufferSize);
-            if (status == ERROR_SUCCESS) {
+            if (status == ERROR_INSUFFICIENT_BUFFER) {
                 FreeLibrary(hmodule);
                 return true;
             }
@@ -329,9 +329,10 @@ bool CheckINTCProviderManifest()
         FreeLibrary(hmodule);
     }
 
-    PrintError("error: Intel graphics events not found on this PC. In order to use Intel internal\n"
-        "       features, you must run GfxEvents\\Install.bat from the driver's TestTools\n"
-        "       package as administrator.\n");
+    PrintWarning(
+        "warning: Intel graphics events not found on this PC. In order to use Intel internal\n"
+        "         features, you must run GfxEvents\\Install.bat from the driver's TestTools\n"
+        "         package as administrator.\n");
     return false;
 }
 
@@ -344,7 +345,7 @@ bool RequireINTCRegDWORD(char const* name, DWORD value)
         return true;
     }
 
-    PrintError("error: requested features require HKLM\\SOFTWARE\\Intel\\IGFX\\D3D10\\%s = %u\n", name, value);
+    PrintWarning("warning: requested features require HKLM\\SOFTWARE\\Intel\\IGFX\\D3D10\\%s = %u\n", name, value);
     return false;
 }
 
@@ -599,14 +600,11 @@ bool ParseCommandLine(int argc, char** argv)
 
     // If the INTC provider is required, check that the manifest is installed.
     if (args->mEtlFileName == nullptr && (args->mTrackINTCTimers || args->mTrackINTCCpuGpuSync || args->mTrackINTCShaderCompilation)) {
-        if (!CheckINTCProviderManifest() ||
-            !RequireINTCRegDWORD("EnableETW", 1)) {
-            return false;
-        }
+        if (CheckINTCProviderManifest()) {
+            RequireINTCRegDWORD("EnableETW", 1);
 
-        if (args->mTrackINTCTimers || args->mTrackINTCCpuGpuSync) {
-            if (!RequireINTCRegDWORD("QueueTimers", 1)) {
-                return false;
+            if (args->mTrackINTCTimers || args->mTrackINTCCpuGpuSync) {
+                RequireINTCRegDWORD("QueueTimers", 1);
             }
         }
     }
