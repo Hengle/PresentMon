@@ -130,7 +130,7 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     , Runtime(runtime)
     , PresentMode(PresentMode::Unknown)
     , FinalState(PresentResult::Unknown)
-    , InputType(InputDeviceType::Unknown)
+    , InputType(InputDeviceType::None)
 
     , SupportsTearing(false)
     , MMIO(false)
@@ -161,7 +161,7 @@ PMTraceConsumer::PMTraceConsumer()
     : mAllPresents(PRESENTEVENT_CIRCULAR_BUFFER_SIZE)
     , mGpuTrace(this)
     , mLastInputDeviceReadTime(0)
-    , mLastInputDeviceType(InputDeviceType::Unknown)
+    , mLastInputDeviceType(InputDeviceType::None)
 {
 }
 
@@ -1751,7 +1751,7 @@ void PMTraceConsumer::HandleWin32kEvent(EVENT_RECORD* pEventRecord)
                 mLastInputDeviceReadTime,
                 mLastInputDeviceType));
         } else {
-            if (ii->second.first == 0) {
+            if (ii->second.first < mLastInputDeviceReadTime) {
                 ii->second.first = mLastInputDeviceReadTime;
                 ii->second.second = mLastInputDeviceType;
             }
@@ -2240,12 +2240,11 @@ void PMTraceConsumer::TrackPresent(
     // Assign any pending retrieved input to this frame
     if (mTrackInput) {
         auto ii = mRetrievedInput.find(present->ProcessId);
-        if (ii != mRetrievedInput.end() && ii->second.first != 0) {
+        if (ii != mRetrievedInput.end() && ii->second.second != InputDeviceType::None) {
             DebugModifyPresent(present.get());
             present->InputTime = ii->second.first;
             present->InputType = ii->second.second;
-            ii->second.first = 0;
-            ii->second.second = InputDeviceType::Unknown;
+            ii->second.second = InputDeviceType::None;
         }
     }
 }

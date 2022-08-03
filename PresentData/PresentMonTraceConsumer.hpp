@@ -111,9 +111,10 @@ enum class Runtime {
 };
 
 enum class InputDeviceType {
-    Unknown,
+    None,
     Mouse,
     Keyboard,
+    Unknown,
 };
 
 struct InputEvent {
@@ -414,6 +415,17 @@ struct PMTraceConsumer
 
 
     // State for tracking keyboard/mouse click times
+    //
+    // mLastInputDeviceReadTime and mLastInputDeviceType are the time/type of
+    // the most-recent input event.  This is global and if multiple input
+    // events are observed, but not retrieved by any window, then older ones
+    // are lost.
+    //
+    // mRetrievedInput stores the time/type of the most-recent input event that
+    // has been retrieved by each process's window(s).  Once that data is
+    // applied to a present, the InputDeviceType is set to None, but the time
+    // is not changed so that we know whether mLastInputDeviceReadTime has
+    // already been retrieved or not.
     uint64_t mLastInputDeviceReadTime;
     InputDeviceType mLastInputDeviceType;
 
