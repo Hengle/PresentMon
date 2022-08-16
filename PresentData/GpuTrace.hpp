@@ -68,8 +68,6 @@ class GpuTrace {
         PacketTrace mOtherEngines;
 
         // INTC-internal state:
-        uint64_t mINTCProducerPresentTime;  // QPC of the present operation on the producer thread
-        uint64_t mINTCConsumerPresentTime;  // QPC of the present operation on the consumer thread
         struct {
             uint64_t mStartTime;            // QPC of the start event for this timer, or 0 if no start event
             uint64_t mAccumulatedTime;      // QPC duration of all processed timer durations
@@ -124,9 +122,6 @@ public:
 
     void EnqueueDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp);
     uint32_t CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp);
-
-    void SetINTCProducerPresentTime(uint32_t processId, uint64_t timestamp);
-    void SetINTCConsumerPresentTime(uint32_t processId, uint64_t timestamp);
 
     void StartINTCTimer(INTCTimer timer, uint32_t processId, uint64_t timestamp);
     void StopINTCTimer(INTCTimer timer, uint32_t processId, uint64_t timestamp);

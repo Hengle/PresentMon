@@ -474,18 +474,6 @@ uint32_t GpuTrace::CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uin
         : 0;
 }
 
-void GpuTrace::SetINTCProducerPresentTime(uint32_t processId, uint64_t timestamp)
-{
-    auto frameInfo = &mProcessFrameInfo.emplace(processId, ProcessFrameInfo{}).first->second;
-    frameInfo->mINTCProducerPresentTime = timestamp;
-}
-
-void GpuTrace::SetINTCConsumerPresentTime(uint32_t processId, uint64_t timestamp)
-{
-    auto frameInfo = &mProcessFrameInfo.emplace(processId, ProcessFrameInfo{}).first->second;
-    frameInfo->mINTCConsumerPresentTime = timestamp;
-}
-
 void GpuTrace::StartINTCTimer(INTCTimer timer, uint32_t processId, uint64_t timestamp)
 {
     auto frameInfo = &mProcessFrameInfo.emplace(processId, ProcessFrameInfo{}).first->second;
@@ -605,11 +593,6 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
         videoTrace->mAccumulatedPacketTime = 0;
 
         if (mPMConsumer->mTrackINTCTimers || mPMConsumer->mTrackINTCCpuGpuSync || mPMConsumer->mTrackINTCShaderCompilation) {
-            pEvent->INTC_ProducerPresentTime = frameInfo->mINTCProducerPresentTime;
-            pEvent->INTC_ConsumerPresentTime = frameInfo->mINTCConsumerPresentTime;
-            frameInfo->mINTCProducerPresentTime = 0;
-            frameInfo->mINTCConsumerPresentTime = 0;
-
             for (uint32_t i = 0; i < INTC_TIMER_COUNT; ++i) {
                 if (frameInfo->mINTCTimers[i].mStartTime != 0) {
                     frameInfo->mINTCTimers[i].mAccumulatedTime += timestamp - frameInfo->mINTCTimers[i].mStartTime;

@@ -173,11 +173,20 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
     switch (hdr.EventDescriptor.Id) {
     case Intel_Graphics_D3D10::QueueTimers_Info::Id:
     {
-        auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
-        switch (Type) {
-        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_APP:    mGpuTrace.SetINTCProducerPresentTime(hdr.ProcessId, hdr.TimeStamp.QuadPart); break;
-        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_DRIVER: mGpuTrace.SetINTCConsumerPresentTime(hdr.ProcessId, hdr.TimeStamp.QuadPart); break;
-        default: DebugAssert(false); break;
+        // FRAME_TIME_APP and FRAME_TIME_DRIVER are both emitted between
+        // Present_Start and Present_Stop on the same thread.
+        auto iter = mPresentByThreadId.find(hdr.ThreadId);
+        if (iter != mPresentByThreadId.end()) {
+            auto present = iter->second.get();
+
+            DebugModifyPresent(present);
+
+            auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
+            switch (Type) {
+            case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_APP:    present->INTC_ProducerPresentTime = hdr.TimeStamp.QuadPart; break;
+            case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_DRIVER: present->INTC_ConsumerPresentTime = hdr.TimeStamp.QuadPart; break;
+            default: DebugAssert(false); break;
+            }
         }
         break;
     }
