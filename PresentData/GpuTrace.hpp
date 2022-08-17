@@ -10,18 +10,12 @@
 struct PresentEvent;
 struct PMTraceConsumer;
 
-enum INTCTimer {
-    INTC_TIMER_WAIT_IF_FULL,
-    INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC,
-    INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN,
-    INTC_TIMER_WAIT_FOR_FENCE,
-    INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED,
-    INTC_TIMER_WAIT_IF_EMPTY,
-    INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU,
-    INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA,
-    INTC_TIMER_WAIT_FOR_COMPILATION_ON_DRAW,
-    INTC_TIMER_WAIT_FOR_COMPILATION_ON_CREATE,
-    INTC_TIMER_COUNT
+enum INTCGPUTimer {
+    INTC_GPU_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU,
+    INTC_GPU_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA,
+    INTC_GPU_TIMER_WAIT_FOR_COMPILATION_ON_DRAW,
+    INTC_GPU_TIMER_WAIT_FOR_COMPILATION_ON_CREATE,
+    INTC_GPU_TIMER_COUNT
 };
 
 enum ResidencyEventTypes {
@@ -72,7 +66,7 @@ class GpuTrace {
             uint64_t mStartTime;            // QPC of the start event for this timer, or 0 if no start event
             uint64_t mAccumulatedTime;      // QPC duration of all processed timer durations
             uint32_t mStartCount;           // The number of timers started
-        } mINTCTimers[INTC_TIMER_COUNT];
+        } mINTCTimers[INTC_GPU_TIMER_COUNT];
 
         struct {
             uint64_t mStartTime;            // QPC of the start of the latest operation.
@@ -123,8 +117,8 @@ public:
     void EnqueueDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp);
     uint32_t CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp);
 
-    void StartINTCTimer(INTCTimer timer, uint32_t processId, uint64_t timestamp);
-    void StopINTCTimer(INTCTimer timer, uint32_t processId, uint64_t timestamp);
+    void StartINTCTimer(INTCGPUTimer timer, uint32_t processId, uint64_t timestamp);
+    void StopINTCTimer(INTCGPUTimer timer, uint32_t processId, uint64_t timestamp);
 
     void StartMakeResident(uint32_t processId, uint64_t timestamp);
     void StopMakeResident(uint32_t processId, uint64_t timestamp);

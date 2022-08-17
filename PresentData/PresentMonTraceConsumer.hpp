@@ -130,6 +130,22 @@ struct ProcessEvent {
     bool IsStartEvent;
 };
 
+enum INTC_Timer {
+    INTC_TIMER_WAIT_IF_FULL,
+    INTC_TIMER_WAIT_IF_EMPTY,
+    INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC,
+    INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN,
+    INTC_TIMER_WAIT_FOR_FENCE,
+    INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED,
+    INTC_TIMER_COUNT
+};
+
+struct INTC_TimerData {
+    uint64_t mStartTime;
+    uint64_t mAccumulatedTime;
+    uint32_t mStartCount;
+};
+
 struct PresentEvent {
     uint64_t QpcTime;           // QPC value of the first event related to the Present (D3D9, DXGI, or DXGK Present_Start)
     uint32_t ProcessId;         // ID of the process that presented
@@ -154,7 +170,8 @@ struct PresentEvent {
     // Intel UMD metrics
     uint64_t INTC_ProducerPresentTime;
     uint64_t INTC_ConsumerPresentTime;
-    uint64_t INTC_Timers[INTC_TIMER_COUNT];
+    uint64_t INTC_Timers[INTC_GPU_TIMER_COUNT];
+    INTC_TimerData INTC_Timer[INTC_TIMER_COUNT];
 
     // Intel frame-pacing data
     uint64_t INTC_FrameID;

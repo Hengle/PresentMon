@@ -153,6 +153,7 @@ PresentEvent::PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime)
     Id = presentCount;
 #endif
 
+    memset(INTC_Timer, 0, sizeof(INTC_Timer));
     memset(INTC_Timers, 0, sizeof(INTC_Timers));
     memset(MemoryResidency, 0, sizeof(MemoryResidency));
 }
@@ -193,6 +194,44 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
 
     case Intel_Graphics_D3D10::QueueTimers_Start::Id:
     case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
+    {
+        // QueueTimers start/stop events can be emitted from either the
+        // producer or consumer threads of the target application.
+        auto iter = mOrderedPresentsByProcessId.find(hdr.ProcessId);
+        if (iter != mOrderedPresentsByProcessId.end() && !iter->second.empty()) {
+            auto present = iter->second.rbegin()->second.get();
+
+            INTC_TimerData* timer = nullptr;
+
+            auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
+            switch (Type) {
+            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_FULL_TIMER:           timer = &present->INTC_Timer[INTC_TIMER_WAIT_IF_FULL]; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_EMPTY_TIMER:          timer = &present->INTC_Timer[INTC_TIMER_WAIT_IF_EMPTY]; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_SYNC_TIMER:  timer = &present->INTC_Timer[INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC]; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_DRAIN_TIMER: timer = &present->INTC_Timer[INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN]; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_FOR_FENCE:               timer = &present->INTC_Timer[INTC_TIMER_WAIT_FOR_FENCE]; break;
+            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_FENCE_SUBMITTED:   timer = &present->INTC_Timer[INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED]; break;
+            default: DebugAssert(false); break;
+            }
+
+            if (hdr.EventDescriptor.Id == Intel_Graphics_D3D10::QueueTimers_Start::Id) {
+                timer->mStartCount += 1;
+                if (timer->mStartCount == 1) {
+                    timer->mStartTime = hdr.TimeStamp.QuadPart;
+                }
+            } else {
+                if (timer->mStartCount >= 1) {
+                    timer->mStartCount -= 1;
+                    if (timer->mStartCount == 0) {
+                        timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime;
+                        timer->mStartTime = 0;
+                    }
+                }
+            }
+        }
+        break;
+    }
+
     case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
     case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
     case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_3::Id:
@@ -200,32 +239,16 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
     case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_4::Id:
     case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_4::Id:
     {
-        INTCTimer timer = INTC_TIMER_COUNT;
+        INTCGPUTimer timer = INTC_GPU_TIMER_COUNT;
 
         switch (hdr.EventDescriptor.Id) {
-        case Intel_Graphics_D3D10::QueueTimers_Start::Id:
-        case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
-        {
-            auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
-            switch (Type) {
-            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_FULL_TIMER:           timer = INTC_TIMER_WAIT_IF_FULL; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_IF_EMPTY_TIMER:          timer = INTC_TIMER_WAIT_IF_EMPTY; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_SYNC_TIMER:  timer = INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_EMPTY_DRAIN_TIMER: timer = INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_FOR_FENCE:               timer = INTC_TIMER_WAIT_FOR_FENCE; break;
-            case Intel_Graphics_D3D10::mTimerType::WAIT_UNTIL_FENCE_SUBMITTED:   timer = INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED; break;
-            default: DebugAssert(false); break;
-            }
-            break;
-        }
-
         case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
         {
             auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mSyncType>(pEventRecord, L"value");
             switch (Type) {
-            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU:   timer = INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; break;
-            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_POLL_ON_QUERY_GET_DATA: timer = INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA; break;
+            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_WAIT_SYNC_OBJECT_CPU:   timer = INTC_GPU_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU; break;
+            case Intel_Graphics_D3D10::mSyncType::SYNC_TYPE_POLL_ON_QUERY_GET_DATA: timer = INTC_GPU_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA; break;
             default: DebugAssert(false); break;
             }
             break;
@@ -233,23 +256,21 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
 
         case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_3::Id:
         case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_3::Id:
-            timer = INTC_TIMER_WAIT_FOR_COMPILATION_ON_DRAW;
+            timer = INTC_GPU_TIMER_WAIT_FOR_COMPILATION_ON_DRAW;
             break;
 
         case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_4::Id:
         case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_4::Id:
-            timer = INTC_TIMER_WAIT_FOR_COMPILATION_ON_CREATE;
+            timer = INTC_GPU_TIMER_WAIT_FOR_COMPILATION_ON_CREATE;
             break;
         }
 
         switch (hdr.EventDescriptor.Id) {
-        case Intel_Graphics_D3D10::QueueTimers_Start::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Start::Id:
         case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_3::Id:
         case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Start_4::Id:
             mGpuTrace.StartINTCTimer(timer, hdr.ProcessId, hdr.TimeStamp.QuadPart);
             break;
-        case Intel_Graphics_D3D10::QueueTimers_Stop::Id:
         case Intel_Graphics_D3D10::CpuGpuSync_Stop::Id:
         case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_3::Id:
         case Intel_Graphics_D3D10::ShaderCompilationTrackingEvents_Stop_4::Id:

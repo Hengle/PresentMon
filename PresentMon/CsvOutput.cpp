@@ -307,24 +307,24 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     }
     if (args.mTrackINTCTimers) {
         fprintf(fp, ",%.*lf,%.*lf,%.*lf,%.*lf,%.*lf,%.*lf,%.*lf,%.*lf",
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_IF_FULL]),
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC]),
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN]),
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_FOR_FENCE]),
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED]),
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_IF_EMPTY]),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timer[INTC_TIMER_WAIT_IF_FULL].mAccumulatedTime),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timer[INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC].mAccumulatedTime),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timer[INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN].mAccumulatedTime),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timer[INTC_TIMER_WAIT_FOR_FENCE].mAccumulatedTime),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timer[INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED].mAccumulatedTime),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timer[INTC_TIMER_WAIT_IF_EMPTY].mAccumulatedTime),
             DBL_DIG - 1, p.INTC_ProducerPresentTime == 0 ? 0.0 : QpcToSeconds(p.INTC_ProducerPresentTime), //TODO - broken, need to be fixed
             DBL_DIG - 1, p.INTC_ConsumerPresentTime == 0 ? 0.0 : QpcToSeconds(p.INTC_ConsumerPresentTime));//TODO - broken, need to be fixed
     }
     if (args.mTrackINTCCpuGpuSync) {
         fprintf(fp, ",%.*lf,%.*lf",
-            DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU]),
-            DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA]));
+            DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_GPU_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU]),
+            DBL_DIG -1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_GPU_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA]));
     }
     if (args.mTrackINTCShaderCompilation) {
         fprintf(fp, ",%.*lf,%.*lf",
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_FOR_COMPILATION_ON_DRAW]),
-            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_TIMER_WAIT_FOR_COMPILATION_ON_CREATE]));
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_GPU_TIMER_WAIT_FOR_COMPILATION_ON_DRAW]),
+            DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timers[INTC_GPU_TIMER_WAIT_FOR_COMPILATION_ON_CREATE]));
     }
     if (args.mTrackMemoryResidency) {
         fprintf(fp, ",%.*lf,%.*lf",
