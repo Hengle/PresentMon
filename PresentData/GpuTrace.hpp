@@ -51,7 +51,9 @@ class GpuTrace {
     struct Context {
         PacketTrace* mPacketTrace;
         Node* mNode;
-        uint64_t mParentDxgHwQueue;
+        uint64_t mParentContext;
+        bool mIsParentContext;
+        bool mIsHwQueue;
         bool mIsVideoEncoderForCloudStreamingApp;
     };
 

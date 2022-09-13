@@ -111,7 +111,9 @@ void GpuTrace::RegisterContext(uint64_t hContext, uint64_t hDevice, uint32_t nod
     auto context = &mContexts.emplace(hContext, Context()).first->second;
     context->mPacketTrace = nullptr;
     context->mNode = node;
-    context->mParentDxgHwQueue = 0;
+    context->mParentContext = 0;
+    context->mIsParentContext = false;
+    context->mIsHwQueue = false;
     context->mIsVideoEncoderForCloudStreamingApp = false;
 
     if (processId != 0) {
@@ -123,12 +125,14 @@ void GpuTrace::RegisterContext(uint64_t hContext, uint64_t hDevice, uint32_t nod
 // following pattern:
 //     Context_Start hContext=C hDevice=D NodeOrdinal=N
 //     HwQueue_Start hContext=C hHwQueue=0x0 ParentDxgHwQueue=Q1
-//     HwQueue_Start hContext=C hHwQueue=H   ParentDxgHwQueue=Q2
+//     HwQueue_Start hContext=C hHwQueue=H1  ParentDxgHwQueue=Q2
+//     HwQueue_Start hContext=C hHwQueue=H2  ParentDxgHwQueue=Q3
 //     ...
 //     DxgKrnl_QueuePacket_Start hContext=Q2 SubmitSequence=S ...
 //     ...
 //     DxgKrnl_QueuePacket_Stop hContext=Q2 SubmitSequence=S
 //     ...
+//     HwQueue_Stop hContext=C hHwQueue=0x0 ParentDxgHwQueue=Q3
 //     HwQueue_Stop hContext=C hHwQueue=0x0 ParentDxgHwQueue=Q2
 //     HwQueue_Stop hContext=C hHwQueue=0x0 ParentDxgHwQueue=Q1
 //     Context_Stop hContext=C
@@ -137,13 +141,19 @@ void GpuTrace::RegisterHwQueueContext(uint64_t hContext, uint64_t parentDxgHwQue
     DebugAssert(mContexts.find(hContext)         != mContexts.end());
     DebugAssert(mContexts.find(parentDxgHwQueue) == mContexts.end());
 
+    // Make a copy of Context that can be looked up by parentDxgHwQueue, but
+    // will continue pointing to the same Node and PacketTrace.
     auto ii = mContexts.find(hContext);
     if (ii != mContexts.end()) {
         auto context = &ii->second;
-        DebugAssert(context->mParentDxgHwQueue == 0);
-        context->mParentDxgHwQueue = parentDxgHwQueue;
+        DebugAssert(context->mParentContext == 0);
+        DebugAssert(context->mIsHwQueue == false);
+        context->mIsParentContext = true;
 
-        mContexts.emplace(parentDxgHwQueue, *context);
+        context = &mContexts.emplace(parentDxgHwQueue, *context).first->second;
+        context->mParentContext = hContext;
+        context->mIsParentContext = false;
+        context->mIsHwQueue = true;
     }
 }
 
@@ -152,12 +162,20 @@ void GpuTrace::UnregisterContext(uint64_t hContext)
     // Sometimes there are duplicate stop events so it's ok if it's already
     // removed
     auto ii = mContexts.find(hContext);
-    if (ii != mContexts.end()) {
-        auto parentDxgHwQueue = ii->second.mParentDxgHwQueue;
+    auto ie = mContexts.end();
+    if (ii != ie) {
+        auto isParentContext = ii->second.mIsParentContext;
         mContexts.erase(ii);
 
-        if (parentDxgHwQueue != 0) {
-            mContexts.erase(parentDxgHwQueue);
+        if (isParentContext) {
+            for (ii = mContexts.begin(); ii != ie; ) {
+                auto const& context = ii->second;
+                if (context.mParentContext == hContext) {
+                    ii = mContexts.erase(ii);
+                } else {
+                    ++ii;
+                }
+            }
         }
     }
 }
@@ -183,52 +201,51 @@ void GpuTrace::SetContextProcessId(Context* context, uint32_t processId)
 {
     auto p = mProcessFrameInfo.emplace(processId, ProcessFrameInfo{});
 
-    if (!mPMConsumer->mTrackGPUVideo) {
+    if (mPMConsumer->mTrackGPUVideo && (context->mNode->mIsVideo || context->mNode->mIsVideoDecode)) {
+        context->mPacketTrace = &p.first->second.mVideoEngines;
+    } else {
         context->mPacketTrace = &p.first->second.mOtherEngines;
-        return;
     }
 
-    context->mPacketTrace = context->mNode->mIsVideo || context->mNode->mIsVideoDecode
-        ? &p.first->second.mVideoEngines
-        : &p.first->second.mOtherEngines;
+    if (mPMConsumer->mTrackGPUVideo) {
+        if (p.second) {
+            if (mCloudStreamingProcessId == 0) {
+                std::string processName;
 
-    if (p.second) {
-        if (mCloudStreamingProcessId == 0) {
-            std::string processName;
-
-            if (mPMConsumer->mNTProcessNames.empty()) { // using as proxy for runtime collection, should we have a variable for this?
-                auto handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
-                if (handle != nullptr) {
-                    char path[MAX_PATH] = {};
-                    DWORD numChars = sizeof(path);
-                    if (QueryFullProcessImageNameA(handle, 0, path, &numChars)) {
-                        for (; numChars > 0; --numChars) {
-                            if (path[numChars - 1] == '/' ||
-                                path[numChars - 1] == '\\') {
-                                break;
+                if (mPMConsumer->mNTProcessNames.empty()) { // using as proxy for runtime collection, should we have a variable for this?
+                    auto handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+                    if (handle != nullptr) {
+                        char path[MAX_PATH] = {};
+                        DWORD numChars = sizeof(path);
+                        if (QueryFullProcessImageNameA(handle, 0, path, &numChars)) {
+                            for (; numChars > 0; --numChars) {
+                                if (path[numChars - 1] == '/' ||
+                                    path[numChars - 1] == '\\') {
+                                    break;
+                                }
                             }
+                            processName = path + numChars;
                         }
-                        processName = path + numChars;
+                        CloseHandle(handle);
                     }
-                    CloseHandle(handle);
+                } else {
+                    auto ii = mPMConsumer->mNTProcessNames.find(processId);
+                    if (ii != mPMConsumer->mNTProcessNames.end()) {
+                        processName = ii->second;
+                    }
                 }
-            } else {
-                auto ii = mPMConsumer->mNTProcessNames.find(processId);
-                if (ii != mPMConsumer->mNTProcessNames.end()) {
-                    processName = ii->second;
-                }
-            }
 
-            if (!processName.empty() && (_stricmp(processName.c_str(), "parsecd.exe") == 0 ||
-                                         _stricmp(processName.c_str(), "intel-cloud-screen-capture.exe") == 0 ||
-                                         _stricmp(processName.c_str(), "nvEncDXGIOutputDuplicationSample.exe") == 0)) {
-                mCloudStreamingProcessId = processId;
+                if (!processName.empty() && (_stricmp(processName.c_str(), "parsecd.exe") == 0 ||
+                                             _stricmp(processName.c_str(), "intel-cloud-screen-capture.exe") == 0 ||
+                                             _stricmp(processName.c_str(), "nvEncDXGIOutputDuplicationSample.exe") == 0)) {
+                    mCloudStreamingProcessId = processId;
+                }
             }
         }
-    }
 
-    if (context->mNode->mIsVideoDecode && processId == mCloudStreamingProcessId) {
-        context->mIsVideoEncoderForCloudStreamingApp = true;
+        if (context->mNode->mIsVideoDecode && processId == mCloudStreamingProcessId) {
+            context->mIsVideoEncoderForCloudStreamingApp = true;
+        }
     }
 }
 
@@ -410,7 +427,7 @@ void GpuTrace::EnqueueQueuePacket(uint32_t processId, uint64_t hContext, uint32_
 
         // Use queue packet duration as a proxy for dma duration for cases we
         // don't get dma events for (HWS).
-        if (context->mParentDxgHwQueue != 0) {
+        if (context->mIsHwQueue) {
             EnqueueWork(context, sequenceId, timestamp);
         }
     }
@@ -424,7 +441,7 @@ void GpuTrace::CompleteQueuePacket(uint64_t hContext, uint32_t sequenceId, uint6
 
         // Use queue packet duration as a proxy for dma duration for cases we
         // don't get dma events for (HWS).
-        if (context->mParentDxgHwQueue != 0) {
+        if (context->mIsHwQueue) {
             CompleteWork(context, sequenceId, timestamp);
         }
     }
@@ -442,7 +459,7 @@ void GpuTrace::EnqueueDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t
     auto context = &ii->second;
 
     // Should not see any dma packets on a HwQueue
-    DebugAssert(context->mParentDxgHwQueue == 0);
+    DebugAssert(!context->mIsHwQueue);
 
     // Start tracking the work
     EnqueueWork(context, sequenceId, timestamp);
@@ -460,7 +477,7 @@ uint32_t GpuTrace::CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uin
     auto context = &ii->second;
 
     // Should not see any dma packets on a HwQueue
-    DebugAssert(context->mParentDxgHwQueue == 0);
+    DebugAssert(!context->mIsHwQueue);
 
     // Stop tracking the work
     if (!CompleteWork(context, sequenceId, timestamp)) {

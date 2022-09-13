@@ -1366,17 +1366,13 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         {
             EventDataDesc desc[] = {
                 { L"hContext" },
-                { L"hHwQueue" },
                 { L"ParentDxgHwQueue" },
             };
             mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
             auto hContext        = desc[0].GetData<uint64_t>();
-            auto hHwQueue        = desc[1].GetData<uint64_t>();
-            auto hHwQueueContext = desc[2].GetData<uint64_t>();
+            auto hHwQueueContext = desc[1].GetData<uint64_t>();
 
-            if (hHwQueue != 0) {
-                mGpuTrace.RegisterHwQueueContext(hContext, hHwQueueContext);
-            }
+            mGpuTrace.RegisterHwQueueContext(hContext, hHwQueueContext);
             return;
         }
 
