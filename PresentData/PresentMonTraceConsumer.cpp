@@ -175,19 +175,32 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
     case Intel_Graphics_D3D10::QueueTimers_Info::Id:
     {
         // FRAME_TIME_APP and FRAME_TIME_DRIVER are both emitted between
-        // Present_Start and Present_Stop on the same thread.
-        auto iter = mPresentByThreadId.find(hdr.ThreadId);
-        if (iter != mPresentByThreadId.end()) {
-            auto present = iter->second.get();
-
-            DebugModifyPresent(present);
-
-            auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
-            switch (Type) {
-            case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_APP:    present->INTC_ProducerPresentTime = hdr.TimeStamp.QuadPart; break;
-            case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_DRIVER: present->INTC_ConsumerPresentTime = hdr.TimeStamp.QuadPart; break;
-            default: DebugAssert(false); break;
+        // Present_Start and Present_Stop.  FRAME_TIME_APP is emitted on the
+        // producer thread (the same thread as the Present() call) and
+        // FRAME_TIME_DRIVER is emitted on the consumer thread.
+        auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
+        switch (Type) {
+        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_APP: {
+            auto iter = mPresentByThreadId.find(hdr.ThreadId);
+            if (iter != mPresentByThreadId.end()) {
+                auto present = iter->second.get();
+                DebugModifyPresent(present);
+                present->INTC_ProducerPresentTime = hdr.TimeStamp.QuadPart;
             }
+            break;
+        }
+        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_DRIVER: {
+            auto iter = mOrderedPresentsByProcessId.find(hdr.ProcessId);
+            if (iter != mOrderedPresentsByProcessId.end() && !iter->second.empty()) {
+                auto present = iter->second.rbegin()->second.get();
+                DebugModifyPresent(present);
+                present->INTC_ConsumerPresentTime = hdr.TimeStamp.QuadPart;
+            }
+            break;
+        }
+        default:
+            DebugAssert(false);
+            break;
         }
         break;
     }
