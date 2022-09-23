@@ -126,8 +126,8 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
                                                    Header_msWaitingOnFence,
                                                    Header_msWaitingOnFenceSubmission,
                                                    Header_msStalledOnQueueEmpty,
-                                                   Header_ProducerPresentTime,
-                                                   Header_ConsumerPresentTime }),
+                                                   Header_msBetweenProducerPresents,
+                                                   Header_msBetweenConsumerPresents }),
 
         HeaderCollection(L"-track_cpu_gpu_sync", { Header_msWaitingOnSyncObject,
                                                    Header_msWaitingOnQueryData }),

@@ -139,8 +139,8 @@ Using `-track_queue_timers` will add the following columns:
 | *msWaitingOnQueueDrain*      | How long the driver waited for the queue to drain, in milliseconds.                         |
 | *msWaitingOnFence*           | How long the driver waited for consumer fences, in milliseconds.                            |
 | *msWaitingOnFenceSubmission* | How long the driver waited for fences submitted to the GPU, in milliseconds.                |
-| *ProducerPresentTime*        | The time of the present operation on the producer thread, in seconds since capture started. |
-| *ConsumerPresentTime*        | The time of the present operation on the consumer thread, in seconds since capture started. |
+| *msBetweenProducerPresents*  | The time between the producer thread processing this Present and the previous Present, in milliseconds. |
+| *msBetweenConsumerPresents*  | The time between the consumer thread processing this Present and the previous Present, in milliseconds. |
 
 Using `-track_cpu_gpu_sync` will add the following columns:
 

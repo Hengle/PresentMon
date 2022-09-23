@@ -71,8 +71,8 @@ struct PresentMonCsv
         Header_msWaitingOnFence,
         Header_msWaitingOnFenceSubmission,
         Header_msStalledOnQueueEmpty,
-        Header_ProducerPresentTime,
-        Header_ConsumerPresentTime,
+        Header_msBetweenProducerPresents,
+        Header_msBetweenConsumerPresents,
 
         // Required headers when -track_cpu_gpu_sync is used:
         Header_msWaitingOnSyncObject,
@@ -138,8 +138,8 @@ struct PresentMonCsv
         case Header_msWaitingOnQueueDrain:            return "msWaitingOnQueueDrain";
         case Header_msWaitingOnFence:                 return "msWaitingOnFence";
         case Header_msWaitingOnFenceSubmission:       return "msWaitingOnFenceSubmission";
-        case Header_ProducerPresentTime:              return "ProducerPresentTime";
-        case Header_ConsumerPresentTime:              return "ConsumerPresentTime";
+        case Header_msBetweenProducerPresents:        return "msBetweenProducerPresents";
+        case Header_msBetweenConsumerPresents:        return "msBetweenConsumerPresents";
         case Header_msWaitingOnSyncObject:            return "msWaitingOnSyncObject";
         case Header_msWaitingOnQueryData:             return "msWaitingOnQueryData";
         case Header_msWaitingOnDrawTimeCompilation:   return "msWaitingOnDrawTimeCompilation";

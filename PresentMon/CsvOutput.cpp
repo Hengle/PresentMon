@@ -92,8 +92,8 @@ static void WriteCsvHeader(FILE* fp)
             ",msWaitingOnFence"
             ",msWaitingOnFenceSubmission"
             ",msStalledOnQueueEmpty"
-            ",ProducerPresentTime"
-            ",ConsumerPresentTime");
+            ",msBetweenProducerPresents"
+            ",msBetweenConsumerPresents");
     }
     if (args.mTrackINTCCpuGpuSync) {
         fprintf(fp,
@@ -200,6 +200,17 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     if (args.mTrackInput) {
         if (p.InputTime != 0) {
             msSinceInput = 1000.0 * QpcDeltaToSeconds(p.QpcTime - p.InputTime);
+        }
+    }
+
+    double msBetweenProducerPresents = 0.0;
+    double msBetweenConsumerPresents = 0.0;
+    if (args.mTrackINTCTimers) {
+        if (p.INTC_ProducerPresentTime != 0 && p.INTC_ProducerPresentTime > lastPresented->INTC_ProducerPresentTime) {
+            msBetweenProducerPresents = 1000.0 * QpcDeltaToSeconds(p.INTC_ProducerPresentTime - lastPresented->INTC_ProducerPresentTime);
+        }
+        if (p.INTC_ConsumerPresentTime != 0 && p.INTC_ConsumerPresentTime > lastPresented->INTC_ConsumerPresentTime) {
+            msBetweenConsumerPresents = 1000.0 * QpcDeltaToSeconds(p.INTC_ConsumerPresentTime - lastPresented->INTC_ConsumerPresentTime);
         }
     }
 
@@ -313,8 +324,8 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timer[INTC_TIMER_WAIT_FOR_FENCE].mAccumulatedTime),
             DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timer[INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED].mAccumulatedTime),
             DBL_DIG - 1, 1000.0 * QpcDeltaToSeconds(p.INTC_Timer[INTC_TIMER_WAIT_IF_EMPTY].mAccumulatedTime),
-            DBL_DIG - 1, p.INTC_ProducerPresentTime == 0 ? 0.0 : QpcToSeconds(p.INTC_ProducerPresentTime), //TODO - broken, need to be fixed
-            DBL_DIG - 1, p.INTC_ConsumerPresentTime == 0 ? 0.0 : QpcToSeconds(p.INTC_ConsumerPresentTime));//TODO - broken, need to be fixed
+            DBL_DIG - 1, msBetweenProducerPresents,
+            DBL_DIG - 1, msBetweenConsumerPresents);
     }
     if (args.mTrackINTCCpuGpuSync) {
         fprintf(fp, ",%.*lf,%.*lf",
