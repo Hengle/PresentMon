@@ -87,34 +87,34 @@
 //     -> Assume DWM will compose this buffer on next present (missing InFrame event), follow windowed blit paths to screen time
 
 enum class PresentMode {
-    Unknown,
-    Hardware_Legacy_Flip,
-    Hardware_Legacy_Copy_To_Front_Buffer,
-    Hardware_Independent_Flip,
-    Composed_Flip,
-    Composed_Copy_GPU_GDI,
-    Composed_Copy_CPU_GDI,
-    Hardware_Composed_Independent_Flip,
+    Unknown = 0,
+    Hardware_Legacy_Flip = 1,
+    Hardware_Legacy_Copy_To_Front_Buffer = 2,
+    Hardware_Independent_Flip = 3,
+    Composed_Flip = 4,
+    Composed_Copy_GPU_GDI = 5,
+    Composed_Copy_CPU_GDI = 6,
+    Hardware_Composed_Independent_Flip = 8,
 };
 
 enum class PresentResult {
-    Unknown,
-    Presented,
-    Discarded,
+    Unknown = 0,
+    Presented = 1,
+    Discarded = 2,
 };
 
 enum class Runtime {
-    Other,
-    DXGI,
-    D3D9,
-    CloudStreaming
+    Other = 0,
+    DXGI = 1,
+    D3D9 = 2,
+    CloudStreaming = 1000,
 };
 
 enum class InputDeviceType {
-    None,
-    Mouse,
-    Keyboard,
-    Unknown,
+    None = 0,
+    Unknown = 1,
+    Mouse = 2,
+    Keyboard = 3,
 };
 
 struct InputEvent {

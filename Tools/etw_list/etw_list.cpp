@@ -8,13 +8,15 @@
 #include <stdint.h>
 #include <string>
 #include <map>
+#include <unordered_map>
 #include <vector>
 #include <windows.h>
 #include <tdh.h> // Must include after windows.h
 
 #include <generated/version.h>
 
-namespace {
+#include "../../presentdata/etw/microsoft_windows_eventmetadata.h"
+
 
 // ----------------------------------------------------------------------------
 // Helper functions
@@ -24,6 +26,7 @@ void usage()
     fprintf(stderr,
         "usage: etw_list.exe [options]\n"
         "options:\n"
+        "    --etl=path           List information from an ETL file instead of the local system.\n"
         "    --provider=filter    List providers that match the filter, argument can be used more than once.\n"
         "                         filter can be a provider name or guid, and can include up to one '*'.\n"
         "    --sort=guid|name     Sort providers by specified element.\n"
@@ -73,9 +76,12 @@ struct Filter
 // too.
 wchar_t const* GetStringPtr(void* base, ULONG offset)
 {
-    auto s = (wchar_t*) ((uintptr_t) base + offset);
-    for (auto n = wcslen(s); n-- && s[n] == L' '; ) {
-        s[n] = '\0';
+    wchar_t* s = nullptr;
+    if (offset > 0) {
+        s = (wchar_t*) ((uintptr_t) base + offset);
+        for (auto n = wcslen(s); n-- && s[n] == L' '; ) {
+            s[n] = '\0';
+        }
     }
     return s;
 }
@@ -92,19 +98,40 @@ struct Provider {
 
     Provider() {}
     Provider(PROVIDER_ENUMERATION_INFO* enumInfo, TRACE_PROVIDER_INFO const& info)
-        : guid_(info.ProviderGuid)
-        , name_(GetStringPtr(enumInfo, info.ProviderNameOffset))
+        : name_(GetStringPtr(enumInfo, info.ProviderNameOffset))
         , manifest_(info.SchemaSource == 0)
     {
+    }
+
+    void SetGUID(GUID const& guid)
+    {
+        guid_ = guid;
+        guidStr_.clear();
+
         wchar_t* guidStr = nullptr;
-        if (StringFromIID(info.ProviderGuid, &guidStr) == S_OK) {
+        if (StringFromIID(guid, &guidStr) == S_OK) {
             guidStr_ = guidStr;
             CoTaskMemFree(guidStr);
         }
     }
+
+    bool Matches(std::vector<Filter>* filters) const
+    {
+        for (auto ii = filters->begin(), ie = filters->end(); ii != ie; ++ii) {
+            auto const& filter = *ii;
+            if (filter.Matches(name_.c_str()) || filter.Matches(guidStr_.c_str())) {
+                // Remove filter if we found an exact match
+                if (!filter.wildcard_) {
+                    filters->erase(ii);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
 };
 
-void EnumerateProviders(
+void EnumerateSystemProviders(
     std::vector<Filter>* providerIds,
     std::vector<Provider>* providers)
 {
@@ -133,40 +160,12 @@ void EnumerateProviders(
     providers->reserve(providerCount);
     for (ULONG i = 0; i < providerCount; ++i) {
         Provider provider(enumInfo, enumInfo->TraceProviderInfoArray[i]);
-
-        for (size_t j = 0, n = providerIds->size(); j < n; ++j) {
-            auto providerId = (*providerIds)[j];
-
-            if (providerId.Matches(provider.name_.c_str()) ||
-                providerId.Matches(provider.guidStr_.c_str())) {
-                providers->emplace_back(provider);
-
-                // Remove filter if we found an exact match
-                if (!providerId.wildcard_) {
-                    providerIds->erase(providerIds->begin() + j);
-                }
-                break;
-            }
+        if (provider.Matches(providerIds)) {
+            providers->emplace_back(provider);
         }
     }
 
     free(enumInfo);
-
-    // Add any full GUIDs provided by user, even if not enumerated by
-    // TdhEnumerateProviders().  If we see events from this provider we'll try
-    // to patch the name from the EVENT_INFO.
-    for (auto providerId : *providerIds) {
-        if (providerId.wildcard_) continue;
-
-        GUID guid = {};
-        if (IIDFromString(providerId.part1_.c_str(), &guid) == S_OK) {
-            providers->emplace_back();
-            providers->back().guid_ = guid;
-            providers->back().guidStr_ = providerId.part1_;
-            providers->back().name_ = L"Unknown";
-            providers->back().manifest_ = true;
-        }
-    }
 }
 
 
@@ -251,6 +250,11 @@ struct Event : public EVENT_DESCRIPTOR {
             opcodeName_ = b;
         } else {
             opcodeName_ = GetStringPtr(eventInfo, eventInfo->OpcodeNameOffset);
+
+            // ETL-loaded opcode names can have "win:" prepended.
+            if (opcodeName_.rfind(L"win:", 0) == 0) {
+                opcodeName_.erase(0, 4);
+            }
         }
         if (eventInfo->LevelNameOffset == 0) {
             wchar_t b[126];
@@ -274,7 +278,7 @@ struct Event : public EVENT_DESCRIPTOR {
     }
 };
 
-void EnumerateEvents(GUID const& providerGuid, std::vector<Event>* events, std::wstring* outProviderName)
+void EnumerateSystemEvents(GUID const& providerGuid, std::vector<Event>* events, std::wstring* outProviderName)
 {
     ULONG bufferSize = 0;
     auto status = TdhEnumerateManifestProviderEvents((LPGUID) &providerGuid, nullptr, &bufferSize);
@@ -372,7 +376,100 @@ void FilterEvents(
     }
 }
 
+// ----------------------------------------------------------------------------
+// ETL
+
+struct EtlProvider {
+    Provider provider_;
+    std::vector<Event> events_;
+};
+
+struct GUIDHash {
+    size_t operator()(GUID const& key) const
+    {
+        static_assert((sizeof(key) % sizeof(size_t)) == 0, "sizeof(GUID) must be multiple of sizeof(size_t)");
+        auto p = (size_t const*)&key;
+        auto h = (size_t)0;
+        for (size_t i = 0; i < sizeof(key) / sizeof(size_t); ++i) {
+            h ^= p[i];
+        }
+        return h;
+    }
+};
+
+struct GUIDEqual {
+    bool operator()(GUID const& lhs, GUID const& rhs) const
+    {
+        return memcmp(&lhs, &rhs, sizeof(GUID)) == 0;
+    }
+};
+
+std::unordered_map<GUID, EtlProvider, GUIDHash, GUIDEqual> etlProviders_;
+
+void CALLBACK EventRecordCallback(EVENT_RECORD* eventRecord)
+{
+    auto const& hdr = eventRecord->EventHeader;
+
+    if (hdr.ProviderId == Microsoft_Windows_EventMetadata::GUID &&
+        hdr.EventDescriptor.Opcode == Microsoft_Windows_EventMetadata::EventInfo::Opcode) {
+        auto tei = (TRACE_EVENT_INFO*) eventRecord->UserData;
+
+        auto pr = etlProviders_.emplace(tei->ProviderGuid, EtlProvider());
+        auto p = &pr.first->second;
+        if (pr.second) {
+            p->provider_.SetGUID(tei->ProviderGuid);
+        }
+
+        if (p->provider_.name_.empty() && tei->ProviderNameOffset != 0) {
+            p->provider_.name_ = GetStringPtr((void*) tei, tei->ProviderNameOffset);
+        }
+
+        p->events_.emplace_back(tei->EventDescriptor, tei);
+    }
 }
+
+void EnumerateEtlProviders(
+    wchar_t* etlFile,
+    std::vector<Filter>* providerIds,
+    std::vector<Provider>* providers)
+{
+    EVENT_TRACE_LOGFILEW traceProps = {};
+    traceProps.LogFileName = etlFile;
+    traceProps.ProcessTraceMode = PROCESS_TRACE_MODE_EVENT_RECORD | PROCESS_TRACE_MODE_RAW_TIMESTAMP;
+    traceProps.EventRecordCallback = &EventRecordCallback;
+
+    auto traceHandle = OpenTraceW(&traceProps);
+    if (traceHandle == INVALID_PROCESSTRACE_HANDLE) {
+        fprintf(stderr, "error: failed to open ETL file: %ls\n", etlFile);
+        exit(1);
+    }
+
+    auto status = ProcessTrace(&traceHandle, 1, NULL, NULL);
+    status = CloseTrace(traceHandle);
+
+    for (auto ii = etlProviders_.begin(), ie = etlProviders_.end(); ii != ie; ) {
+        auto const& provider = ii->second.provider_;
+        if (provider.Matches(providerIds)) {
+            providers->emplace_back(provider);
+            ++ii;
+        } else {
+            ii = etlProviders_.erase(ii);
+        }
+    }
+}
+
+void EnumerateEtlEvents(GUID const& providerGuid, std::vector<Event>* events, std::wstring* outProviderName)
+{
+    (void) outProviderName;
+
+    auto ii = etlProviders_.find(providerGuid);
+    if (ii == etlProviders_.end()) {
+        events->clear();
+    } else {
+        *events = ii->second.events_;
+    }
+}
+
 
 
 // ----------------------------------------------------------------------------
@@ -735,6 +832,7 @@ int wmain(
     // Parse command line arguments
     std::vector<Filter> providerIds;
     std::vector<Filter> eventIds;
+    wchar_t* etlFile = nullptr;
     auto sortByName = false;
     auto sortByGuid = false;
     auto showKeywords = true;
@@ -744,6 +842,11 @@ int wmain(
     auto showEventStructs = true;
     auto showPropertyEnums = true;
     for (int i = 1; i < argc; ++i) {
+        if (wcsncmp(argv[i], L"--etl=", 6) == 0) {
+            etlFile = argv[i] + 6;
+            continue;
+        }
+
         if (wcsncmp(argv[i], L"--provider=", 11) == 0) {
             providerIds.emplace_back(argv[i] + 11);
             continue;
@@ -811,9 +914,33 @@ int wmain(
         eventIds.emplace_back(L"*");
     }
 
+    if (etlFile) {
+        showPropertyEnums = false;
+    }
+
     // Enumerate all providers that match providerIds
     std::vector<Provider> providers;
-    EnumerateProviders(&providerIds, &providers);
+    if (etlFile) {
+        EnumerateEtlProviders(etlFile, &providerIds, &providers);
+    } else {
+        EnumerateSystemProviders(&providerIds, &providers);
+    }
+
+    // Add any full GUIDs provided by user, even if not enumerated by the
+    // system/etl.  If we see events from this provider we'll try to patch the
+    // name from the EVENT_INFO.
+    for (auto providerId : providerIds) {
+        if (!providerId.wildcard_) {
+            GUID guid = {};
+            if (IIDFromString(providerId.part1_.c_str(), &guid) == S_OK) {
+                providers.emplace_back();
+                providers.back().guid_ = guid;
+                providers.back().guidStr_ = providerId.part1_;
+                providers.back().name_ = L"Unknown";
+                providers.back().manifest_ = true;
+            }
+        }
+    }
 
     // Sort providers
     if (sortByName) {
@@ -847,7 +974,11 @@ int wmain(
         // Enumerate events first, since that can help resolve the provider
         // name.
         std::vector<Event> events;
-        EnumerateEvents(provider.guid_, &events, &provider.name_);
+        if (etlFile) {
+            EnumerateEtlEvents(provider.guid_, &events, &provider.name_);
+        } else {
+            EnumerateSystemEvents(provider.guid_, &events, &provider.name_);
+        }
 
         // Print provider name/guid
         printf(
@@ -860,7 +991,7 @@ int wmain(
             provider.guidStr_.c_str());
 
         // Print field information
-        {
+        if (etlFile == nullptr) {
             std::vector<EVENT_FIELD_TYPE> fieldTypes;
             if (showKeywords) fieldTypes.emplace_back(EventKeywordInformation);
             if (showLevels)   fieldTypes.emplace_back(EventLevelInformation);
@@ -1016,4 +1147,3 @@ int wmain(
     // Done
     return 0;
 }
-

@@ -31,6 +31,10 @@ which is controlled from MainThread based on user input or timer.
 
 #include <unordered_map>
 
+// Verbosity of console output for normal operation:
+//     None = none
+//     Simple = recording changes, etc.
+//     Full = statistics about captured presents
 enum class ConsoleOutput {
     None,
     Simple,

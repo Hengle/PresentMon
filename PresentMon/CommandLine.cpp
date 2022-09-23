@@ -552,6 +552,11 @@ bool ParseCommandLine(int argc, char** argv)
         }
     }
 
+    // Disable top/stats console output if we're in DEBUG_VERBOSE
+    #if DEBUG_VERBOSE
+    args->mConsoleOutputType = ConsoleOutput::None;
+    #endif
+
     // If we're outputing CSV to stdout, we can't use it for console output.
     //
     // Further, we're currently limited to outputing CSV to either file(s) or
@@ -559,7 +564,7 @@ bool ParseCommandLine(int argc, char** argv)
     // since -output_stdout redirects all CSV output to stdout ignore
     // -multi_csv or -track_mixed_reality in this case.
     if (args->mOutputCsvToStdout) {
-        args->mConsoleOutputType = ConsoleOutput::None; // No warning needed if user used -no_top, just swap out Simple for None
+        args->mConsoleOutputType = ConsoleOutput::None;
 
         if (args->mOutputCsvFileName != nullptr) {
             PrintError("error: only one of -output_file or -output_stdout arguments can be used.\n");
@@ -581,14 +586,8 @@ bool ParseCommandLine(int argc, char** argv)
     // Try to initialize the console, and warn if we're not going to be able to
     // do the advanced display as requested.
     if (args->mConsoleOutputType == ConsoleOutput::Full && !args->mOutputCsvToStdout && !IsConsoleInitialized()) {
-        if (args->mOutputCsvToFile) {
-            PrintWarning("warning: could not initialize console display; continuing with -no_top.\n");
-            args->mConsoleOutputType = ConsoleOutput::Simple;
-        } else {
-            PrintError("error: could not initialize console display; use -no_top or -output_stdout in this environment.\n");
-            PrintHelp();
-            return false;
-        }
+        PrintWarning("warning: could not initialize console display; continuing with -no_top.\n");
+        args->mConsoleOutputType = ConsoleOutput::Simple;
     }
 
     // If -terminate_existing, warn about any normal arguments since we'll just
