@@ -206,10 +206,10 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     double msBetweenProducerPresents = 0.0;
     double msBetweenConsumerPresents = 0.0;
     if (args.mTrackINTCTimers) {
-        if (p.INTC_ProducerPresentTime != 0 && p.INTC_ProducerPresentTime > lastPresented->INTC_ProducerPresentTime) {
+        if (lastPresented->INTC_ProducerPresentTime != 0 && p.INTC_ProducerPresentTime > lastPresented->INTC_ProducerPresentTime) {
             msBetweenProducerPresents = 1000.0 * QpcDeltaToSeconds(p.INTC_ProducerPresentTime - lastPresented->INTC_ProducerPresentTime);
         }
-        if (p.INTC_ConsumerPresentTime != 0 && p.INTC_ConsumerPresentTime > lastPresented->INTC_ConsumerPresentTime) {
+        if (lastPresented->INTC_ConsumerPresentTime != 0 && p.INTC_ConsumerPresentTime > lastPresented->INTC_ConsumerPresentTime) {
             msBetweenConsumerPresents = 1000.0 * QpcDeltaToSeconds(p.INTC_ConsumerPresentTime - lastPresented->INTC_ConsumerPresentTime);
         }
     }
