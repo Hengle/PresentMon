@@ -101,6 +101,7 @@ struct Provider {
         : name_(GetStringPtr(enumInfo, info.ProviderNameOffset))
         , manifest_(info.SchemaSource == 0)
     {
+        SetGUID(info.ProviderGuid);
     }
 
     void SetGUID(GUID const& guid)

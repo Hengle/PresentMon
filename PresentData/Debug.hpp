@@ -13,6 +13,7 @@
 #include <stdint.h>
 
 struct PresentEvent; // Can't include PresentMonTraceConsumer.hpp because it includes Debug.hpp (before defining PresentEvent)
+struct PMTraceConsumer;
 struct EventMetadata;
 struct _EVENT_RECORD;
 union _LARGE_INTEGER;
@@ -24,7 +25,7 @@ void DebugInitialize(_LARGE_INTEGER* firstTimestamp, _LARGE_INTEGER const& times
 bool DebugDone();
 
 // Print debug information about the handled event
-void DebugEvent(_EVENT_RECORD* eventRecord, EventMetadata* metadata);
+void DebugEvent(PMTraceConsumer* pmConsumer, _EVENT_RECORD* eventRecord, EventMetadata* metadata);
 
 // Call when a new present is created
 void DebugCreatePresent(PresentEvent const& p);
@@ -42,7 +43,7 @@ int DebugPrintTimeDelta(uint64_t value);
 
 #define DebugInitialize(firstTimestamp, timestampFrequency) (void) firstTimestamp, timestampFrequency
 #define DebugDone()                                         false
-#define DebugEvent(eventRecord, metadata)                   (void) eventRecord, metadata
+#define DebugEvent(pmConsumer, eventRecord, metadata)       (void) pmConsumer, eventRecord, metadata
 #define DebugCreatePresent(p)                               (void) p
 #define DebugModifyPresent(p)                               (void) p
 #define DebugAssert(condition)                              assert(condition)

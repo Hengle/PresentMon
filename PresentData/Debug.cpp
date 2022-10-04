@@ -113,18 +113,6 @@ void PrintPresentHistoryModel(uint32_t model)
     default:                                             printf("Unknown (%u)", model); assert(false); break;
     }
 }
-void PrintTokenState(uint32_t state)
-{
-    using namespace Microsoft_Windows_Win32k;
-    switch (state) {
-    case TokenState::Completed: printf("Completed"); break;
-    case TokenState::InFrame:   printf("InFrame");   break;
-    case TokenState::Confirmed: printf("Confirmed"); break;
-    case TokenState::Retired:   printf("Retired");   break;
-    case TokenState::Discarded: printf("Discarded"); break;
-    default:                    printf("Unknown (%u)", state); assert(false); break;
-    }
-}
 void PrintQueuePacketType(uint32_t type)
 {
     using namespace Microsoft_Windows_DxgKrnl;
@@ -185,7 +173,6 @@ void PrintEventHeader(EVENT_RECORD* eventRecord, EventMetadata* metadata, char c
         else if (propFunc == PrintU64x)                 PrintU64x(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == DebugPrintTime)            DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == DebugPrintTimeDelta)       DebugPrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, propName));
-        else if (propFunc == PrintTokenState)           PrintTokenState(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintQueuePacketType)      PrintQueuePacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintDmaPacketType)        PrintDmaPacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintPresentFlags)         PrintPresentFlags(metadata->GetEventData<uint32_t>(eventRecord, propName));
@@ -286,7 +273,7 @@ bool DebugDone()
     return gDebugDone;
 }
 
-void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
+void DebugEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, EventMetadata* metadata)
 {
     auto const& hdr = eventRecord->EventHeader;
     auto id = hdr.EventDescriptor.Id;
@@ -421,9 +408,44 @@ void DebugEvent(EVENT_RECORD* eventRecord, EventMetadata* metadata)
         using namespace Microsoft_Windows_Win32k;
         switch (id) {
         case TokenCompositionSurfaceObject_Info::Id: PrintEventHeader(hdr, "Win32k_TokenCompositionSurfaceObject"); break;
-        case TokenStateChanged_Info::Id:             PrintEventHeader(eventRecord, metadata, "Win32K_TokenStateChanged",    { L"NewState",   PrintTokenState, }); break;
         case InputDeviceRead_Stop::Id:               PrintEventHeader(eventRecord, metadata, "Win32k_InputDeviceRead_Stop", { L"DeviceType", PrintU32, }); break;
         case RetrieveInputMessage_Info::Id:          PrintEventHeader(eventRecord, metadata, "Win32k_RetrieveInputMessage", { L"flags",      PrintU32, }); break;
+        case TokenStateChanged_Info::Id: {
+            EventDataDesc desc[] = {
+                { L"CompositionSurfaceLuid" },
+                { L"PresentCount" },
+                { L"BindId" },
+                { L"NewState" },
+            };
+            metadata->GetEventData(eventRecord, desc, _countof(desc));
+            auto CompositionSurfaceLuid = desc[0].GetData<uint64_t>();
+            auto PresentCount           = desc[1].GetData<uint32_t>();
+            auto BindId                 = desc[2].GetData<uint64_t>();
+            auto NewState               = desc[3].GetData<uint32_t>();
+
+            PrintEventHeader(hdr);
+            printf("Win32K_TokenStateChanged");
+
+            PMTraceConsumer::Win32KPresentHistoryToken key(CompositionSurfaceLuid, PresentCount, BindId);
+            auto eventIter = pmConsumer->mPresentByWin32KPresentHistoryToken.find(key);
+            if (eventIter == pmConsumer->mPresentByWin32KPresentHistoryToken.end()) {
+                printf(" (unknown present)");
+            } else {
+                auto present = eventIter->second;
+                printf(" p%llu", present->Id);
+            }
+
+            switch (NewState) {
+            case TokenState::Completed: printf(" NewState=Completed"); break;
+            case TokenState::InFrame:   printf(" NewState=InFrame");   break;
+            case TokenState::Confirmed: printf(" NewState=Confirmed"); break;
+            case TokenState::Retired:   printf(" NewState=Retired");   break;
+            case TokenState::Discarded: printf(" NewState=Discarded"); break;
+            default:                    printf(" NewState=Unknown (%u)", NewState); assert(false); break;
+            }
+
+            printf("\n");
+        }   break;
         }
         return;
     }

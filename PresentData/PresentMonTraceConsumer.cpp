@@ -168,7 +168,7 @@ PMTraceConsumer::PMTraceConsumer()
 
 void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
 {
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
 
     auto const& hdr = pEventRecord->EventHeader;
     switch (hdr.EventDescriptor.Id) {
@@ -436,7 +436,7 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
 
 void PMTraceConsumer::HandleIntelPCATEvent(EVENT_RECORD* pEventRecord)
 {
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
 
     auto const& hdr = pEventRecord->EventHeader;
     switch (hdr.EventDescriptor.Id) {
@@ -499,7 +499,7 @@ void PMTraceConsumer::HandleIntelPCATEvent(EVENT_RECORD* pEventRecord)
 
 void PMTraceConsumer::HandleD3D9Event(EVENT_RECORD* pEventRecord)
 {
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
 
     auto const& hdr = pEventRecord->EventHeader;
 
@@ -544,7 +544,7 @@ void PMTraceConsumer::HandleD3D9Event(EVENT_RECORD* pEventRecord)
 
 void PMTraceConsumer::HandleDXGIEvent(EVENT_RECORD* pEventRecord)
 {
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
 
     auto const& hdr = pEventRecord->EventHeader;
 
@@ -1057,7 +1057,7 @@ void PMTraceConsumer::HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint
 
 void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 {
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
 
     auto const& hdr = pEventRecord->EventHeader;
     switch (hdr.EventDescriptor.Id) {
@@ -1504,7 +1504,7 @@ void PMTraceConsumer::HandleWin7DxgkBlt(EVENT_RECORD* pEventRecord)
 {
     using namespace Microsoft_Windows_DxgKrnl::Win7;
 
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
     TRACK_PRESENT_PATH_GENERATE_ID();
 
     auto pBltEvent = reinterpret_cast<DXGKETW_BLTEVENT*>(pEventRecord->UserData);
@@ -1518,7 +1518,7 @@ void PMTraceConsumer::HandleWin7DxgkFlip(EVENT_RECORD* pEventRecord)
 {
     using namespace Microsoft_Windows_DxgKrnl::Win7;
 
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
     TRACK_PRESENT_PATH_GENERATE_ID();
 
     auto pFlipEvent = reinterpret_cast<DXGKETW_FLIPEVENT*>(pEventRecord->UserData);
@@ -1532,7 +1532,7 @@ void PMTraceConsumer::HandleWin7DxgkPresentHistory(EVENT_RECORD* pEventRecord)
 {
     using namespace Microsoft_Windows_DxgKrnl::Win7;
 
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
 
     auto pPresentHistoryEvent = reinterpret_cast<DXGKETW_PRESENTHISTORYEVENT*>(pEventRecord->UserData);
     if (pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_START) {
@@ -1552,7 +1552,7 @@ void PMTraceConsumer::HandleWin7DxgkQueuePacket(EVENT_RECORD* pEventRecord)
 {
     using namespace Microsoft_Windows_DxgKrnl::Win7;
 
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
 
     if (pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_START) {
         auto pSubmitEvent = reinterpret_cast<DXGKETW_QUEUESUBMITEVENT*>(pEventRecord->UserData);
@@ -1573,7 +1573,7 @@ void PMTraceConsumer::HandleWin7DxgkVSyncDPC(EVENT_RECORD* pEventRecord)
 {
     using namespace Microsoft_Windows_DxgKrnl::Win7;
 
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
     TRACK_PRESENT_PATH_GENERATE_ID();
 
     auto pVSyncDPCEvent = reinterpret_cast<DXGKETW_SCHEDULER_VSYNC_DPC*>(pEventRecord->UserData);
@@ -1586,7 +1586,7 @@ void PMTraceConsumer::HandleWin7DxgkMMIOFlip(EVENT_RECORD* pEventRecord)
 {
     using namespace Microsoft_Windows_DxgKrnl::Win7;
 
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
     TRACK_PRESENT_PATH_GENERATE_ID();
 
     if (pEventRecord->EventHeader.Flags & EVENT_HEADER_FLAG_32_BIT_HEADER)
@@ -1620,7 +1620,7 @@ std::size_t PMTraceConsumer::Win32KPresentHistoryTokenHash::operator()(PMTraceCo
 
 void PMTraceConsumer::HandleWin32kEvent(EVENT_RECORD* pEventRecord)
 {
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
 
     auto const& hdr = pEventRecord->EventHeader;
     switch (hdr.EventDescriptor.Id) {
@@ -1806,7 +1806,7 @@ void PMTraceConsumer::HandleWin32kEvent(EVENT_RECORD* pEventRecord)
 
 void PMTraceConsumer::HandleDWMEvent(EVENT_RECORD* pEventRecord)
 {
-    DebugEvent(pEventRecord, &mMetadata);
+    DebugEvent(this, pEventRecord, &mMetadata);
 
     auto const& hdr = pEventRecord->EventHeader;
     switch (hdr.EventDescriptor.Id) {
