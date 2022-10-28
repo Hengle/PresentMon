@@ -73,13 +73,20 @@ If you set your `user.name` and `user.email` git config accordingly, this line w
 
 ## How to add tracking for a new event
 
-1. In the appropriate provider's PresentData/ETW/\_\_\_.h file, add an
-   `EVENT_DESCRIPTOR_DECL()` line for the new event.  If this is a new
-   provider, start a new header as well.  If you have the provider's manifest
-   installed, or if you have an example .ETL file containing the event, then you
-   can use the Tools/etw\_list tool to extract the information and you should also
-   add the relevant command line to Tools/collect\_etw\_info.cmd to ensure the
-   event persists through updates.
+1. If this is a new provider, create a new header file in
+   PresentData/ETW/_provider\_name_.h (otherwise modify the existing one) and
+   add an `EVENT_DESCRIPTOR_DECL()` line to it for the new event.
+
+   If you have the provider's manifest installed, or if you have an example
+   .ETL file containing the event, then you can use the Tools/etw\_list tool to
+   extract the information and you should also add the relevant command line to
+   Tools/collect\_etw\_info.cmd to ensure the event persists through updates.
+   e.g.:
+
+    ```bat
+    > msbuild Tools\etw_list
+    > build\Debug\etw_list-dev-x64.exe --etl=TRACE.etl --provider=PROVIDER_NAME --event=* --no_event_structs
+    ```
 
 2. In PresentData/TraceSession.cpp, modify `EnableProviders()` to add the new
    event to the provider before it is enabled.  If this is a new provider, you
