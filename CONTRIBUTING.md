@@ -74,7 +74,7 @@ If you set your `user.name` and `user.email` git config accordingly, this line w
 ## How to add tracking for a new event
 
 1. If this is a new provider, create a new header file in
-   PresentData/ETW/_provider\_name_.h (otherwise modify the existing one) and
+   PresentData/ETW/_PROVIDER\_NAME_.h (otherwise modify the existing one) and
    add an `EVENT_DESCRIPTOR_DECL()` line to it for the new event.
 
    If you have the provider's manifest installed, or if you have an example
@@ -125,3 +125,21 @@ If you set your `user.name` and `user.email` git config accordingly, this line w
     or from first-hand knowledge about the event, or by stepping into the
     `mMetadata.GetEventData()` call and seeing what names/types of properties are
     iterated through.
+
+    *"Code to handle event"* will typically involve looking up the right
+    `PresentEvent` using one of `PMTraceConsumer`'s tracking data structures.
+    Which structure to look the present up in depends on when your event is created
+    among other factors.  `PMTraceConsumer::FindOrCreatePresent()` may be a good
+    default, or at least an example of how you might need to look up the present.
+
+If you need to add a column of data  to the output CSV:
+
+1. In PresentMon/CsvOutput.cpp, modify `WriteCsvHeader()` and `UpdateCsv()`.
+   It is important that the new column is added to the header and update
+   functions in the same order (with respect to other existing columns).
+
+2. In Tests/PresentMonTests.h, add a `Header` enum value and a case handling it
+   to `GetHeaderString()`.
+
+3. In Tests/PresentMon.cpp, add the new enum value to the appropriate
+   `headerGroups` in `PresentMonCsv::Open()`.
