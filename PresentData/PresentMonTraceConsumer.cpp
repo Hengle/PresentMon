@@ -75,6 +75,10 @@ uint32_t GetDeferredCompletionWaitCount(PresentEvent const& p)
 #define TRACK_PRESENT_PATH_SAVE_GENERATED_ID(present) (void) present
 #endif
 
+#if DEBUG_VERBOSE
+static uint64_t gNextPresentId = 1;
+#endif
+
 PresentEvent::PresentEvent()
     : PresentStartTime(0)
     , ProcessId(0)
@@ -142,17 +146,13 @@ PresentEvent::PresentEvent()
     , IsCompleted(false)
     , IsLost(false)
     , PresentInDwmWaitingStruct(false)
+    #ifdef TRACK_PRESENT_PATHS
+    , AnalysisPath(0ull)
+    #endif
+    #if DEBUG_VERBOSE
+    , Id(gNextPresentId++)
+    #endif
 {
-#ifdef TRACK_PRESENT_PATHS
-    AnalysisPath = 0ull;
-#endif
-
-#if DEBUG_VERBOSE
-    static uint64_t presentCount = 0;
-    presentCount += 1;
-    Id = presentCount;
-#endif
-
     memset(INTC_Timer, 0, sizeof(INTC_Timer));
     memset(INTC_Timers, 0, sizeof(INTC_Timers));
     memset(MemoryResidency, 0, sizeof(MemoryResidency));
@@ -174,28 +174,105 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
     switch (hdr.EventDescriptor.Id) {
     case Intel_Graphics_D3D10::QueueTimers_Info::Id:
     {
-        // FRAME_TIME_APP and FRAME_TIME_DRIVER are both emitted between
-        // Present_Start and Present_Stop.  FRAME_TIME_APP is emitted on the
-        // producer thread (the same thread as the Present() call) and
-        // FRAME_TIME_DRIVER is emitted on the consumer thread.
         auto Type = mMetadata.GetEventData<Intel_Graphics_D3D10::mTimerType>(pEventRecord, L"value");
         switch (Type) {
-        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_APP: {
-            auto iter = mPresentByThreadId.find(hdr.ThreadId);
-            if (iter != mPresentByThreadId.end()) {
-                auto present = iter->second.get();
-                DebugModifyPresent(present);
+        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_APP:
+        {
+            // FRAME_TIME_APP is emitted between Present_Start/Present_Stop on
+            // the same thread that Present() was called on.
+            auto present = FindThreadPresent(hdr.ThreadId);
+            if (present != nullptr) {
+                DebugAssert(present->PresentStopTime == 0);
+                DebugAssert(present->INTC_ProducerPresentTime == 0);
+                DebugAssert(present->INTC_ConsumerPresentTime == 0);
+
+                // It's possible for the driver to defer a previous present so
+                // long that we get its DXGK/etc. events after as subsequent
+                // Present() call.  When this happens, PresentMon mistakenly
+                // associates those events with the most recent Present() call.
+                //
+                // FARME_TIME_APP gives us an opportunity to fix that, since we
+                // know that this Present() hasn't actually be submitted by the
+                // driver yet we know that any DXGK/etc. presents already
+                // attached to it are really from some previous one.
+                //
+                // We don't try to figure out where they belong, we just throw
+                // them away by creating a new PresentEvent and taking the
+                // valid data from the old one.
+                if (present->DriverThreadId != 0 ||
+                    present->SeenDxgkPresent ||
+                    present->SeenWin32KEvents ||
+                    present->PresentMode != PresentMode::Unknown) {
+
+                    auto newPresent = std::make_shared<PresentEvent>();
+
+                    DebugModifyPresent(nullptr);
+                    #if DEBUG_VERBOSE
+                    gNextPresentId -= 1;
+                    newPresent->Id = present->Id;
+                    #endif
+
+                    newPresent->PresentStartTime = present->PresentStartTime;
+                    newPresent->ProcessId        = present->ProcessId;
+                    newPresent->ThreadId         = present->ThreadId;
+                    newPresent->Runtime          = present->Runtime;
+                    newPresent->SwapChainAddress = present->SwapChainAddress;
+                    newPresent->PresentFlags     = present->PresentFlags;
+                    newPresent->SyncInterval     = present->SyncInterval;
+
+                    RemoveLostPresent(present);
+
+                    TrackPresent(newPresent, &mOrderedPresentsByProcessId[newPresent->ProcessId]);
+
+                    present = newPresent;
+                }
+
+                DebugModifyPresent(present.get());
                 present->INTC_ProducerPresentTime = hdr.TimeStamp.QuadPart;
             }
             break;
         }
-        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_DRIVER: {
-            auto iter = mOrderedPresentsByProcessId.find(hdr.ProcessId);
-            if (iter != mOrderedPresentsByProcessId.end() && !iter->second.empty()) {
-                auto present = iter->second.rbegin()->second.get();
-                DebugModifyPresent(present);
-                present->INTC_ConsumerPresentTime = hdr.TimeStamp.QuadPart;
+        case Intel_Graphics_D3D10::mTimerType::FRAME_TIME_DRIVER:
+        {
+            // FRAME_TIME_DRIVER is emitted on the driver thread some time
+            // after FRAME_TIME_APP.  It should be the first event emitted on
+            // the driver thread (since the present hasn't beem submitted yet).
+            std::shared_ptr<PresentEvent> present;
+            auto presentsByThisProcess = &mOrderedPresentsByProcessId[hdr.ProcessId];
+            for (auto const& pr : *presentsByThisProcess) {
+                auto const& p = pr.second;
+                if (p->INTC_ProducerPresentTime != 0 && p->INTC_ConsumerPresentTime == 0) {
+                    DebugAssert(p->DriverThreadId == 0);
+                    DebugAssert(p->SeenDxgkPresent == false);
+                    DebugAssert(p->SeenWin32KEvents == false);
+                    DebugAssert(p->PresentMode == PresentMode::Unknown);
+
+                    present = p;
+                    DebugModifyPresent(present.get());
+                    present->DriverThreadId = hdr.ThreadId;
+
+                    SetThreadPresent(hdr.ThreadId, present);
+                    break;
+                }
             }
+
+            if (present == nullptr) {
+                if (!IsProcessTrackedForFiltering(hdr.ProcessId)) {
+                    return;
+                }
+
+                present = std::make_shared<PresentEvent>();
+
+                DebugModifyPresent(present.get());
+                present->PresentStartTime = *(uint64_t*) &hdr.TimeStamp;
+                present->ProcessId = hdr.ProcessId;
+                present->ThreadId = hdr.ThreadId;
+
+                TrackPresent(present, presentsByThisProcess);
+            }
+
+            DebugModifyPresent(present.get());
+            present->INTC_ConsumerPresentTime = hdr.TimeStamp.QuadPart;
             break;
         }
         default:
@@ -2257,17 +2334,30 @@ std::shared_ptr<PresentEvent> PMTraceConsumer::FindOrCreatePresent(EVENT_HEADER 
     auto presentsByThisProcess = &mOrderedPresentsByProcessId[hdr.ProcessId];
     for (auto const& pr : *presentsByThisProcess) {
         present = pr.second;
-        if (present->DriverThreadId == 0 &&
+
+        // Intel_Graphics_D3D10::QueueTimers_Info with FRAMETIME_DRIVER sets
+        // DriverThreadId to the Intel driver thread id, but in some hybrid
+        // cases DXGK etc. events may happen on a different driver thread so we
+        // allow driver thread to change in this case.
+        if ((present->DriverThreadId == 0 || present->INTC_ConsumerPresentTime != 0) &&
             present->SeenDxgkPresent == false &&
             present->SeenWin32KEvents == false &&
             present->PresentMode == PresentMode::Unknown) {
-            DebugModifyPresent(present.get());
-            present->DriverThreadId = hdr.ThreadId;
 
             // Set this present as the one the driver thread is working on.  We
             // leave it assigned to the one the application thread is working
             // on as well, in case we haven't yet seen application events such
             // as Present::Stop.
+            if (present->DriverThreadId != 0) {
+                auto ii = mPresentByThreadId.find(present->DriverThreadId);
+                if (ii != mPresentByThreadId.end() && ii->second == present) {
+                    mPresentByThreadId.erase(ii);
+                }
+            }
+
+            DebugModifyPresent(present.get());
+            present->DriverThreadId = hdr.ThreadId;
+
             SetThreadPresent(hdr.ThreadId, present);
 
             return present;
