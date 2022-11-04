@@ -147,10 +147,10 @@ struct INTC_TimerData {
 };
 
 struct PresentEvent {
-    uint64_t QpcTime;           // QPC value of the first event related to the Present (D3D9, DXGI, or DXGK Present_Start)
+    uint64_t PresentStartTime;  // QPC value of the first event related to the Present (D3D9, DXGI, or DXGK Present_Start)
     uint32_t ProcessId;         // ID of the process that presented
     uint32_t ThreadId;          // ID of the thread that presented
-    uint64_t TimeTaken;         // QPC duration between runtime present start and end
+    uint64_t PresentStopTime;   // QPC duration between runtime present start and end
     uint64_t GPUStartTime;      // QPC value when the frame's first DMA packet started
     uint64_t ReadyTime;         // QPC value when the frame's last DMA packet completed
     uint64_t GPUDuration;       // QPC duration during which a frame's DMA packet was running on
@@ -201,9 +201,10 @@ struct PresentEvent {
     uint64_t Hwnd;                        // mLastPresentByWindow
     uint32_t mAllPresentsTrackingIndex;   // mAllPresents.
     uint32_t QueueSubmitSequence;         // mPresentBySubmitSequence
-    // Note: the following index tracking structures, but are also considered useful data:
-    //       ProcessId : mOrderedPresentsByProcessId
-    //       ThreadId  : mPresentByThreadId
+    // Note: the following index tracking structures as well but are defined elsewhere:
+    //       ProcessId                 -> mOrderedPresentsByProcessId
+    //       ThreadId, DriverThreadId  -> mPresentByThreadId
+    //       PresentInDwmWaitingStruct -> mPresentsWaitingForDWM
 
     // How many PresentStop events from the thread to wait for before
     // enqueueing this present.
@@ -212,7 +213,8 @@ struct PresentEvent {
     // Properties deduced by watching events through present pipeline
     uint32_t DestWidth;
     uint32_t DestHeight;
-    uint32_t DriverBatchThreadId;
+    uint32_t DriverThreadId;    // If the present is deferred by the driver, this will hold the
+                                // threaad id that the driver finally presented on.
     Runtime Runtime;
     PresentMode PresentMode;
     PresentResult FinalState;
@@ -227,8 +229,8 @@ struct PresentEvent {
     bool IsCompleted;           // All expected events have been observed
     bool IsLost;                // This PresentEvent was found in an unexpected state or is too old
 
-    // We need a signal to prevent us from looking fruitlessly through the WaitingForDwm list
-    bool PresentInDwmWaitingStruct;
+    bool PresentInDwmWaitingStruct; // Whether this PresentEvent is currently stored in
+                                    // PMTraceConsumer::mPresentsWaitingForDWM
 
     // Additional transient tracking state
     std::deque<std::shared_ptr<PresentEvent>> DependentPresents;
@@ -243,7 +245,7 @@ struct PresentEvent {
     uint64_t Id;
     #endif
 
-    PresentEvent(EVENT_HEADER const& hdr, ::Runtime runtime);
+    PresentEvent();
 
 private:
     PresentEvent(PresentEvent const& copy); // dne
@@ -392,7 +394,7 @@ struct PMTraceConsumer
     std::vector<std::shared_ptr<PresentEvent>> mAllPresents;
 
     std::unordered_map<uint32_t, std::shared_ptr<PresentEvent>> mPresentByThreadId;                     // ThreadId -> PresentEvent
-    std::unordered_map<uint32_t, OrderedPresents>               mOrderedPresentsByProcessId;            // ProcessId -> ordered QpcTime -> PresentEvent
+    std::unordered_map<uint32_t, OrderedPresents>               mOrderedPresentsByProcessId;            // ProcessId -> ordered PresentStartTime -> PresentEvent
     std::unordered_map<uint32_t, std::shared_ptr<PresentEvent>> mPresentBySubmitSequence;               // SubmitSequenceId -> PresentEvent
     std::unordered_map<Win32KPresentHistoryToken, std::shared_ptr<PresentEvent>,
                        Win32KPresentHistoryTokenHash>           mPresentByWin32KPresentHistoryToken;    // Win32KPresentHistoryToken -> PresentEvent
@@ -450,10 +452,8 @@ struct PMTraceConsumer
 
 
     void HandleDxgkBlt(EVENT_HEADER const& hdr, uint64_t hwnd, bool redirectedPresent);
-    void HandleDxgkBltCancel(EVENT_HEADER const& hdr);
     void HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterval, bool mmio);
-    template<bool Win7>
-    void HandleDxgkQueueSubmit(EVENT_HEADER const& hdr, uint64_t hContext, uint32_t submitSequence, uint32_t packetType, bool isPresentPacket);
+    void HandleDxgkQueueSubmit(EVENT_HEADER const& hdr, uint64_t hContext, uint32_t submitSequence, uint32_t packetType, bool isPresentPacket, bool isWin7);
     void HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint64_t hContext, uint32_t submitSequence);
     void HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flags);
     void HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid);
@@ -466,7 +466,6 @@ struct PMTraceConsumer
     void CompletePresentHelper(std::shared_ptr<PresentEvent> const& p);
     void EnqueueDeferredCompletions(DeferredCompletions* deferredCompletions);
     void EnqueueDeferredPresent(std::shared_ptr<PresentEvent> const& p);
-    std::shared_ptr<PresentEvent> FindOrCreatePresent(EVENT_HEADER const& hdr);
     void TrackPresent(std::shared_ptr<PresentEvent> present, OrderedPresents* presentsByThisProcess);
     void RemoveLostPresent(std::shared_ptr<PresentEvent> present);
     void RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> present);
@@ -493,4 +492,8 @@ struct PMTraceConsumer
     void AddTrackedProcessForFiltering(uint32_t processID);
     void RemoveTrackedProcessForFiltering(uint32_t processID);
     bool IsProcessTrackedForFiltering(uint32_t processID);
+
+    void SetThreadPresent(uint32_t threadId, std::shared_ptr<PresentEvent> const& present);
+    std::shared_ptr<PresentEvent> FindThreadPresent(uint32_t threadId);
+    std::shared_ptr<PresentEvent> FindOrCreatePresent(EVENT_HEADER const& hdr);
 };

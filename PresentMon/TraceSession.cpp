@@ -147,6 +147,18 @@ double QpcDeltaToSeconds(uint64_t qpcDelta)
     return (double) qpcDelta / gSession.mQpcFrequency.QuadPart;
 }
 
+double PositiveQpcDeltaToSeconds(uint64_t qpcFrom, uint64_t qpcTo)
+{
+    return qpcFrom == 0 || qpcTo <= qpcFrom ? 0.0 : QpcDeltaToSeconds(qpcTo - qpcFrom);
+}
+
+double QpcDeltaToSeconds(uint64_t qpcFrom, uint64_t qpcTo)
+{
+    return qpcFrom == 0 || qpcTo == 0 || qpcFrom == qpcTo ? 0.0 :
+        qpcTo > qpcFrom ? QpcDeltaToSeconds(qpcTo - qpcFrom) :
+                         -QpcDeltaToSeconds(qpcFrom - qpcTo);
+}
+
 uint64_t SecondsDeltaToQpc(double secondsDelta)
 {
     return (uint64_t) (secondsDelta * gSession.mQpcFrequency.QuadPart);

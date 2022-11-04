@@ -1,6 +1,5 @@
-// Copyright (C) 2019-2021 Intel Corporation
+// Copyright (C) 2019-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
-
 #pragma once
 
 #define DEBUG_VERBOSE 0
@@ -27,9 +26,6 @@ bool DebugDone();
 // Print debug information about the handled event
 void DebugEvent(PMTraceConsumer* pmConsumer, _EVENT_RECORD* eventRecord, EventMetadata* metadata);
 
-// Call when a new present is created
-void DebugCreatePresent(PresentEvent const& p);
-
 // Call before modifying any PresentEvent member
 void DebugModifyPresent(PresentEvent const* p);
 
@@ -44,7 +40,6 @@ int DebugPrintTimeDelta(uint64_t value);
 #define DebugInitialize(firstTimestamp, timestampFrequency) (void) firstTimestamp, timestampFrequency
 #define DebugDone()                                         false
 #define DebugEvent(pmConsumer, eventRecord, metadata)       (void) pmConsumer, eventRecord, metadata
-#define DebugCreatePresent(p)                               (void) p
 #define DebugModifyPresent(p)                               (void) p
 #define DebugAssert(condition)                              assert(condition)
 

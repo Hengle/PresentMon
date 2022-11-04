@@ -147,7 +147,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     }
 
     // Early return if not outputing to CSV.
-    auto fp = GetOutputCsv(processInfo).mFile;
+    auto fp = GetOutputCsv(processInfo, p.ProcessId).mFile;
     if (fp == nullptr) {
         return;
     }
@@ -161,107 +161,55 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     auto lastPresented = chain.mPresentHistory[(chain.mNextPresentIndex - 1) % SwapChainData::PRESENT_HISTORY_MAX_COUNT].get();
 
     // Compute frame statistics.
-    double msBetweenPresents      = 1000.0 * QpcDeltaToSeconds(p.QpcTime - lastPresented->QpcTime);
-    double msInPresentApi         = 1000.0 * QpcDeltaToSeconds(p.TimeTaken);
-    double msUntilRenderStart     = 0.0;
+    double msBetweenPresents      = 1000.0 * PositiveQpcDeltaToSeconds(lastPresented->PresentStartTime, p.PresentStartTime);
+    double msInPresentApi         = 1000.0 * PositiveQpcDeltaToSeconds(p.PresentStartTime, p.PresentStopTime);
     double msUntilRenderComplete  = 0.0;
     double msUntilDisplayed       = 0.0;
     double msBetweenDisplayChange = 0.0;
-    double msSinceInput           = 0.0;
 
     if (args.mTrackDisplay) {
-        if (p.ReadyTime != 0) {
-            if (p.ReadyTime < p.QpcTime) {
-                msUntilRenderComplete = -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.ReadyTime);
-            } else {
-                msUntilRenderComplete = 1000.0 * QpcDeltaToSeconds(p.ReadyTime - p.QpcTime);
-            }
-        }
+        msUntilRenderComplete = 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.ReadyTime);
+
         if (presented) {
-            msUntilDisplayed = 1000.0 * QpcDeltaToSeconds(p.ScreenTime - p.QpcTime);
+            msUntilDisplayed = 1000.0 * PositiveQpcDeltaToSeconds(p.PresentStartTime, p.ScreenTime);
 
-            if (chain.mLastDisplayedPresentIndex > 0) {
+            if (chain.mLastDisplayedPresentIndex != UINT32_MAX) {
                 auto lastDisplayed = chain.mPresentHistory[chain.mLastDisplayedPresentIndex % SwapChainData::PRESENT_HISTORY_MAX_COUNT].get();
-                msBetweenDisplayChange = 1000.0 * QpcDeltaToSeconds(p.ScreenTime - lastDisplayed->ScreenTime);
+                msBetweenDisplayChange = 1000.0 * PositiveQpcDeltaToSeconds(lastDisplayed->ScreenTime, p.ScreenTime);
             }
         }
     }
 
+    double msUntilRenderStart = 0.0;
     if (args.mTrackGPU) {
-        if (p.GPUStartTime != 0) {
-            if (p.GPUStartTime < p.QpcTime) {
-                msUntilRenderStart = -1000.0 * QpcDeltaToSeconds(p.QpcTime - p.GPUStartTime);
-            } else {
-                msUntilRenderStart = 1000.0 * QpcDeltaToSeconds(p.GPUStartTime - p.QpcTime);
-            }
-        }
+        msUntilRenderStart = 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.GPUStartTime);
     }
 
+    double msSinceInput = 0.0;
     if (args.mTrackInput) {
         if (p.InputTime != 0) {
-            msSinceInput = 1000.0 * QpcDeltaToSeconds(p.QpcTime - p.InputTime);
+            msSinceInput = 1000.0 * QpcDeltaToSeconds(p.PresentStartTime - p.InputTime);
         }
     }
 
     double msBetweenProducerPresents = 0.0;
     double msBetweenConsumerPresents = 0.0;
     if (args.mTrackINTCTimers) {
-        if (lastPresented->INTC_ProducerPresentTime != 0 && p.INTC_ProducerPresentTime > lastPresented->INTC_ProducerPresentTime) {
-            msBetweenProducerPresents = 1000.0 * QpcDeltaToSeconds(p.INTC_ProducerPresentTime - lastPresented->INTC_ProducerPresentTime);
-        }
-        if (lastPresented->INTC_ConsumerPresentTime != 0 && p.INTC_ConsumerPresentTime > lastPresented->INTC_ConsumerPresentTime) {
-            msBetweenConsumerPresents = 1000.0 * QpcDeltaToSeconds(p.INTC_ConsumerPresentTime - lastPresented->INTC_ConsumerPresentTime);
-        }
+        msBetweenProducerPresents = 1000.0 * PositiveQpcDeltaToSeconds(lastPresented->INTC_ProducerPresentTime, p.INTC_ProducerPresentTime);
+        msBetweenConsumerPresents = 1000.0 * PositiveQpcDeltaToSeconds(lastPresented->INTC_ConsumerPresentTime, p.INTC_ConsumerPresentTime);
     }
 
-    // Temporary calculation while debugging.  Allow timestamps to be before or after QpcTime for now.
-    double INTC_AppWorkStart = 0.0;
-    double INTC_AppSimulationTime = 0.0;
-    double INTC_DriverWorkStart = 0.0;
-    double INTC_DriverWorkEnd = 0.0;
-    double INTC_KernelDriverSubmitStart = 0.0;
-    double INTC_KernelDriverSubmitEnd = 0.0;
-    double INTC_GPUStart = 0.0;
-    double INTC_GPUEnd = 0.0;
-    double INTC_KernelDriverFenceReport = 0.0;
-    double INTC_PresentAPICall = 0.0;
-    double INTC_FlipReceivedTime = 0.0;
-    double INTC_FlipReportTime = 0.0;
-    double INTC_FlipProgrammingTime = 0.0;
-    double INTC_ActualFlipTime = 0.0;
+    // ScheduledFlipTime[N] = max(ScheduledFlipTime[N-1], FlipReceivedTime[N-1]) + TargetFrameTime[N]
     double INTC_ScheduledFlipTime = 0.0;
-    if (args.mDebugINTCFramePacing) {
-        #define INTC_CALC_DELTA(_N) _N = p._N == 0         ? 0.0 : \
-                                         p._N >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(p._N - p.QpcTime) : \
-                                                            -1000.0 * QpcDeltaToSeconds(p.QpcTime - p._N)
-        INTC_CALC_DELTA(INTC_AppWorkStart);
-        INTC_CALC_DELTA(INTC_AppSimulationTime);
-        INTC_CALC_DELTA(INTC_DriverWorkStart);
-        INTC_CALC_DELTA(INTC_DriverWorkEnd);
-        INTC_CALC_DELTA(INTC_KernelDriverSubmitStart);
-        INTC_CALC_DELTA(INTC_KernelDriverSubmitEnd);
-        INTC_CALC_DELTA(INTC_GPUStart);
-        INTC_CALC_DELTA(INTC_GPUEnd);
-        INTC_CALC_DELTA(INTC_KernelDriverFenceReport);
-        INTC_CALC_DELTA(INTC_PresentAPICall);
-        INTC_CALC_DELTA(INTC_FlipReceivedTime);
-        INTC_CALC_DELTA(INTC_FlipReportTime);
-        INTC_CALC_DELTA(INTC_FlipProgrammingTime);
-        INTC_CALC_DELTA(INTC_ActualFlipTime);
-        #undef INTC_CALC_DELTA
+    if (args.mDebugINTCFramePacing && p.INTC_TargetFrameTime != 0 && chain.mLastDisplayedPresentIndex > 0) {
+        auto lastDisplayed = chain.mPresentHistory[chain.mLastDisplayedPresentIndex % SwapChainData::PRESENT_HISTORY_MAX_COUNT].get();
 
-        // ScheduledFlipTime[N] = max(ScheduledFlipTime[N-1], FlipReceivedTime[N-1]) + TargetFrameTime[N]
-        if (p.INTC_TargetFrameTime != 0 && chain.mLastDisplayedPresentIndex > 0) {
-            auto lastDisplayed = chain.mPresentHistory[chain.mLastDisplayedPresentIndex % SwapChainData::PRESENT_HISTORY_MAX_COUNT].get();
+        // NOTE: once ScheduledFlipTime is computed for a particular present,
+        // we store it by overwriting p.INTC_TargetFrameTime.
+        auto scheduledQpc = max(lastDisplayed->INTC_TargetFrameTime, lastDisplayed->INTC_FlipReceivedTime) + pp->INTC_TargetFrameTime;
+        pp->INTC_TargetFrameTime = scheduledQpc;
 
-            // NOTE: once ScheduledFlipTime is computed for a particular present,
-            // we store it by overwriting p.INTC_TargetFrameTime.
-            auto scheduledQpc = max(lastDisplayed->INTC_TargetFrameTime, lastDisplayed->INTC_FlipReceivedTime) + pp->INTC_TargetFrameTime;
-            pp->INTC_TargetFrameTime = scheduledQpc;
-
-            INTC_ScheduledFlipTime = scheduledQpc >= p.QpcTime ? 1000.0 * QpcDeltaToSeconds(scheduledQpc - p.QpcTime) :
-                                                                -1000.0 * QpcDeltaToSeconds(p.QpcTime - scheduledQpc);
-        }
+        INTC_ScheduledFlipTime = 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, scheduledQpc);
     }
 
     // Output in CSV format
@@ -276,7 +224,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     if (args.mOutputDateTime) {
         SYSTEMTIME st = {};
         uint64_t ns = 0;
-        QpcToLocalSystemTime(p.QpcTime, &st, &ns);
+        QpcToLocalSystemTime(p.PresentStartTime, &st, &ns);
         fprintf(fp, "%u-%u-%u %u:%02u:%02u.%09llu",
             st.wYear,
             st.wMonth,
@@ -286,7 +234,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
             st.wSecond,
             ns);
     } else {
-        fprintf(fp, "%.*lf", DBL_DIG - 1, QpcToSeconds(p.QpcTime));
+        fprintf(fp, "%.*lf", DBL_DIG - 1, QpcToSeconds(p.PresentStartTime));
     }
     fprintf(fp, ",%.*lf,%.*lf",
         DBL_DIG - 1, msInPresentApi,
@@ -301,7 +249,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     }
     if (args.mTrackDebug) {
         fprintf(fp, ",%d,%d",
-            p.DriverBatchThreadId != 0,
+            p.DriverThreadId != 0,
             p.DwmNotified);
     }
     if (args.mTrackGPU) {
@@ -344,28 +292,28 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
     }
     if (args.mOutputQpcTime) {
         if (args.mOutputQpcTimeInSeconds) {
-            fprintf(fp, ",%.*lf", DBL_DIG - 1, QpcDeltaToSeconds(p.QpcTime));
+            fprintf(fp, ",%.*lf", DBL_DIG - 1, QpcDeltaToSeconds(p.PresentStartTime));
         } else {
-            fprintf(fp, ",%llu", p.QpcTime);
+            fprintf(fp, ",%llu", p.PresentStartTime);
         }
     }
     if (args.mDebugINTCFramePacing) {
         fprintf(fp, ",%llu", p.INTC_FrameID);
-        fprintf(fp, ",%lf", INTC_AppWorkStart);
-        fprintf(fp, ",%lf", INTC_AppSimulationTime);
-        fprintf(fp, ",%lf", INTC_DriverWorkStart);
-        fprintf(fp, ",%lf", INTC_DriverWorkEnd);
-        fprintf(fp, ",%lf", INTC_KernelDriverSubmitStart);
-        fprintf(fp, ",%lf", INTC_KernelDriverSubmitEnd);
-        fprintf(fp, ",%lf", INTC_GPUStart);
-        fprintf(fp, ",%lf", INTC_GPUEnd);
-        fprintf(fp, ",%lf", INTC_KernelDriverFenceReport);
-        fprintf(fp, ",%lf", INTC_PresentAPICall);
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_AppWorkStart));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_AppSimulationTime));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_DriverWorkStart));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_DriverWorkEnd));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_KernelDriverSubmitStart));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_KernelDriverSubmitEnd));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_GPUStart));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_GPUEnd));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_KernelDriverFenceReport));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_PresentAPICall));
         fprintf(fp, ",%lf", INTC_ScheduledFlipTime);
-        fprintf(fp, ",%lf", INTC_FlipReceivedTime);
-        fprintf(fp, ",%lf", INTC_FlipReportTime);
-        fprintf(fp, ",%lf", INTC_FlipProgrammingTime);
-        fprintf(fp, ",%lf", INTC_ActualFlipTime);
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_FlipReceivedTime));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_FlipReportTime));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_FlipProgrammingTime));
+        fprintf(fp, ",%lf", 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, p.INTC_ActualFlipTime));
     }
     fprintf(fp, "\n");
 
@@ -389,19 +337,19 @@ with `-INDEX` appended to the file name.
 If `-include_mixed_reality` is used, a second CSV file will be generated with
 `_WMR` appended to the filename containing the WMR data.
 */
-static void GenerateFilename(char const* processName, char* path)
+static void GenerateFilename(char* path, char const* processName, uint32_t processId)
 {
     auto const& args = GetCommandLineArgs();
 
     char ext[_MAX_EXT];
     int pathLength = MAX_PATH;
 
-#define ADD_TO_PATH(...) do { \
-    if (path != nullptr) { \
-        auto result = _snprintf_s(path, pathLength, _TRUNCATE, __VA_ARGS__); \
-        if (result == -1) path = nullptr; else { path += result; pathLength -= result; } \
-    } \
-} while (0)
+    #define ADD_TO_PATH(...) do { \
+        if (path != nullptr) { \
+            auto result = _snprintf_s(path, pathLength, _TRUNCATE, __VA_ARGS__); \
+            if (result == -1) path = nullptr; else { path += result; pathLength -= result; } \
+        } \
+    } while (0)
 
     // Generate base filename.
     if (args.mOutputCsvFileName) {
@@ -420,7 +368,10 @@ static void GenerateFilename(char const* processName, char* path)
 
     // Append -PROCESSNAME if applicable.
     if (processName != nullptr) {
-        ADD_TO_PATH("-%s", processName);
+        if (strcmp(processName, "<error>")) {
+            ADD_TO_PATH("-%s", processName);
+        }
+        ADD_TO_PATH("-%u", processId);
     }
 
     // Append -INDEX if applicable.
@@ -430,9 +381,11 @@ static void GenerateFilename(char const* processName, char* path)
 
     // Append extension.
     ADD_TO_PATH("%s", ext);
+
+    #undef ADD_TO_PATH
 }
 
-static OutputCsv CreateOutputCsv(char const* processName)
+static OutputCsv CreateOutputCsv(char const* processName, uint32_t processId)
 {
     auto const& args = GetCommandLineArgs();
 
@@ -443,7 +396,7 @@ static OutputCsv CreateOutputCsv(char const* processName)
         outputCsv.mWmrFile = nullptr;       // WMR disallowed if -output_stdout
     } else {
         char path[MAX_PATH];
-        GenerateFilename(processName, path);
+        GenerateFilename(path, processName, processId);
 
         fopen_s(&outputCsv.mFile, path, "w");
 
@@ -459,7 +412,7 @@ static OutputCsv CreateOutputCsv(char const* processName)
     return outputCsv;
 }
 
-OutputCsv GetOutputCsv(ProcessInfo* processInfo)
+OutputCsv GetOutputCsv(ProcessInfo* processInfo, uint32_t processId)
 {
     auto const& args = GetCommandLineArgs();
 
@@ -469,10 +422,10 @@ OutputCsv GetOutputCsv(ProcessInfo* processInfo)
 
     if (args.mOutputCsvToFile && processInfo->mOutputCsv.mFile == nullptr) {
         if (args.mMultiCsv) {
-            processInfo->mOutputCsv = CreateOutputCsv(processInfo->mModuleName.c_str());
+            processInfo->mOutputCsv = CreateOutputCsv(processInfo->mModuleName.c_str(), processId);
         } else {
             if (gSingleOutputCsv.mFile == nullptr) {
-                gSingleOutputCsv = CreateOutputCsv(nullptr);
+                gSingleOutputCsv = CreateOutputCsv(nullptr, 0);
             }
 
             processInfo->mOutputCsv = gSingleOutputCsv;

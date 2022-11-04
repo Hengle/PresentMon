@@ -122,7 +122,7 @@ void GetPropertySize(TRACE_EVENT_INFO const& tei, EVENT_RECORD const& eventRecor
     }
 
     assert(size > 0);
-    assert(count > 0);
+    // Note: count can be 0 for array properties.
 
     *outSize = size;
     *outCount = count;
@@ -226,10 +226,9 @@ void EventMetadata::GetEventData(EVENT_RECORD* eventRecord, EventDataDesc* desc,
         if (propName != nullptr) {
             for (uint32_t j = 0; j < descCount; ++j) {
                 if (desc[j].status_ == PROP_STATUS_NOT_FOUND && wcscmp(propName, desc[j].name_) == 0) {
-                    assert(desc[j].arrayIndex_ < count);
-
-                    desc[j].data_   = (void*) ((uintptr_t) eventRecord->UserData + (offset + desc[j].arrayIndex_ * size));
+                    desc[j].data_   = (void*) ((uintptr_t) eventRecord->UserData + offset);
                     desc[j].size_   = size;
+                    desc[j].count_  = count;
                     desc[j].status_ = status;
 
                     foundCount += 1;

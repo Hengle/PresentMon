@@ -91,7 +91,7 @@ struct SwapChainData {
     std::shared_ptr<PresentEvent> mPresentHistory[PRESENT_HISTORY_MAX_COUNT];
     uint32_t mPresentHistoryCount;
     uint32_t mNextPresentIndex;
-    uint32_t mLastDisplayedPresentIndex;
+    uint32_t mLastDisplayedPresentIndex; // UINT32_MAX if none displayed
 };
 
 struct OutputCsv {
@@ -129,7 +129,7 @@ void WaitForConsumerThreadToExit();
 
 // CsvOutput.cpp:
 void IncrementRecordingCount();
-OutputCsv GetOutputCsv(ProcessInfo* processInfo);
+OutputCsv GetOutputCsv(ProcessInfo* processInfo, uint32_t processId);
 void CloseOutputCsv(ProcessInfo* processInfo);
 void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEvent* p);
 const char* FinalStateToDroppedString(PresentResult res);
@@ -159,6 +159,8 @@ void DequeueAnalyzedInfo(
     std::vector<std::shared_ptr<PresentEvent>>* lostPresentEvents,
     std::vector<std::shared_ptr<LateStageReprojectionEvent>>* lsrs);
 double QpcDeltaToSeconds(uint64_t qpcDelta);
+double QpcDeltaToSeconds(uint64_t qpcFrom, uint64_t qpcTo);
+double PositiveQpcDeltaToSeconds(uint64_t qpcFrom, uint64_t qpcTo);
 uint64_t SecondsDeltaToQpc(double secondsDelta);
 double QpcToSeconds(uint64_t qpc);
 void QpcToLocalSystemTime(uint64_t qpc, SYSTEMTIME* st, uint64_t* ns);

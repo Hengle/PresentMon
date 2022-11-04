@@ -22,7 +22,7 @@
 namespace {
 
 PresentEvent const* gModifiedPresent = nullptr;
-PresentEvent gOriginalPresentValues(EVENT_HEADER{}, Runtime::Other);
+PresentEvent gOriginalPresentValues;
 
 bool gDebugDone = false;
 bool gDebugTrace = false;
@@ -168,7 +168,8 @@ void PrintEventHeader(EVENT_RECORD* eventRecord, EventMetadata* metadata, char c
 
         printf(" %ls=", propName);
 
-             if (propFunc == PrintU32)                  PrintU32(metadata->GetEventData<uint32_t>(eventRecord, propName));
+             if (propFunc == PrintBool)                 PrintBool(metadata->GetEventData<uint32_t>(eventRecord, propName) != 0);
+        else if (propFunc == PrintU32)                  PrintU32(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintU64)                  PrintU64(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintU64x)                 PrintU64x(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == DebugPrintTime)            DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, propName));
@@ -200,7 +201,7 @@ void FlushModifiedPresent()
         printf("->"); \
         _Fn(gModifiedPresent->_Name); \
     }
-    FLUSH_MEMBER(DebugPrintTimeDelta, TimeTaken)
+    FLUSH_MEMBER(DebugPrintTime,      PresentStopTime)
     FLUSH_MEMBER(DebugPrintTime,      ReadyTime)
     FLUSH_MEMBER(DebugPrintTime,      ScreenTime)
     FLUSH_MEMBER(DebugPrintTime,      InputTime)
@@ -213,7 +214,7 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintU64x,           Hwnd)
     FLUSH_MEMBER(PrintU64x,           DxgkPresentHistoryToken)
     FLUSH_MEMBER(PrintU32,            QueueSubmitSequence)
-    FLUSH_MEMBER(PrintU32,            DriverBatchThreadId)
+    FLUSH_MEMBER(PrintU32,            DriverThreadId)
     FLUSH_MEMBER(PrintPresentMode,    PresentMode)
     FLUSH_MEMBER(PrintPresentResult,  FinalState)
     FLUSH_MEMBER(PrintBool,           SupportsTearing)
@@ -545,21 +546,6 @@ void DebugModifyPresent(PresentEvent const* p)
             gOriginalPresentValues = *p;
         }
     }
-}
-
-void DebugCreatePresent(PresentEvent const& p)
-{
-    if (!gDebugTrace) return;
-    FlushModifiedPresent();
-    PrintUpdateHeader(p.Id);
-    printf(" CreatePresent");
-    printf(" ProcessId=%u", p.ProcessId);
-    printf(" SwapChainAddress=%llx", p.SwapChainAddress);
-    printf(" PresentFlags=%x", p.PresentFlags);
-    printf(" SyncInterval=%u", p.SyncInterval);
-    printf(" Runtime=");
-    PrintRuntime(p.Runtime);
-    printf("\n");
 }
 
 #endif // if DEBUG_VERBOSE

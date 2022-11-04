@@ -663,13 +663,7 @@ ULONG TraceSession::Start(
         break;
     }
 
-    if (saveFirstTimestamp) {
-        SYSTEMTIME ust = {};
-        SYSTEMTIME lst = {};
-        FileTimeToSystemTime((FILETIME const*) &traceProps.LogfileHeader.StartTime, &ust);
-        SystemTimeToTzSpecificLocalTime(&traceProps.LogfileHeader.TimeZone, &ust, &lst);
-        SystemTimeToFileTime(&lst, &mStartTime);
-    } else {
+    if (etlPath == nullptr) {
         LARGE_INTEGER qpc1 = {};
         LARGE_INTEGER qpc2 = {};
         FILETIME ft = {};
@@ -678,6 +672,12 @@ ULONG TraceSession::Start(
         QueryPerformanceCounter(&qpc2);
         FileTimeToLocalFileTime(&ft, &mStartTime);
         mStartQpc.QuadPart = qpc1.QuadPart + (qpc2.QuadPart - qpc1.QuadPart) / 2;
+    } else {
+        SYSTEMTIME ust = {};
+        SYSTEMTIME lst = {};
+        FileTimeToSystemTime((FILETIME const*) &traceProps.LogfileHeader.StartTime, &ust);
+        SystemTimeToTzSpecificLocalTime(&traceProps.LogfileHeader.TimeZone, &ust, &lst);
+        SystemTimeToFileTime(&lst, &mStartTime);
     }
 
     DebugInitialize(&mStartQpc, mQpcFrequency);

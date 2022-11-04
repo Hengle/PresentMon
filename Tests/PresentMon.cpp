@@ -188,6 +188,20 @@ bool PresentMonCsv::Open(char const* file, int line, std::wstring const& path)
         }
     }
 
+    // Prevent warning: -track_debug requires display tracking; ignoring -no_track_display
+    size_t noTrackDisplayIdx = SIZE_MAX;
+    bool trackDebug = false;
+    for (size_t i = 0, n = params_.size(); i < n; ++i) {
+        if (wcscmp(params_[i], L"-track_debug") == 0) {
+            trackDebug = true;
+        } else if (wcscmp(params_[i], L"-no_track_display") == 0) {
+            noTrackDisplayIdx = i;
+        }
+    }
+    if (trackDebug && noTrackDisplayIdx != SIZE_MAX) {
+        params_.erase(params_.begin() + noTrackDisplayIdx);
+    }
+
     return true;
 }
 

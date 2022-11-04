@@ -233,7 +233,7 @@ void UpdateLsrCsv(LateStageReprojectionData& lsr, ProcessInfo* proc, LateStageRe
 {
     auto const& args = GetCommandLineArgs();
 
-    auto fp = GetOutputCsv(proc).mWmrFile;
+    auto fp = GetOutputCsv(proc, p.ProcessId).mWmrFile;
     if (fp == nullptr) {
         return;
     }

@@ -1,8 +1,9 @@
-:: Copyright (C) 2020-2021 Intel Corporation
+:: Copyright (C) 2020-2022 Intel Corporation
 :: SPDX-License-Identifier: MIT
 
 @echo off
 setlocal enabledelayedexpansion
+set toolsdir=%~dp0
 for %%a in ("%~dp0..") do set pmdir=%%~fa
 set only_x64_platform=0
 set use_debug_config=1
@@ -36,6 +37,33 @@ set errorcount=0
     goto args_begin
 :args_end
 
+:: -----------------------------------------------------------------------------
+:: Check dependencies
+set need_presentbench=0
+set need_tempdir=0
+
+if %do_default_gtests% EQU 1 set need_presentbench=1
+
+if %do_realtime_tests% EQU 1 (
+    set need_presentbench=1
+    set need_tempdir=1
+)
+
+if %need_presentbench% EQU 1 if not exist "%toolsdir%\PresentBench.exe" (
+    echo [31merror: dependency not found: %toolsdir%\PresentBench.exe[0m
+    exit /b 1
+)
+
+if %need_tempdir% EQU 1 (
+    if "%temp%"=="" (
+        echo [31merror: dependency not found: TEMP environment variable[0m
+        exit /b 1
+    )
+    if not exist "%temp%\." (
+        echo [31merror: dependency not found: TEMP directory: %temp%[0m
+        exit /b 1
+    )
+)
 
 :: -----------------------------------------------------------------------------
 echo [96mVersion lookup...[90m
@@ -117,9 +145,13 @@ if %use_release_config% EQU 1 (
 
 if %do_realtime_tests% EQU 1 (
     echo [90mRealtime collection tests...[0m
-    call :realtime_test "DX12" "DXGI"
-    call :realtime_test "DX9"  "D3D9"
-    call :realtime_test "VK"   "Other"
+
+    call :realtime_presentbench_test "DX12" "DXGI"
+    call :realtime_presentbench_test "DX9"  "D3D9"
+    call :realtime_presentbench_test "VK"   "Other"
+
+    call :realtime_multicsv_test
+
     echo.
 )
 
@@ -230,13 +262,7 @@ exit /b 0
     call :is_app_running /fi "imagename eq PresentBench.exe"
     if %errorlevel% NEQ 0 exit /b 1
 
-    if not exist "%~dp0PresentBench.exe" (
-        echo [31mwarning: dependency not found: %~dp0PresentBench.exe[0m
-        echo [31m         continuing, but tests requiring presents may fail[0m
-        exit /b 0
-    )
-
-    start /b "" "%~dp0PresentBench.exe" %* >NUL
+    start /b "" "%toolsdir%\PresentBench.exe" %* >NUL
     for /f "tokens=1,2 delims=:" %%a in ('tasklist /fi "imagename eq PresentBench.exe" /fo list') do (
         if "%%a" EQU "PID" (
             set /a started_target_app_pid=%%b
@@ -261,13 +287,13 @@ exit /b 0
     exit /b 0
 
 :: -----------------------------------------------------------------------------
-:realtime_test
+:realtime_presentbench_test
     set test_api=%~1
     set expected_runtime=%~2
 
     call :start_target_app /width=320 /height=240 /api=%test_api%
     if %errorlevel% NEQ 0 (
-        echo [31merror: realtime tests cannot run with a process named PresentBench.exe already running[0m
+        echo [31merror: realtime PresentBench tests cannot run with a process named PresentBench.exe already running[0m
         set /a errorcount=%errorcount%+1
         exit /b 0
     )
@@ -297,11 +323,60 @@ exit /b 0
         exit /b 0
     )
     if %saw_row% EQU 0 (
-        echo [31merror: realtime tests did not record any presents[0m
+        echo [31merror: realtime PresentBench test did not record any presents[0m
         set /a errorcount=%errorcount%+1
         exit /b 0
     )
 
     echo.   [90m%test_api%: %expected_runtime%, %present_mode%[0m
+    exit /b 0
+
+:: -----------------------------------------------------------------------------
+:realtime_multicsv_test
+    set target_app_pid_1=0
+    set target_app_pid_2=0
+
+    start /b "" "%toolsdir%\PresentBench.exe" /width=320 /height=240 >NUL
+    start /b "" "%toolsdir%\PresentBench.exe" /width=320 /height=240 >NUL
+    for /f "tokens=1,2 delims=:" %%a in ('tasklist /fi "imagename eq PresentBench.exe" /fo list') do (
+        if "%%a" EQU "PID" (
+            if "!target_app_pid_1!"=="0" (
+                set /a target_app_pid_1=%%b
+            ) else (
+                set /a target_app_pid_2=%%b
+            )
+        )
+    )
+
+    if %target_app_pid_2% EQU 0 (
+        echo [31merror: failed to obtain PresentBench PIDs[0m
+        set /a errorcount=%errorcount%+1
+        exit /b 0
+    )
+
+    "%pmdir%\build\%test_config%\PresentMon-%version%-x64.exe" -multi_csv -timed 2 -terminate_after_timed -output_file "%temp%\pm_multicsv_test.csv" >NUL 2>&1
+
+    taskkill /PID %target_app_pid_1% >NUL
+    taskkill /PID %target_app_pid_2% >NUL
+
+    :until_killed_1
+        call :is_app_running /fi "imagename eq PresentBench.exe" /fi "pid eq %target_app_pid_1%"
+        if %errorlevel% NEQ 0 goto until_killed_1
+    :until_killed_2
+        call :is_app_running /fi "imagename eq PresentBench.exe" /fi "pid eq %target_app_pid_2%"
+        if %errorlevel% NEQ 0 goto until_killed_2
+
+    if not exist "%temp%\pm_multicsv_test-PresentBench.exe-%target_app_pid_1%.csv" (
+        echo [31merror: expected csv output missing: %temp%\pm_multicsv_test-PresentBench.exe-%target_app_pid_1%.csv[0m
+        set /a errorcount=%errorcount%+1
+    )
+
+    if not exist "%temp%\pm_multicsv_test-PresentBench.exe-%target_app_pid_2%.csv" (
+        echo [31merror: expected csv output missing: %temp%\pm_multicsv_test-PresentBench.exe-%target_app_pid_2%.csv[0m
+        set /a errorcount=%errorcount%+1
+    )
+
+    del /Q "%temp%\pm_multicsv_test-*.csv"
+
     exit /b 0
 

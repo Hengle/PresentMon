@@ -152,7 +152,7 @@ void UpdateConsole(uint32_t processId, ProcessInfo const& processInfo)
 
         auto const& present0 = *chain.mPresentHistory[(chain.mNextPresentIndex - chain.mPresentHistoryCount) % SwapChainData::PRESENT_HISTORY_MAX_COUNT];
         auto const& presentN = *chain.mPresentHistory[(chain.mNextPresentIndex - 1) % SwapChainData::PRESENT_HISTORY_MAX_COUNT];
-        auto cpuAvg = QpcDeltaToSeconds(presentN.QpcTime - present0.QpcTime) / (chain.mPresentHistoryCount - 1);
+        auto cpuAvg = QpcDeltaToSeconds(presentN.PresentStartTime - present0.PresentStartTime) / (chain.mPresentHistoryCount - 1);
         auto gpuAvg = 0.0;
         auto dspAvg = 0.0;
         auto latAvg = 0.0;
@@ -173,7 +173,7 @@ void UpdateConsole(uint32_t processId, ProcessInfo const& processInfo)
                         display0ScreenTime = p->ScreenTime;
                     }
                     displayN = p.get();
-                    latSum += p->ScreenTime - p->QpcTime;
+                    latSum += p->ScreenTime - p->PresentStartTime;
                     displayCount += 1;
                 }
             }
