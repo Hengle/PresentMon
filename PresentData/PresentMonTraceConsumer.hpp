@@ -227,6 +227,7 @@ struct PresentEvent {
     bool SeenINTCFramePacerInfo;
     bool DwmNotified;
     bool SeenInFrameEvent;      // This present has gotten a Win32k TokenStateChanged event into InFrame state
+    bool GpuFrameCompleted;     // This present has already seen an event that caused GpuTrace::CompleteFrame() to be called.
     bool IsCompleted;           // All expected events have been observed
     bool IsLost;                // This PresentEvent was found in an unexpected state or is too old
 

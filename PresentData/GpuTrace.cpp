@@ -575,19 +575,22 @@ void GpuTrace::StopPagingQueuePacket(uint64_t sequenceId, uint64_t timestamp)
 
 void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
 {
-    // Note: there is a potential race here because QueuePacket_Stop occurs
-    // sometime after DmaPacket_Info it's possible that some small portion of
-    // the next frame's GPU work has both started and completed before
-    // QueuePacket_Stop and will be attributed to this frame.  However, this is
-    // necessarily a small amount of work, and we can't use DMA packets as not
-    // all present types create them.
+    // There are a few different events that can be used to complete the GPU
+    // trace for each frame, e.g. QueuePacket_Stop for a present packet, or
+    // MMIOFlipMultiPlaneOverlay_Info, and they can occur in any order so we
+    // only apply the first one we see.
+    if (pEvent->GpuFrameCompleted) {
+        return;
+    }
+
+    VerboseTraceBeforeModifyingPresent(pEvent);
+    pEvent->GpuFrameCompleted = true;
+
     auto ii = mProcessFrameInfo.find(pEvent->ProcessId);
     if (ii != mProcessFrameInfo.end()) {
         auto frameInfo = &ii->second;
         auto packetTrace = &frameInfo->mOtherEngines;
         auto videoTrace = &frameInfo->mVideoEngines;
-
-        VerboseTraceBeforeModifyingPresent(pEvent);
 
         // Update GPUStartTime/ReadyTime/GPUDuration if any DMA packets were
         // observed.
@@ -657,5 +660,11 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
             videoTrace->mFirstPacketTime = timestamp;
             videoTrace->mRunningPacketStartTime = timestamp;
         }
+    }
+
+    // If we did not track any GPU work, use the frame completion time as the
+    // ready time.
+    if (pEvent->ReadyTime == 0) {
+        pEvent->ReadyTime = timestamp;
     }
 }

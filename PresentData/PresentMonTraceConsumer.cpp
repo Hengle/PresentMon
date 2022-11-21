@@ -144,6 +144,7 @@ PresentEvent::PresentEvent()
     , SeenINTCFramePacerInfo(false)
     , DwmNotified(false)
     , SeenInFrameEvent(false)
+    , GpuFrameCompleted(false)
     , IsCompleted(false)
     , IsLost(false)
     , PresentInDwmWaitingStruct(false)
@@ -810,7 +811,7 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
 
 void PMTraceConsumer::HandleDxgkQueueComplete(uint64_t timestamp, uint64_t hContext, uint32_t submitSequence)
 {
-    // Track GPU execution
+    // Track GPU execution of the packet
     if (mTrackGPU) {
         mGpuTrace.CompleteQueuePacket(hContext, submitSequence, timestamp);
     }
@@ -825,7 +826,14 @@ void PMTraceConsumer::HandleDxgkQueueComplete(uint64_t timestamp, uint64_t hCont
 
             TRACK_PRESENT_PATH_SAVE_GENERATED_ID(pEvent);
 
-            // Assign any tracked accumulated GPU work to the present.
+            // Stop tracking GPU work for this present.
+            //
+            // Note: there is a potential race here because QueuePacket_Stop
+            // occurs sometime after DmaPacket_Info it's possible that some
+            // small portion of the next frame's GPU work has started before
+            // QueuePacket_Stop and will be attributed to this frame.  However,
+            // this is necessarily a small amount of work, and we can't use DMA
+            // packets as not all present types create them.
             if (mTrackGPU) {
                 mGpuTrace.CompleteFrame(pEvent.get(), timestamp);
             }
@@ -1173,12 +1181,11 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 
             TRACK_PRESENT_PATH(present);
 
+            // Complete the GPU tracking for this frame.
+            //
             // For some present modes (e.g., Hardware_Legacy_Flip) this may be
             // the first event telling us the present is ready.
-            if (present->ReadyTime == 0) {
-                VerboseTraceBeforeModifyingPresent(present.get());
-                present->ReadyTime = hdr.TimeStamp.QuadPart;
-            }
+            mGpuTrace.CompleteFrame(present.get(), hdr.TimeStamp.QuadPart);
 
             // Check and handle the post-flip status if available.
             if (flipEntryStatusAfterFlipValid) {
