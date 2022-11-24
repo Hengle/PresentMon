@@ -541,14 +541,14 @@ void GpuTrace::StartPagingQueuePacket(uint64_t sequenceId, uint64_t timestamp)
         auto frameInfo = &mProcessFrameInfo.emplace(pagingIter->second, ProcessFrameInfo{}).first->second;
         auto timer = &frameInfo->mResidencyTimers[DXGK_RESIDENCY_EVENT_PAGING_QUEUE_PACKET];
 
-        // If this fires, then either a PagingQueuePacket_Stop event
-        // was missed (which is expected but should be rare) or
-        // multiple paging packets can execute in parallel (which
-        // violates the assumption we're making).  If the latter, this
+        // mStartTime should be 0, if it isn't then either a
+        // PagingQueuePacket_Stop event was missed (which is expected but
+        // should be rare) or multiple paging packets can execute in parallel
+        // (which violates the assumption we're making).  If the latter, this
         // needs to be fixed.
-        DebugAssert(timer->mStartTime == 0);
-
-        timer->mStartTime = timestamp;
+        if (timer->mStartTime == 0) {
+            timer->mStartTime = timestamp;
+        }
     }
 }
 
