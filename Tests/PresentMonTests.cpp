@@ -203,6 +203,7 @@ int wmain(
                 PresentMon::exePath_.c_str(),
                 goldDir.c_str());
             help = true;
+            argv[i] = (wchar_t*) L"--help"; // gtest only recognises this one
             break;
         }
     }

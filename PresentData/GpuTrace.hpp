@@ -96,10 +96,8 @@ class GpuTrace {
     void EnqueueWork(Context* context, uint32_t sequenceId, uint64_t timestamp);
     bool CompleteWork(Context* context, uint32_t sequenceId, uint64_t timestamp);
 
-    #if DEBUG_VERBOSE
     uint32_t LookupPacketTraceProcessId(PacketTrace* packetTrace) const;
-    void DebugPrintRunningContexts() const;
-    #endif
+    void PrintRunningContexts() const;
 
 public:
     explicit GpuTrace(PMTraceConsumer* pmConsumer);

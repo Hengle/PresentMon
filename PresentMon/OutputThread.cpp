@@ -474,10 +474,6 @@ done:
     if (terminatedProcessIndex > 0) {
         terminatedProcesses->erase(terminatedProcesses->begin(), terminatedProcesses->begin() + terminatedProcessIndex);
     }
-
-    if (DebugDone()) {
-        ExitMainThread();
-    }
 }
 
 void Output()

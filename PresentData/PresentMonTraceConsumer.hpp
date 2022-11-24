@@ -199,8 +199,8 @@ struct PresentEvent {
     uint64_t DxgkPresentHistoryTokenData; // mPresentByDxgkPresentHistoryTokenData
     uint64_t DxgkContext;                 // mPresentByDxgkContext
     uint64_t Hwnd;                        // mLastPresentByWindow
-    uint32_t mAllPresentsTrackingIndex;   // mAllPresents.
     uint32_t QueueSubmitSequence;         // mPresentBySubmitSequence
+    uint32_t mAllPresentsTrackingIndex;   // mAllPresents.
     // Note: the following index tracking structures as well but are defined elsewhere:
     //       ProcessId                 -> mOrderedPresentsByProcessId
     //       ThreadId, DriverThreadId  -> mPresentByThreadId
@@ -220,7 +220,8 @@ struct PresentEvent {
     PresentResult FinalState;
     InputDeviceType InputType;
     bool SupportsTearing;
-    bool MMIO;
+    bool WaitForFlipEvent;
+    bool WaitForMPOFlipEvent;
     bool SeenDxgkPresent;
     bool SeenWin32KEvents;
     bool SeenINTCFramePacerInfo;
@@ -241,7 +242,7 @@ struct PresentEvent {
     #endif
 
     // Give every present a unique id for debugging.
-    #if DEBUG_VERBOSE
+    #ifndef NDEBUG
     uint64_t Id;
     #endif
 
@@ -353,9 +354,11 @@ struct PMTraceConsumer
     // DXGK, driver threads).  It's also used to detect discarded presents when
     // newer presents are displayed from the same swapchain.
     //
-    // mPresentBySubmitSequence stores in-progress presents associated with
-    // each present queue packet.  Presents should be removed as the queue
-    // packet completes.
+    // mPresentBySubmitSequence stores presents who have had a present packet
+    // submitted on to a queue until they are completed or discarded.  It's
+    // used to associate those presents to various DXGK events (such as
+    // MMIOFlip, IndependentFlip and *SyncDPC) which reference the submit
+    // sequence id.
     //
     // mPresentByWin32KPresentHistoryToken stores the in-progress present
     // associated with each Win32KPresentHistoryToken, which is a unique key
@@ -395,7 +398,8 @@ struct PMTraceConsumer
 
     std::unordered_map<uint32_t, std::shared_ptr<PresentEvent>> mPresentByThreadId;                     // ThreadId -> PresentEvent
     std::unordered_map<uint32_t, OrderedPresents>               mOrderedPresentsByProcessId;            // ProcessId -> ordered PresentStartTime -> PresentEvent
-    std::unordered_map<uint32_t, std::shared_ptr<PresentEvent>> mPresentBySubmitSequence;               // SubmitSequenceId -> PresentEvent
+    std::unordered_map<uint32_t, std::unordered_map<uint64_t, std::shared_ptr<PresentEvent>>>
+                                                                mPresentBySubmitSequence;               // SubmitSequenceId -> hContext -> PresentEvent
     std::unordered_map<Win32KPresentHistoryToken, std::shared_ptr<PresentEvent>,
                        Win32KPresentHistoryTokenHash>           mPresentByWin32KPresentHistoryToken;    // Win32KPresentHistoryToken -> PresentEvent
     std::unordered_map<uint64_t, std::shared_ptr<PresentEvent>> mPresentByDxgkPresentHistoryToken;      // DxgkPresentHistoryToken -> PresentEvent
@@ -452,13 +456,11 @@ struct PMTraceConsumer
 
 
     void HandleDxgkBlt(EVENT_HEADER const& hdr, uint64_t hwnd, bool redirectedPresent);
-    void HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterval, bool mmio);
+    void HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterval, bool isMMIOFlip, bool isMPOFlip);
     void HandleDxgkQueueSubmit(EVENT_HEADER const& hdr, uint64_t hContext, uint32_t submitSequence, uint32_t packetType, bool isPresentPacket, bool isWin7);
-    void HandleDxgkQueueComplete(EVENT_HEADER const& hdr, uint64_t hContext, uint32_t submitSequence);
-    void HandleDxgkMMIOFlip(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flags);
-    void HandleDxgkMMIOFlipMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, uint32_t flipEntryStatusAfterFlip, bool flipEntryStatusAfterFlipValid);
-    void HandleDxgkSyncDPC(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence);
-    void HandleDxgkSyncDPCMPO(EVENT_HEADER const& hdr, uint32_t flipSubmitSequence, bool isMultiplane);
+    void HandleDxgkQueueComplete(uint64_t timestamp, uint64_t hContext, uint32_t submitSequence);
+    void HandleDxgkMMIOFlip(uint64_t timestamp, uint32_t submitSequence, uint32_t flags);
+    void HandleDxgkSyncDPC(uint64_t timestamp, uint32_t submitSequence);
     void HandleDxgkPresentHistory(EVENT_HEADER const& hdr, uint64_t token, uint64_t tokenData, Microsoft_Windows_DxgKrnl::PresentModel presentModel);
     void HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint64_t token);
 
@@ -468,7 +470,8 @@ struct PMTraceConsumer
     void EnqueueDeferredPresent(std::shared_ptr<PresentEvent> const& p);
     void TrackPresent(std::shared_ptr<PresentEvent> present, OrderedPresents* presentsByThisProcess);
     void RemoveLostPresent(std::shared_ptr<PresentEvent> present);
-    void RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> present);
+    void RemovePresentFromTemporaryTrackingCollections(std::shared_ptr<PresentEvent> const& present);
+    void RemovePresentFromSubmitSequenceIdTracking(std::shared_ptr<PresentEvent> const& present);
     void RuntimePresentStart(Runtime runtime, EVENT_HEADER const& hdr, uint64_t swapchainAddr, uint32_t dxgiPresentFlags, int32_t syncInterval);
     void RuntimePresentStop(Runtime runtime, EVENT_HEADER const& hdr, uint32_t result);
 
@@ -496,4 +499,5 @@ struct PMTraceConsumer
     void SetThreadPresent(uint32_t threadId, std::shared_ptr<PresentEvent> const& present);
     std::shared_ptr<PresentEvent> FindThreadPresent(uint32_t threadId);
     std::shared_ptr<PresentEvent> FindOrCreatePresent(EVENT_HEADER const& hdr);
+    std::shared_ptr<PresentEvent> FindPresentBySubmitSequence(uint32_t submitSequence);
 };

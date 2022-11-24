@@ -3,8 +3,6 @@
 
 #include "Debug.hpp"
 
-#if DEBUG_VERBOSE
-
 #include "PresentMonTraceConsumer.hpp"
 
 #include "ETW/Intel_Graphics_D3D10.h"
@@ -17,15 +15,14 @@
 
 #include <assert.h>
 #include <dxgi.h>
-#include <initializer_list>
 
 namespace {
+
+bool gVerboseTraceEnabled = false;
 
 PresentEvent const* gModifiedPresent = nullptr;
 PresentEvent gOriginalPresentValues;
 
-bool gDebugDone = false;
-bool gDebugTrace = false;
 LARGE_INTEGER* gFirstTimestamp = nullptr;
 LARGE_INTEGER gTimestampFrequency = {};
 
@@ -172,8 +169,8 @@ void PrintEventHeader(EVENT_RECORD* eventRecord, EventMetadata* metadata, char c
         else if (propFunc == PrintU32)                  PrintU32(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintU64)                  PrintU64(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintU64x)                 PrintU64x(metadata->GetEventData<uint64_t>(eventRecord, propName));
-        else if (propFunc == DebugPrintTime)            DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, propName));
-        else if (propFunc == DebugPrintTimeDelta)       DebugPrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, propName));
+        else if (propFunc == PrintTime)                 PrintTime(metadata->GetEventData<uint64_t>(eventRecord, propName));
+        else if (propFunc == PrintTimeDelta)            PrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintQueuePacketType)      PrintQueuePacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintDmaPacketType)        PrintDmaPacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintPresentFlags)         PrintPresentFlags(metadata->GetEventData<uint32_t>(eventRecord, propName));
@@ -183,60 +180,66 @@ void PrintEventHeader(EVENT_RECORD* eventRecord, EventMetadata* metadata, char c
     printf("\n");
 }
 
-void PrintUpdateHeader(uint64_t id, int indent=0)
-{
-    printf("%*sp%llu", 17 + 6 + 6 + indent*4, "", id);
-}
-
 void FlushModifiedPresent()
 {
     if (gModifiedPresent == nullptr) return;
 
     uint32_t changedCount = 0;
+
+#ifdef NDEBUG
+#define PRINT_PRESENT_ID(_P)
+#else
+#define PRINT_PRESENT_ID(_P) printf("p%llu", gModifiedPresent->Id)
+#endif
 #define FLUSH_MEMBER(_Fn, _Name) \
     if (gModifiedPresent->_Name != gOriginalPresentValues._Name) { \
-        if (changedCount++ == 0) PrintUpdateHeader(gModifiedPresent->Id); \
+        if (changedCount++ == 0) { \
+            printf("%*s", 17 + 6 + 6, ""); \
+            PRINT_PRESENT_ID(gModifiedPresent); \
+        } \
         printf(" " #_Name "="); \
         _Fn(gOriginalPresentValues._Name); \
         printf("->"); \
         _Fn(gModifiedPresent->_Name); \
     }
-    FLUSH_MEMBER(DebugPrintTime,      PresentStopTime)
-    FLUSH_MEMBER(DebugPrintTime,      ReadyTime)
-    FLUSH_MEMBER(DebugPrintTime,      ScreenTime)
-    FLUSH_MEMBER(DebugPrintTime,      InputTime)
-    FLUSH_MEMBER(DebugPrintTime,      GPUStartTime)
-    FLUSH_MEMBER(DebugPrintTimeDelta, GPUDuration)
-    FLUSH_MEMBER(DebugPrintTimeDelta, GPUVideoDuration)
-    FLUSH_MEMBER(PrintU64x,           SwapChainAddress)
-    FLUSH_MEMBER(PrintU32,            SyncInterval)
-    FLUSH_MEMBER(PrintU32,            PresentFlags)
-    FLUSH_MEMBER(PrintU64x,           Hwnd)
-    FLUSH_MEMBER(PrintU64x,           DxgkPresentHistoryToken)
-    FLUSH_MEMBER(PrintU32,            QueueSubmitSequence)
-    FLUSH_MEMBER(PrintU32,            DriverThreadId)
-    FLUSH_MEMBER(PrintPresentMode,    PresentMode)
-    FLUSH_MEMBER(PrintPresentResult,  FinalState)
-    FLUSH_MEMBER(PrintBool,           SupportsTearing)
-    FLUSH_MEMBER(PrintBool,           MMIO)
-    FLUSH_MEMBER(PrintBool,           SeenDxgkPresent)
-    FLUSH_MEMBER(PrintBool,           SeenWin32KEvents)
-    FLUSH_MEMBER(PrintBool,           DwmNotified)
-    FLUSH_MEMBER(PrintBool,           IsCompleted)
-    FLUSH_MEMBER(PrintBool,           IsLost)
-    FLUSH_MEMBER(PrintU32,            DeferredCompletionWaitCount)
-    FLUSH_MEMBER(DebugPrintTime,      INTC_ProducerPresentTime)
-    FLUSH_MEMBER(DebugPrintTime,      INTC_ConsumerPresentTime)
-    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timer[INTC_TIMER_WAIT_IF_FULL].mAccumulatedTime)
-    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timer[INTC_TIMER_WAIT_IF_EMPTY].mAccumulatedTime)
-    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timer[INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC].mAccumulatedTime)
-    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timer[INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN].mAccumulatedTime)
-    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timer[INTC_TIMER_WAIT_FOR_FENCE].mAccumulatedTime)
-    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timer[INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED].mAccumulatedTime)
-    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timers[INTC_GPU_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU])
-    FLUSH_MEMBER(DebugPrintTimeDelta, INTC_Timers[INTC_GPU_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA])
-    FLUSH_MEMBER(PrintU64,            INTC_FrameID)
+    FLUSH_MEMBER(PrintTime,          PresentStopTime)
+    FLUSH_MEMBER(PrintTime,          ReadyTime)
+    FLUSH_MEMBER(PrintTime,          ScreenTime)
+    FLUSH_MEMBER(PrintTime,          InputTime)
+    FLUSH_MEMBER(PrintTime,          GPUStartTime)
+    FLUSH_MEMBER(PrintTimeDelta,     GPUDuration)
+    FLUSH_MEMBER(PrintTimeDelta,     GPUVideoDuration)
+    FLUSH_MEMBER(PrintU64x,          SwapChainAddress)
+    FLUSH_MEMBER(PrintU32,           SyncInterval)
+    FLUSH_MEMBER(PrintU32,           PresentFlags)
+    FLUSH_MEMBER(PrintU64x,          Hwnd)
+    FLUSH_MEMBER(PrintU64x,          DxgkPresentHistoryToken)
+    FLUSH_MEMBER(PrintU32,           QueueSubmitSequence)
+    FLUSH_MEMBER(PrintU32,           DriverThreadId)
+    FLUSH_MEMBER(PrintPresentMode,   PresentMode)
+    FLUSH_MEMBER(PrintPresentResult, FinalState)
+    FLUSH_MEMBER(PrintBool,          SupportsTearing)
+    FLUSH_MEMBER(PrintBool,          WaitForFlipEvent)
+    FLUSH_MEMBER(PrintBool,          WaitForMPOFlipEvent)
+    FLUSH_MEMBER(PrintBool,          SeenDxgkPresent)
+    FLUSH_MEMBER(PrintBool,          SeenWin32KEvents)
+    FLUSH_MEMBER(PrintBool,          DwmNotified)
+    FLUSH_MEMBER(PrintBool,          IsCompleted)
+    FLUSH_MEMBER(PrintBool,          IsLost)
+    FLUSH_MEMBER(PrintU32,           DeferredCompletionWaitCount)
+    FLUSH_MEMBER(PrintTime,          INTC_ProducerPresentTime)
+    FLUSH_MEMBER(PrintTime,          INTC_ConsumerPresentTime)
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_Timer[INTC_TIMER_WAIT_IF_FULL].mAccumulatedTime)
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_Timer[INTC_TIMER_WAIT_IF_EMPTY].mAccumulatedTime)
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_Timer[INTC_TIMER_WAIT_UNTIL_EMPTY_SYNC].mAccumulatedTime)
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_Timer[INTC_TIMER_WAIT_UNTIL_EMPTY_DRAIN].mAccumulatedTime)
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_Timer[INTC_TIMER_WAIT_FOR_FENCE].mAccumulatedTime)
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_Timer[INTC_TIMER_WAIT_UNTIL_FENCE_SUBMITTED].mAccumulatedTime)
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_Timers[INTC_GPU_TIMER_SYNC_TYPE_WAIT_SYNC_OBJECT_CPU])
+    FLUSH_MEMBER(PrintTimeDelta,     INTC_Timers[INTC_GPU_TIMER_SYNC_TYPE_POLL_ON_QUERY_GET_DATA])
+    FLUSH_MEMBER(PrintU64,           INTC_FrameID)
 #undef FLUSH_MEMBER
+
     if (changedCount > 0) {
         printf("\n");
     }
@@ -244,9 +247,43 @@ void FlushModifiedPresent()
     gModifiedPresent = nullptr;
 }
 
+uint64_t LookupPresentId(
+    PMTraceConsumer* pmConsumer,
+    uint64_t CompositionSurfaceLuid,
+    uint64_t PresentCount,
+    uint64_t BindId)
+{
+#ifdef NDEBUG
+    (void) pmConsumer, CompositionSurfaceLuid, PresentCount, BindId;
+#else
+    // pmConsumer can complete presents before they've seen all of
+    // their TokenStateChanged_Info events, so we keep a copy of the
+    // token->present id map here simply so we can print what present
+    // the event refers to.
+    static std::unordered_map<
+        PMTraceConsumer::Win32KPresentHistoryToken,
+        uint64_t,
+        PMTraceConsumer::Win32KPresentHistoryTokenHash> tokenToIdMap;
+
+    PMTraceConsumer::Win32KPresentHistoryToken key(CompositionSurfaceLuid, PresentCount, BindId);
+    auto ii = pmConsumer->mPresentByWin32KPresentHistoryToken.find(key);
+    if (ii != pmConsumer->mPresentByWin32KPresentHistoryToken.end()) {
+        tokenToIdMap[key] = ii->second->Id;
+        return ii->second->Id;
+    }
+
+    auto jj = tokenToIdMap.find(key);
+    if (jj != tokenToIdMap.end()) {
+        return jj->second;
+    }
+#endif
+
+    return 0;
 }
 
-int DebugPrintTime(uint64_t value)
+}
+
+int PrintTime(uint64_t value)
 {
     return value == 0
         ? printf("0")
@@ -255,45 +292,48 @@ int DebugPrintTime(uint64_t value)
             : printf("%s", AddCommas(ConvertTimestampToNs(value)));
 }
 
-int DebugPrintTimeDelta(uint64_t value)
+int PrintTimeDelta(uint64_t value)
 {
     return printf("%s", value == 0 ? "0" : AddCommas(ConvertTimestampDeltaToNs(value)));
 }
 
-void DebugInitialize(LARGE_INTEGER* firstTimestamp, LARGE_INTEGER const& timestampFrequency)
+#ifndef NDEBUG
+void EnableVerboseTrace(bool enable)
 {
-    gDebugDone = false;
+    gVerboseTraceEnabled = enable;
+}
+
+bool IsVerboseTraceEnabled()
+{
+    return gVerboseTraceEnabled;
+}
+#endif
+
+void DebugAssertImpl(wchar_t const* msg, wchar_t const* file, int line)
+{
+    if (IsVerboseTraceEnabled()) {
+        printf("ASSERTION FAILED: %ls(%d): %ls\n", file, line, msg);
+    } else {
+        #ifndef NDEBUG
+        _wassert(msg, file, line);
+        #endif
+    }
+}
+
+void InitializeVerboseTrace(LARGE_INTEGER* firstTimestamp, LARGE_INTEGER const& timestampFrequency)
+{
     gFirstTimestamp = firstTimestamp;
     gTimestampFrequency = timestampFrequency;
 
     printf("       Time (ns)   PID   TID EVENT\n");
 }
 
-bool DebugDone()
-{
-    return gDebugDone;
-}
-
-void DebugEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, EventMetadata* metadata)
+void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, EventMetadata* metadata)
 {
     auto const& hdr = eventRecord->EventHeader;
     auto id = hdr.EventDescriptor.Id;
 
     FlushModifiedPresent();
-
-    auto t = ConvertTimestampToNs(hdr.TimeStamp.QuadPart);
-    if (t >= DEBUG_START_TIME_NS) {
-        gDebugTrace = true;
-    }
-
-    if (t >= DEBUG_STOP_TIME_NS) {
-        gDebugTrace = false;
-        gDebugDone = true;
-    }
-
-    if (!gDebugTrace) {
-        return;
-    }
 
     if (hdr.ProviderId == Microsoft_Windows_D3D9::GUID) {
         using namespace Microsoft_Windows_D3D9;
@@ -328,13 +368,11 @@ void DebugEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, EventMet
         case Blit_Info::Id:                     PrintEventHeader(hdr, "Blit_Info"); break;
         case BlitCancel_Info::Id:               PrintEventHeader(hdr, "BlitCancel_Info"); break;
         case FlipMultiPlaneOverlay_Info::Id:    PrintEventHeader(hdr, "FlipMultiPlaneOverlay_Info"); break;
-        case HSyncDPCMultiPlane_Info::Id:       PrintEventHeader(hdr, "HSyncDPCMultiPlane_Info"); break;
-        case VSyncDPCMultiPlane_Info::Id:       PrintEventHeader(hdr, "VSyncDPCMultiPlane_Info"); break;
-        case MMIOFlip_Info::Id:                 PrintEventHeader(hdr, "MMIOFlip_Info"); break;
         case Present_Info::Id:                  PrintEventHeader(hdr, "DxgKrnl_Present_Info"); break;
         case MakeResident_Start::Id:            PrintEventHeader(hdr, "MakeResident_Start"); break;
         case MakeResident_Stop::Id:             PrintEventHeader(hdr, "MakeResident_Stop"); break;
 
+        case MMIOFlip_Info::Id:                 PrintEventHeader(eventRecord, metadata, "MMIOFlip_Info",                { L"FlipSubmitSequence", PrintU64, }); break;
         case Flip_Info::Id:                     PrintEventHeader(eventRecord, metadata, "Flip_Info",                    { L"FlipInterval",   PrintU32,
                                                                                                                           L"MMIOFlip",       PrintBool, }); break;
         case IndependentFlip_Info::Id:          PrintEventHeader(eventRecord, metadata, "IndependentFlip_Info",         { L"SubmitSequence", PrintU32,
@@ -351,7 +389,6 @@ void DebugEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, EventMet
                                                                                                                           L"bPresent",       PrintU32, }); break;
         case QueuePacket_Stop::Id:              PrintEventHeader(eventRecord, metadata, "QueuePacket_Stop",             { L"hContext",       PrintU64x,
                                                                                                                           L"SubmitSequence", PrintU32, }); break;
-        case VSyncDPC_Info::Id:                 PrintEventHeader(eventRecord, metadata, "VSyncDPC_Info",                { L"FlipFenceId",    PrintU64x, }); break;
         case Context_DCStart::Id:
         case Context_Start::Id:                 PrintEventHeader(eventRecord, metadata, "Context_Start",                { L"hContext",       PrintU64x,
                                                                                                                           L"hDevice",        PrintU64x,
@@ -374,9 +411,42 @@ void DebugEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, EventMet
         case PagingQueuePacket_Info::Id:        PrintEventHeader(eventRecord, metadata, "PagingQueuePacket_Info",       { L"SequenceId",     PrintU64 }); break;
         case PagingQueuePacket_Stop::Id:        PrintEventHeader(eventRecord, metadata, "PagingQueuePacket_Stop",       { L"SequenceId",     PrintU64 }); break;
 
-        case MMIOFlipMultiPlaneOverlay_Info::Id:
+        case VSyncDPC_Info::Id: {
+            auto FlipFenceId = metadata->GetEventData<uint64_t>(eventRecord, L"FlipFenceId");
             PrintEventHeader(hdr);
-            printf("DXGKrnl_MMIOFlipMultiPlaneOverlay_Info FlipSubmitSequence=%llx", metadata->GetEventData<uint64_t>(eventRecord, L"FlipSubmitSequence"));
+            printf("VSyncDPC_Info SubmitSequence=%llu FlipId=0x%llx\n",
+                FlipFenceId >> 32,
+                FlipFenceId & 0xffffffffll);
+            break;
+        }
+        case HSyncDPCMultiPlane_Info::Id:
+        case VSyncDPCMultiPlane_Info::Id: {
+            EventDataDesc desc[] = {
+                { L"FlipEntryCount" },
+                { L"FlipSubmitSequence" },
+            };
+
+            metadata->GetEventData(eventRecord, desc, _countof(desc));
+            auto FlipEntryCount     = desc[0].GetData<uint32_t>();
+            auto FlipSubmitSequence = desc[1].GetArray<uint64_t>(FlipEntryCount);
+
+            PrintEventHeader(hdr);
+            printf("%s", id == HSyncDPCMultiPlane_Info::Id ? "HSyncDPCMultiPlane_Info" : "VSyncDPCMultiPlane_Info");
+            for (uint32_t i = 0; i < FlipEntryCount; ++i) {
+                if (i > 0) printf("\n                                                    ");
+                printf(" SubmitSequence[%u]=%llu FlipId[%u]=0x%llx",
+                    i, FlipSubmitSequence[i] >> 32,
+                    i, FlipSubmitSequence[i] & 0xffffffffll);
+            }
+            printf("\n");
+            break;
+        }
+        case MMIOFlipMultiPlaneOverlay_Info::Id: {
+            auto FlipSubmitSequence = metadata->GetEventData<uint64_t>(eventRecord, L"FlipSubmitSequence");
+            PrintEventHeader(hdr);
+            printf("DXGKrnl_MMIOFlipMultiPlaneOverlay_Info SubmitSequence=%llu FlipId=0x%llx",
+                FlipSubmitSequence >> 32,
+                FlipSubmitSequence & 0xffffffffll);
             if (hdr.EventDescriptor.Version >= 2) {
                 switch (metadata->GetEventData<uint32_t>(eventRecord, L"FlipEntryStatusAfterFlip")) {
                 case FlipEntryStatus::FlipWaitVSync:    printf(" FlipWaitVSync"); break;
@@ -386,6 +456,7 @@ void DebugEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, EventMet
             }
             printf("\n");
             break;
+        }
         }
         return;
     }
@@ -427,13 +498,11 @@ void DebugEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, EventMet
             PrintEventHeader(hdr);
             printf("Win32K_TokenStateChanged");
 
-            PMTraceConsumer::Win32KPresentHistoryToken key(CompositionSurfaceLuid, PresentCount, BindId);
-            auto eventIter = pmConsumer->mPresentByWin32KPresentHistoryToken.find(key);
-            if (eventIter == pmConsumer->mPresentByWin32KPresentHistoryToken.end()) {
+            auto presentId = LookupPresentId(pmConsumer, CompositionSurfaceLuid, PresentCount, BindId);
+            if (presentId == 0) {
                 printf(" (unknown present)");
             } else {
-                auto present = eventIter->second;
-                printf(" p%llu", present->Id);
+                printf(" p%llu", presentId);
             }
 
             switch (NewState) {
@@ -504,21 +573,21 @@ void DebugEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, EventMet
             }
             /* END WORKAROUND */
 #if 0
-            printf(  "%*sAppWorkStart            = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));
-            printf("\n%*sAppSimulationTime       = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime"));
-            printf("\n%*sDriverWorkStart         = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));
-            printf("\n%*sDriverWorkEnd           = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));
-            printf("\n%*sKernelDriverSubmitStart = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitStart"));
-            printf("\n%*sKernelDriverSubmitEnd   = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitEnd"));
-            printf("\n%*sGPUStart                = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));
-            printf("\n%*sGPUEnd                  = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));
-            printf("\n%*sKernelDriverFenceReport = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverFenceReport"));
-            printf("\n%*sPresentAPICall          = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
-            printf("\n%*sTargetFrameTime         = ", 29, ""); DebugPrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, L"TargetFrameTime"));
-            printf("\n%*sFlipReceivedTime        = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReceivedTime"));
-            printf("\n%*sFlipReportTime          = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReportTime"));
-            printf("\n%*sFlipProgrammingTime     = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipProgrammingTime"));
-            printf("\n%*sActualFlipTime          = ", 29, ""); DebugPrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
+            printf(  "%*sAppWorkStart            = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppWorkStart"));
+            printf("\n%*sAppSimulationTime       = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"AppSimulationTime"));
+            printf("\n%*sDriverWorkStart         = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkStart"));
+            printf("\n%*sDriverWorkEnd           = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"DriverWorkEnd"));
+            printf("\n%*sKernelDriverSubmitStart = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitStart"));
+            printf("\n%*sKernelDriverSubmitEnd   = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverSubmitEnd"));
+            printf("\n%*sGPUStart                = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUStart"));
+            printf("\n%*sGPUEnd                  = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"GPUEnd"));
+            printf("\n%*sKernelDriverFenceReport = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"KernelDriverFenceReport"));
+            printf("\n%*sPresentAPICall          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"PresentAPICall"));
+            printf("\n%*sTargetFrameTime         = ", 29, ""); PrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, L"TargetFrameTime"));
+            printf("\n%*sFlipReceivedTime        = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReceivedTime"));
+            printf("\n%*sFlipReportTime          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipReportTime"));
+            printf("\n%*sFlipProgrammingTime     = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"FlipProgrammingTime"));
+            printf("\n%*sActualFlipTime          = ", 29, ""); PrintTime(metadata->GetEventData<uint64_t>(eventRecord, L"ActualFlipTime"));
 #endif
             printf("\n");
             break;
@@ -532,13 +601,10 @@ void DebugEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, EventMet
         }
         return;
     }
-
-    assert(false);
 }
 
-void DebugModifyPresent(PresentEvent const* p)
+void VerboseTraceBeforeModifyingPresentImpl(PresentEvent const* p)
 {
-    if (!gDebugTrace) return;
     if (gModifiedPresent != p) {
         FlushModifiedPresent();
         gModifiedPresent = p;
@@ -547,5 +613,3 @@ void DebugModifyPresent(PresentEvent const* p)
         }
     }
 }
-
-#endif // if DEBUG_VERBOSE

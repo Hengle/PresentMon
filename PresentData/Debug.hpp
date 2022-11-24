@@ -1,14 +1,6 @@
 // Copyright (C) 2019-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 #pragma once
-
-#define DEBUG_VERBOSE 0
-#if DEBUG_VERBOSE
-
-// Time relative to first event
-#define DEBUG_START_TIME_NS     0ull
-#define DEBUG_STOP_TIME_NS      UINT64_MAX
-
 #include <stdint.h>
 
 struct PresentEvent; // Can't include PresentMonTraceConsumer.hpp because it includes Debug.hpp (before defining PresentEvent)
@@ -17,30 +9,42 @@ struct EventMetadata;
 struct _EVENT_RECORD;
 union _LARGE_INTEGER;
 
-// Initialize debug system
-void DebugInitialize(_LARGE_INTEGER* firstTimestamp, _LARGE_INTEGER const& timestampFrequency);
+// Print a time or time range
+int PrintTime(uint64_t value);
+int PrintTimeDelta(uint64_t value);
 
-// Check if debug is complete
-bool DebugDone();
+// Initialize debug system
+void InitializeVerboseTrace(_LARGE_INTEGER* firstTimestamp, _LARGE_INTEGER const& timestampFrequency);
 
 // Print debug information about the handled event
-void DebugEvent(PMTraceConsumer* pmConsumer, _EVENT_RECORD* eventRecord, EventMetadata* metadata);
+void VerboseTraceEvent(PMTraceConsumer* pmConsumer, _EVENT_RECORD* eventRecord, EventMetadata* metadata);
 
-// Call before modifying any PresentEvent member
-void DebugModifyPresent(PresentEvent const* p);
+// Flush any pending data to the verbose trace
+void FlushVerboseTrace();
 
-// Print a time or time range
-int DebugPrintTime(uint64_t value);
-int DebugPrintTimeDelta(uint64_t value);
-
-#define DebugAssert(condition) while (!(condition)) { printf("ASSERTION FAILED: %s(%d): %s\n", __FILE__, __LINE__, #condition); break; }
-
+// Enable the verbose trace.  This is only available in debug builds.  In
+// release, the fact IsVerboseTraceEnabled() maps to false should cause all
+// debug code to be eliminated as dead code.
+#ifndef NDEBUG
+void EnableVerboseTrace(bool enable);
+bool IsVerboseTraceEnabled();
 #else
-
-#define DebugInitialize(firstTimestamp, timestampFrequency) (void) firstTimestamp, timestampFrequency
-#define DebugDone()                                         false
-#define DebugEvent(pmConsumer, eventRecord, metadata)       (void) pmConsumer, eventRecord, metadata
-#define DebugModifyPresent(p)                               (void) p
-#define DebugAssert(condition)                              assert(condition)
-
+#define IsVerboseTraceEnabled() false
 #endif
+
+// Call whenever modifying a PresentEvent member so changes are included in the
+// verbose trace
+void VerboseTraceBeforeModifyingPresentImpl(PresentEvent const* p);
+#define VerboseTraceBeforeModifyingPresent(p) !IsVerboseTraceEnabled() || (VerboseTraceBeforeModifyingPresentImpl(p), false)
+
+// Debug assert either calls standard assert() or prints message to verbose
+// trace (if enabled).
+#ifndef NDEBUG
+void DebugAssertImpl(wchar_t const* msg, wchar_t const* file, int line);
+#define DebugAssertWide1(x) L##x
+#define DebugAssertWide2(x) DebugAssertWide1(x)
+#define DebugAssert(condition) !!(condition) || (DebugAssertImpl(L#condition, DebugAssertWide2(__FILE__), __LINE__), false)
+#else
+#define DebugAssert(condition)
+#endif
+

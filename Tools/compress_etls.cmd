@@ -6,10 +6,19 @@ set rootdir=%~1
 set xperf="%ProgramFiles(x86)%\Windows Kits\10\Windows Performance Toolkit\xperf.exe"
 
 if "%~1" equ "" goto usage
+if "%~2" equ "" goto check_args
 if "%~2" neq "" set xperf=%2
-if not exist "%rootdir%\." goto usage
-if not exist %xperf% goto usage
-goto args_ok
+if "%~3" neq "" goto usage
+:check_args
+    if not exist "%rootdir%\." (
+        echo error: invalid root dir: %rootdir%
+        goto usage
+    )
+    if not exist %xperf% (
+        echo error: dependency not found: xperf.exe
+        goto usage
+    )
+    goto args_ok
 :usage
     echo usage: compress_etls.cmd RootDirWithEtls [XPerfPath]
     exit /b 1

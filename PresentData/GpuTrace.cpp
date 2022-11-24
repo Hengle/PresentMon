@@ -3,8 +3,6 @@
 
 #include "PresentMonTraceConsumer.hpp"
 
-#if DEBUG_VERBOSE
-
 namespace {
 
 void DebugPrintAccumulatedGpuTime(uint32_t processId, uint64_t accumulatedTime, uint64_t startTime, uint64_t endTime)
@@ -12,13 +10,13 @@ void DebugPrintAccumulatedGpuTime(uint32_t processId, uint64_t accumulatedTime, 
     auto addedTime = endTime - startTime;
 
     printf("                             Accumulated GPU time ProcessId=%u: ", processId);
-    DebugPrintTimeDelta(accumulatedTime);
+    PrintTimeDelta(accumulatedTime);
     printf(" + [");
-    DebugPrintTime(startTime);
+    PrintTime(startTime);
     printf(", ");
-    DebugPrintTime(endTime);
+    PrintTime(endTime);
     printf("] = ");
-    DebugPrintTimeDelta(accumulatedTime + addedTime);
+    PrintTimeDelta(accumulatedTime + addedTime);
     printf("\n");
 }
 
@@ -35,7 +33,7 @@ uint32_t GpuTrace::LookupPacketTraceProcessId(PacketTrace* packetTrace) const
     return 0;
 }
 
-void GpuTrace::DebugPrintRunningContexts() const
+void GpuTrace::PrintRunningContexts() const
 {
     for (auto const& pr1 : mNodes) {
         auto pDxgAdapter = pr1.first;
@@ -72,8 +70,6 @@ void GpuTrace::DebugPrintRunningContexts() const
         }
     }
 }
-
-#endif
 
 GpuTrace::GpuTrace(PMTraceConsumer* pmConsumer)
     : mPMConsumer(pmConsumer)
@@ -257,21 +253,21 @@ void GpuTrace::StartPacket(PacketTrace* packetTrace, uint64_t timestamp) const
         if (packetTrace->mFirstPacketTime == 0) {
             packetTrace->mFirstPacketTime = timestamp;
 
-            #if DEBUG_VERBOSE
-            printf("                             GPU: pid=%u frame's first work\n", LookupPacketTraceProcessId(packetTrace));
-            #endif
+            if (IsVerboseTraceEnabled()) {
+                printf("                             GPU: pid=%u frame's first work\n", LookupPacketTraceProcessId(packetTrace));
+            }
         }
     }
 }
 
 void GpuTrace::CompletePacket(PacketTrace* packetTrace, uint64_t timestamp) const
 {
-    #if DEBUG_VERBOSE
-    DebugPrintAccumulatedGpuTime(LookupPacketTraceProcessId(packetTrace),
-                                 packetTrace->mAccumulatedPacketTime,
-                                 packetTrace->mRunningPacketStartTime,
-                                 timestamp);
-    #endif
+    if (IsVerboseTraceEnabled()) {
+        DebugPrintAccumulatedGpuTime(LookupPacketTraceProcessId(packetTrace),
+                                     packetTrace->mAccumulatedPacketTime,
+                                     packetTrace->mRunningPacketStartTime,
+                                     timestamp);
+    }
 
     auto accumulatedTime = timestamp - packetTrace->mRunningPacketStartTime;
 
@@ -315,9 +311,9 @@ void GpuTrace::EnqueueWork(Context* context, uint32_t sequenceId, uint64_t times
         StartPacket(packetTrace, timestamp);
     }
 
-    #if DEBUG_VERBOSE
-    DebugPrintRunningContexts();
-    #endif
+    if (IsVerboseTraceEnabled()) {
+        PrintRunningContexts();
+    }
 }
 
 bool GpuTrace::CompleteWork(Context* context, uint32_t sequenceId, uint64_t timestamp)
@@ -325,9 +321,9 @@ bool GpuTrace::CompleteWork(Context* context, uint32_t sequenceId, uint64_t time
     auto packetTrace = context->mPacketTrace;
     auto node = context->mNode;
 
-    #if DEBUG_VERBOSE
-    DebugPrintRunningContexts();
-    #endif
+    if (IsVerboseTraceEnabled()) {
+        PrintRunningContexts();
+    }
 
     // It's possible to miss DmaPacket events during realtime analysis, so try
     // to handle it gracefully here.
@@ -591,7 +587,7 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
         auto packetTrace = &frameInfo->mOtherEngines;
         auto videoTrace = &frameInfo->mVideoEngines;
 
-        DebugModifyPresent(pEvent);
+        VerboseTraceBeforeModifyingPresent(pEvent);
 
         // Update GPUStartTime/ReadyTime/GPUDuration if any DMA packets were
         // observed.
@@ -627,9 +623,9 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
             }
         }
 
-        #if DEBUG_VERBOSE
-        printf("                             GPU: pid=%u completing frame\n", pEvent->ProcessId);
-        #endif
+        if (IsVerboseTraceEnabled()) {
+            printf("                             GPU: pid=%u completing frame\n", pEvent->ProcessId);
+        }
 
         // There are some cases where the QueuePacket_Stop timestamp is before
         // the previous dma packet completes.  e.g., this seems to be typical
@@ -638,12 +634,12 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
         // to both frames.  Note this is incorrect, as the dma's full cost
         // should be fully attributed to the previous frame.
         if (packetTrace->mRunningPacketCount > 0) {
-            #if DEBUG_VERBOSE
-            DebugPrintAccumulatedGpuTime(pEvent->ProcessId,
-                                         pEvent->GPUDuration,
-                                         packetTrace->mRunningPacketStartTime,
-                                         timestamp);
-            #endif
+            if (IsVerboseTraceEnabled()) {
+                DebugPrintAccumulatedGpuTime(pEvent->ProcessId,
+                                             pEvent->GPUDuration,
+                                             packetTrace->mRunningPacketStartTime,
+                                             timestamp);
+            }
 
             auto accumulatedTime = timestamp - packetTrace->mRunningPacketStartTime;
 
@@ -652,9 +648,9 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
             packetTrace->mFirstPacketTime = timestamp;
             packetTrace->mRunningPacketStartTime = timestamp;
 
-            #if DEBUG_VERBOSE
-            printf("                             GPU: work still running; splitting and considering as new work for next frame\n");
-            #endif
+            if (IsVerboseTraceEnabled()) {
+                printf("                             GPU: work still running; splitting and considering as new work for next frame\n");
+            }
         }
         if (videoTrace->mRunningPacketCount > 0) {
             pEvent->GPUVideoDuration += timestamp - videoTrace->mRunningPacketStartTime;
