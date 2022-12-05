@@ -35,9 +35,11 @@ class GpuTrace {
     };
 
     // Node is information about a particular GPU parallel node, including any
-    // packets currently running/queued to it.
+    // packets currently running/queued to it.  For implementations with
+    // hardware scheduling enabled, there is one node per HWQueue many of which
+    // may map to the same device engine.
     struct Node {
-        enum { MAX_QUEUE_SIZE = 9 };               // MAX_QUEUE_SIZE=9 for 2 full cachelines (one is not enough).
+        enum { MAX_QUEUE_SIZE = 15 };
         PacketTrace* mPacketTrace[MAX_QUEUE_SIZE]; // Frame trace for enqueued packets
         uint32_t mSequenceId[MAX_QUEUE_SIZE];      // Sequence IDs for enqueued packets
         uint32_t mQueueIndex;                      // Index into mPacketTrace and mSequenceId for currently-running packet
@@ -93,7 +95,7 @@ class GpuTrace {
     void StartPacket(PacketTrace* packetTrace, uint64_t timestamp) const;
     void CompletePacket(PacketTrace* packetTrace, uint64_t timestamp) const;
 
-    void EnqueueWork(Context* context, uint32_t sequenceId, uint64_t timestamp);
+    void EnqueueWork(Context* context, uint32_t sequenceId, uint64_t timestamp, bool isWaitPacket);
     bool CompleteWork(Context* context, uint32_t sequenceId, uint64_t timestamp);
 
     uint32_t LookupPacketTraceProcessId(PacketTrace* packetTrace) const;
@@ -111,7 +113,7 @@ public:
 
     void SetEngineType(uint64_t pDxgAdapter, uint32_t nodeOrdinal, Microsoft_Windows_DxgKrnl::DXGK_ENGINE engineType);
 
-    void EnqueueQueuePacket(uint32_t processId, uint64_t hContext, uint32_t sequenceId, uint64_t timestamp);
+    void EnqueueQueuePacket(uint64_t hContext, uint32_t sequenceId, uint32_t processId, uint64_t timestamp, bool isWaitPacket);
     void CompleteQueuePacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp);
 
     void EnqueueDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp);

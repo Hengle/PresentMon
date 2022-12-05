@@ -387,6 +387,8 @@ void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, E
                                                                                                                           L"SubmitSequence", PrintU32,
                                                                                                                           L"PacketType",     PrintQueuePacketType,
                                                                                                                           L"bPresent",       PrintU32, }); break;
+        case QueuePacket_Start_2::Id:           PrintEventHeader(eventRecord, metadata, "QueuePacket_Start WAIT",       { L"hContext",       PrintU64x,
+                                                                                                                          L"SubmitSequence", PrintU32, }); break;
         case QueuePacket_Stop::Id:              PrintEventHeader(eventRecord, metadata, "QueuePacket_Stop",             { L"hContext",       PrintU64x,
                                                                                                                           L"SubmitSequence", PrintU32, }); break;
         case Context_DCStart::Id:

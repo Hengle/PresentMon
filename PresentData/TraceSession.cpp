@@ -195,6 +195,7 @@ ULONG EnableProviders(
         provider.AddEvent<Microsoft_Windows_DxgKrnl::PresentHistory_Info>();
         provider.AddEvent<Microsoft_Windows_DxgKrnl::PresentHistoryDetailed_Start>();
         provider.AddEvent<Microsoft_Windows_DxgKrnl::QueuePacket_Start>();
+        provider.AddEvent<Microsoft_Windows_DxgKrnl::QueuePacket_Start_2>();
         provider.AddEvent<Microsoft_Windows_DxgKrnl::QueuePacket_Stop>();
         provider.AddEvent<Microsoft_Windows_DxgKrnl::VSyncDPC_Info>();
     }

@@ -749,7 +749,8 @@ void PMTraceConsumer::HandleDxgkQueueSubmit(
 {
     // Track GPU execution
     if (mTrackGPU) {
-        mGpuTrace.EnqueueQueuePacket(hdr.ProcessId, hContext, submitSequence, hdr.TimeStamp.QuadPart);
+        bool isWaitPacket = packetType == (uint32_t) Microsoft_Windows_DxgKrnl::QueuePacketType::DXGKETW_WAIT_COMMAND_BUFFER;
+        mGpuTrace.EnqueueQueuePacket(hContext, submitSequence, hdr.ProcessId, hdr.TimeStamp.QuadPart, isWaitPacket);
     }
 
     // For blt presents on Win7, the only way to distinguish between DWM-off
@@ -1120,6 +1121,9 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         TRACK_PRESENT_PATH_GENERATE_ID();
         HandleDxgkFlip(hdr, -1, true, true);
         return;
+    // QueuPacket_Start are used for render queue packets
+    // QueuPacket_Start_2 are used for monitor wait packets
+    // QueuPacket_Start_3 are used for monitor signal packets
     case Microsoft_Windows_DxgKrnl::QueuePacket_Start::Id:
     {
         EventDataDesc desc[] = {
@@ -1134,6 +1138,21 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
         auto hContext       = desc[2].GetData<uint64_t>();
         auto bPresent       = desc[3].GetData<BOOL>() != 0;
 
+        HandleDxgkQueueSubmit(hdr, hContext, SubmitSequence, PacketType, bPresent, false);
+        return;
+    }
+    case Microsoft_Windows_DxgKrnl::QueuePacket_Start_2::Id:
+    {
+        EventDataDesc desc[] = {
+            { L"hContext" },
+            { L"SubmitSequence" },
+        };
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        auto hContext       = desc[0].GetData<uint64_t>();
+        auto SubmitSequence = desc[1].GetData<uint32_t>();
+
+        uint32_t PacketType = (uint32_t) Microsoft_Windows_DxgKrnl::QueuePacketType::DXGKETW_WAIT_COMMAND_BUFFER;
+        bool bPresent = false;
         HandleDxgkQueueSubmit(hdr, hContext, SubmitSequence, PacketType, bPresent, false);
         return;
     }

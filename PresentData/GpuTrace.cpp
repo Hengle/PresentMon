@@ -9,15 +9,17 @@ void DebugPrintAccumulatedGpuTime(uint32_t processId, uint64_t accumulatedTime, 
 {
     auto addedTime = endTime - startTime;
 
-    printf("                             Accumulated GPU time ProcessId=%u: ", processId);
-    PrintTimeDelta(accumulatedTime);
-    printf(" + [");
-    PrintTime(startTime);
-    printf(", ");
-    PrintTime(endTime);
-    printf("] = ");
-    PrintTimeDelta(accumulatedTime + addedTime);
-    printf("\n");
+    if (addedTime > 0ull) {
+        printf("                             Accumulated GPU time ProcessId=%u: ", processId);
+        PrintTimeDelta(accumulatedTime);
+        printf(" + [");
+        PrintTime(startTime);
+        printf(", ");
+        PrintTime(endTime);
+        printf("] = ");
+        PrintTimeDelta(accumulatedTime + addedTime);
+        printf("\n");
+    }
 }
 
 }
@@ -35,38 +37,30 @@ uint32_t GpuTrace::LookupPacketTraceProcessId(PacketTrace* packetTrace) const
 
 void GpuTrace::PrintRunningContexts() const
 {
-    for (auto const& pr1 : mNodes) {
-        auto pDxgAdapter = pr1.first;
-        bool firstActiveNode = true;
-        for (auto const& pr2 : pr1.second) {
-            auto nodeOrdinal = pr2.first;
-            auto const& node = pr2.second;
+    for (auto const& pr : mContexts) {
+        auto hContext = pr.first;
+        auto const& context = pr.second;
+        auto const& node = *context.mNode;
+
+        if (node.mQueueCount > 0) {
+            printf("                             hContext=0x%llx [", hContext);
 
             for (uint32_t i = 0; i < node.mQueueCount; ++i) {
                 auto queueIdx = (node.mQueueIndex + i) % Node::MAX_QUEUE_SIZE;
 
-                printf("                             ");
-                if (firstActiveNode) {
-                    firstActiveNode = false;
-                    printf("pDxgAdapter=0x%llx", pDxgAdapter);
-                } else {
-                    printf("                              ");
+                if (i > 0) {
+                    printf("\n                                                          ");
                 }
 
-                if (i == 0) {
-                    printf(" NodeOrdinal=%u [", nodeOrdinal);
-                } else {
-                    printf("                ");
-                }
-
-                printf(" ProcessId=%u", LookupPacketTraceProcessId(node.mPacketTrace[queueIdx]));
                 printf(" SequenceId=%u", node.mSequenceId[queueIdx]);
-
-                if (i == node.mQueueCount - 1) {
-                    printf(" ]");
+                if (node.mPacketTrace[queueIdx] == nullptr) {
+                    printf(" WAIT");
+                } else {
+                    printf(" ProcessId=%u", LookupPacketTraceProcessId(node.mPacketTrace[queueIdx]));
                 }
-                printf("\n");
             }
+
+            printf(" ]\n");
         }
     }
 }
@@ -137,20 +131,40 @@ void GpuTrace::RegisterHwQueueContext(uint64_t hContext, uint64_t parentDxgHwQue
     DebugAssert(mContexts.find(hContext)         != mContexts.end());
     DebugAssert(mContexts.find(parentDxgHwQueue) == mContexts.end());
 
-    // Make a copy of Context that can be looked up by parentDxgHwQueue, but
-    // will continue pointing to the same Node and PacketTrace.
+    // Look up the context C, which we're calling the parent context.  We
+    // should already have seen a Context_Start event.
     auto ii = mContexts.find(hContext);
-    if (ii != mContexts.end()) {
-        auto context = &ii->second;
-        DebugAssert(context->mParentContext == 0);
-        DebugAssert(context->mIsHwQueue == false);
-        context->mIsParentContext = true;
-
-        context = &mContexts.emplace(parentDxgHwQueue, *context).first->second;
-        context->mParentContext = hContext;
-        context->mIsParentContext = false;
-        context->mIsHwQueue = true;
+    if (ii == mContexts.end()) {
+        return;
     }
+    auto parentContext = &ii->second;
+
+    DebugAssert(parentContext->mParentContext == 0);
+    DebugAssert(parentContext->mIsHwQueue == false);
+    parentContext->mIsParentContext = true;
+
+    // Create a new context for the HWQueue.  Even though they map the same
+    // device engine, HWQueues need their own context so that tracked sequence
+    // IDs are ordered.
+    //
+    // If there are two HwQueues that map to the same engine, it's not clear
+    // whether or not queue packets running at the same time are really running
+    // simultaneous, but since we're counting any duration where at least one
+    // node is running it doesn't matter.
+
+    Node* node = new Node();
+    node->mQueueIndex = 0;
+    node->mQueueCount = 0;
+    node->mIsVideo = parentContext->mNode->mIsVideo;
+    node->mIsVideoDecode = parentContext->mNode->mIsVideoDecode;
+
+    auto hwQueueContext = &mContexts.emplace(parentDxgHwQueue, Context()).first->second;
+    hwQueueContext->mPacketTrace = parentContext->mPacketTrace;
+    hwQueueContext->mNode = node;
+    hwQueueContext->mParentContext = hContext;
+    hwQueueContext->mIsParentContext = false;
+    hwQueueContext->mIsHwQueue = true;
+    hwQueueContext->mIsVideoEncoderForCloudStreamingApp = false;
 }
 
 void GpuTrace::UnregisterContext(uint64_t hContext)
@@ -167,6 +181,8 @@ void GpuTrace::UnregisterContext(uint64_t hContext)
             for (ii = mContexts.begin(); ii != ie; ) {
                 auto const& context = ii->second;
                 if (context.mParentContext == hContext) {
+                    DebugAssert(context.mIsHwQueue);
+                    delete context.mNode;
                     ii = mContexts.erase(ii);
                 } else {
                     ++ii;
@@ -276,7 +292,7 @@ void GpuTrace::CompletePacket(PacketTrace* packetTrace, uint64_t timestamp) cons
     packetTrace->mRunningPacketStartTime = 0;
 }
 
-void GpuTrace::EnqueueWork(Context* context, uint32_t sequenceId, uint64_t timestamp)
+void GpuTrace::EnqueueWork(Context* context, uint32_t sequenceId, uint64_t timestamp, bool isWaitPacket)
 {
     auto packetTrace = context->mPacketTrace;
     auto node = context->mNode;
@@ -298,7 +314,16 @@ void GpuTrace::EnqueueWork(Context* context, uint32_t sequenceId, uint64_t times
         return;
     }
 
-    // Enqueue the packet
+    // Enqueue the packet.
+    //
+    // Wait packets aren't counted as GPU work, but we still need to enqueue
+    // them so they block future work.  We encode wait packets by setting their
+    // packetTrace to null.  This saves some memory as we don't need the
+    // packetTrace pointer for wait packets.
+    if (isWaitPacket) {
+        packetTrace = nullptr;
+    }
+
     auto queueIndex = (node->mQueueIndex + node->mQueueCount) % Node::MAX_QUEUE_SIZE;
     node->mPacketTrace[queueIndex] = packetTrace;
     node->mSequenceId[queueIndex] = sequenceId;
@@ -307,7 +332,7 @@ void GpuTrace::EnqueueWork(Context* context, uint32_t sequenceId, uint64_t times
     // If the queue was empty, the packet starts running right away, otherwise
     // it is just enqueued and will start running after all previous packets
     // complete.
-    if (node->mQueueCount == 1) {
+    if (packetTrace != nullptr && node->mQueueCount == 1) {
         StartPacket(packetTrace, timestamp);
     }
 
@@ -320,10 +345,6 @@ bool GpuTrace::CompleteWork(Context* context, uint32_t sequenceId, uint64_t time
 {
     auto packetTrace = context->mPacketTrace;
     auto node = context->mNode;
-
-    if (IsVerboseTraceEnabled()) {
-        PrintRunningContexts();
-    }
 
     // It's possible to miss DmaPacket events during realtime analysis, so try
     // to handle it gracefully here.
@@ -379,36 +400,39 @@ bool GpuTrace::CompleteWork(Context* context, uint32_t sequenceId, uint64_t time
                 node->mSequenceId[queueIndex] = node->mSequenceId[node->mQueueIndex];
                 node->mQueueIndex = queueIndex;
                 node->mQueueCount -= missingCount;
-
-                packetTrace = node->mPacketTrace[node->mQueueIndex];
                 break;
             }
         }
     }
 
-    // Pop the completed packet from the queue
-    node->mQueueCount -= 1;
-    packetTrace->mRunningPacketCount -= 1;
-
+    // Pop the completed packet from the queue.
+    //
     // If this was the process' last executing packet, accumulate the execution
     // duration into the process' count.
-    DebugAssert(packetTrace == node->mPacketTrace[node->mQueueIndex]);
-    if (packetTrace->mRunningPacketCount == 0) {
-        CompletePacket(packetTrace, timestamp);
+    node->mQueueCount -= 1;
+
+    packetTrace = node->mPacketTrace[node->mQueueIndex];
+    if (packetTrace != nullptr) {
+        packetTrace->mRunningPacketCount -= 1;
+        if (packetTrace->mRunningPacketCount == 0) {
+            CompletePacket(packetTrace, timestamp);
+        }
     }
 
     // If there was another queued packet, start it
     if (node->mQueueCount > 0) {
         node->mQueueIndex = (node->mQueueIndex + 1) % Node::MAX_QUEUE_SIZE;
-        packetTrace = node->mPacketTrace[node->mQueueIndex];
 
-        StartPacket(packetTrace, timestamp);
+        packetTrace = node->mPacketTrace[node->mQueueIndex];
+        if (packetTrace != nullptr) {
+            StartPacket(packetTrace, timestamp);
+        }
     }
 
     return true;
 }
 
-void GpuTrace::EnqueueQueuePacket(uint32_t processId, uint64_t hContext, uint32_t sequenceId, uint64_t timestamp)
+void GpuTrace::EnqueueQueuePacket(uint64_t hContext, uint32_t sequenceId, uint32_t processId, uint64_t timestamp, bool isWaitPacket)
 {
     auto contextIter = mContexts.find(hContext);
     if (contextIter != mContexts.end()) {
@@ -424,7 +448,7 @@ void GpuTrace::EnqueueQueuePacket(uint32_t processId, uint64_t hContext, uint32_
         // Use queue packet duration as a proxy for dma duration for cases we
         // don't get dma events for (HWS).
         if (context->mIsHwQueue) {
-            EnqueueWork(context, sequenceId, timestamp);
+            EnqueueWork(context, sequenceId, timestamp, isWaitPacket);
         }
     }
 }
@@ -438,7 +462,12 @@ void GpuTrace::CompleteQueuePacket(uint64_t hContext, uint32_t sequenceId, uint6
         // Use queue packet duration as a proxy for dma duration for cases we
         // don't get dma events for (HWS).
         if (context->mIsHwQueue) {
-            CompleteWork(context, sequenceId, timestamp);
+            auto trackedWorkWasCompleted = CompleteWork(context, sequenceId, timestamp);
+
+            #pragma warning(suppress: 4127) // conditional expression is constant in release build
+            if (IsVerboseTraceEnabled() && trackedWorkWasCompleted) {
+                PrintRunningContexts();
+            }
         }
     }
 }
@@ -458,7 +487,8 @@ void GpuTrace::EnqueueDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t
     DebugAssert(!context->mIsHwQueue);
 
     // Start tracking the work
-    EnqueueWork(context, sequenceId, timestamp);
+    bool isWaitPacket = false;
+    EnqueueWork(context, sequenceId, timestamp, isWaitPacket);
 }
 
 uint32_t GpuTrace::CompleteDmaPacket(uint64_t hContext, uint32_t sequenceId, uint64_t timestamp)
@@ -637,22 +667,22 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
         // to both frames.  Note this is incorrect, as the dma's full cost
         // should be fully attributed to the previous frame.
         if (packetTrace->mRunningPacketCount > 0) {
-            if (IsVerboseTraceEnabled()) {
-                DebugPrintAccumulatedGpuTime(pEvent->ProcessId,
-                                             pEvent->GPUDuration,
-                                             packetTrace->mRunningPacketStartTime,
-                                             timestamp);
-            }
-
-            auto accumulatedTime = timestamp - packetTrace->mRunningPacketStartTime;
 
             pEvent->ReadyTime = timestamp;
-            pEvent->GPUDuration += accumulatedTime;
-            packetTrace->mFirstPacketTime = timestamp;
-            packetTrace->mRunningPacketStartTime = timestamp;
 
-            if (IsVerboseTraceEnabled()) {
-                printf("                             GPU: work still running; splitting and considering as new work for next frame\n");
+            auto accumulatedTime = timestamp - packetTrace->mRunningPacketStartTime;
+            if (accumulatedTime > 0) {
+                if (IsVerboseTraceEnabled()) {
+                    DebugPrintAccumulatedGpuTime(pEvent->ProcessId,
+                                                 pEvent->GPUDuration,
+                                                 packetTrace->mRunningPacketStartTime,
+                                                 timestamp);
+                    printf("                             GPU: work still running; splitting and considering as new work for next frame\n");
+                }
+
+                pEvent->GPUDuration += accumulatedTime;
+                packetTrace->mFirstPacketTime = timestamp;
+                packetTrace->mRunningPacketStartTime = timestamp;
             }
         }
         if (videoTrace->mRunningPacketCount > 0) {

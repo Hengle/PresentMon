@@ -75,6 +75,7 @@ set events=%events% --event=PresentHistory::Start
 set events=%events% --event=PresentHistory::Info
 set events=%events% --event=PresentHistoryDetailed::Start
 set events=%events% --event=QueuePacket::Start
+set events=%events% --event=QueuePacket::Start_2
 set events=%events% --event=QueuePacket::Stop
 set events=%events% --event=VSyncDPC::Info
 set events=%events% --event=Context::DCStart
