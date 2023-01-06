@@ -312,6 +312,7 @@
     <ClInclude Include="ETW\Microsoft_Windows_DXGI.h" />
     <ClInclude Include="ETW\Microsoft_Windows_DxgKrnl.h" />
     <ClInclude Include="ETW\Microsoft_Windows_EventMetadata.h" />
+    <ClInclude Include="ETW\Microsoft_Windows_Kernel_Process.h" />
     <ClInclude Include="ETW\Microsoft_Windows_Win32k.h" />
     <ClInclude Include="ETW\NT_Process.h" />
     <ClInclude Include="Debug.hpp" />

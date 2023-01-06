@@ -1,12 +1,5 @@
-// Copyright (C) 2017-2020 Intel Corporation
+// Copyright (C) 2017-2020,2022 Intel Corporation
 // SPDX-License-Identifier: MIT
-
-#define NOMINMAX
-#include <algorithm>
-#include <d3d9.h>
-#include <dxgi.h>
-#include <windows.h>
-#include <tdh.h>
 
 #include "MixedRealityTraceConsumer.hpp"
 #include "TraceConsumer.hpp"

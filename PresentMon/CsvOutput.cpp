@@ -206,7 +206,7 @@ void UpdateCsv(ProcessInfo* processInfo, SwapChainData const& chain, PresentEven
 
         // NOTE: once ScheduledFlipTime is computed for a particular present,
         // we store it by overwriting p.INTC_TargetFrameTime.
-        auto scheduledQpc = max(lastDisplayed->INTC_TargetFrameTime, lastDisplayed->INTC_FlipReceivedTime) + pp->INTC_TargetFrameTime;
+        auto scheduledQpc = std::max(lastDisplayed->INTC_TargetFrameTime, lastDisplayed->INTC_FlipReceivedTime) + pp->INTC_TargetFrameTime;
         pp->INTC_TargetFrameTime = scheduledQpc;
 
         INTC_ScheduledFlipTime = 1000.0 * QpcDeltaToSeconds(p.PresentStartTime, scheduledQpc);

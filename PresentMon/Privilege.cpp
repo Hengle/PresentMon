@@ -1,12 +1,9 @@
-// Copyright (C) 2017-2021 Intel Corporation
+// Copyright (C) 2017-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 
-#include <windows.h>
-#include <shellapi.h>
-#include <stdio.h>
-#include <string>
-
 #include "PresentMon.hpp"
+
+#include <shellapi.h>
 
 bool InPerfLogUsersGroup()
 {

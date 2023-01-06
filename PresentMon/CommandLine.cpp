@@ -3,7 +3,6 @@
 
 #include <generated/version.h>
 
-#define NOMINMAX
 #include "PresentMon.hpp"
 #include "../PresentData/ETW/Intel_Graphics_D3D10.h"
 
@@ -608,6 +607,21 @@ bool ParseCommandLine(int argc, char** argv)
     if (args->mTerminateExisting && argc != 2) {
         PrintWarning("warning: -terminate_existing exits without capturing anything; ignoring all capture,\n"
                      "         output, and recording arguments.\n");
+    }
+
+    // Prune any directory and ".exe" off of the provided process names.  This
+    // is primarily because the ProcessStart event typically has a full path
+    // including "\\Device\\..." and ProcessStop event sometimes is missing
+    // part of the extension.
+    for (auto& name : args->mTargetProcessNames) {
+        auto pr = GetProcessNameComparisonRange(name, strlen(name));
+        name += pr.first;
+        ((char*) name)[pr.second] = '\0';
+    }
+    for (auto& name : args->mExcludeProcessNames) {
+        auto pr = GetProcessNameComparisonRange(name, strlen(name));
+        name += pr.first;
+        ((char*) name)[pr.second] = '\0';
     }
 
     // If the INTC provider is required, check that the manifest is installed.

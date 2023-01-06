@@ -10,12 +10,14 @@
 #include "ETW/Microsoft_Windows_DXGI.h"
 #include "ETW/Microsoft_Windows_DxgKrnl.h"
 #include "ETW/Microsoft_Windows_EventMetadata.h"
+#include "ETW/Microsoft_Windows_Kernel_Process.h"
 #include "ETW/Microsoft_Windows_Win32k.h"
 
 #include <algorithm>
 #include <assert.h>
 #include <d3d9.h>
 #include <dxgi.h>
+#include <stdlib.h>
 #include <unordered_set>
 
 #ifdef DEBUG
@@ -2652,35 +2654,74 @@ void PMTraceConsumer::RuntimePresentStop(Runtime runtime, EVENT_HEADER const& hd
     }
 }
 
-void PMTraceConsumer::HandleNTProcessEvent(EVENT_RECORD* pEventRecord)
+void PMTraceConsumer::HandleProcessEvent(EVENT_RECORD* pEventRecord)
 {
-    if (pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_START ||
-        pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_DC_START ||
-        pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_END||
-        pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_DC_END) {
+    auto const& hdr = pEventRecord->EventHeader;
+
+    ProcessEvent event;
+    event.QpcTime = hdr.TimeStamp.QuadPart;
+
+    if (hdr.ProviderId == Microsoft_Windows_Kernel_Process::GUID) {
+        switch (hdr.EventDescriptor.Id) {
+        case Microsoft_Windows_Kernel_Process::ProcessStart_Start::Id: {
+            EventDataDesc desc[] = {
+                { L"ProcessID" },
+                { L"ImageName" },
+            };
+            mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+            event.ProcessId     = desc[0].GetData<uint32_t>();
+            auto ImageName      = desc[1].GetData<std::wstring>();
+            event.IsStartEvent  = true;
+
+            auto size = ImageName.size();
+            event.ImageFileName.resize(size + 1);
+            wcstombs_s(&size, &event.ImageFileName[0], size + 1, ImageName.c_str(), size);
+            event.ImageFileName.resize(size - 1);
+            break;
+        }
+        case Microsoft_Windows_Kernel_Process::ProcessStop_Stop::Id: {
+            EventDataDesc desc[] = {
+                { L"ProcessID" },
+                { L"ImageName" },
+            };
+            mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+            event.ProcessId     = desc[0].GetData<uint32_t>();
+            event.ImageFileName = desc[1].GetData<std::string>();
+            event.IsStartEvent  = false;
+            break;
+        }
+        default:
+            assert(!mFilteredEvents); // Assert that filtering is working if expected
+            return;
+        }
+    } else { // hdr.ProviderId == NT_Process::GUID
+        if (hdr.EventDescriptor.Opcode == EVENT_TRACE_TYPE_START ||
+            hdr.EventDescriptor.Opcode == EVENT_TRACE_TYPE_DC_START) {
+            event.IsStartEvent = true;
+        } else if (hdr.EventDescriptor.Opcode == EVENT_TRACE_TYPE_END||
+                   hdr.EventDescriptor.Opcode == EVENT_TRACE_TYPE_DC_END) {
+            event.IsStartEvent = false;
+        } else {
+            return;
+        }
+
         EventDataDesc desc[] = {
             { L"ProcessId" },
             { L"ImageFileName" },
         };
         mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-
-        ProcessEvent event;
-        event.QpcTime       = pEventRecord->EventHeader.TimeStamp.QuadPart;
         event.ProcessId     = desc[0].GetData<uint32_t>();
         event.ImageFileName = desc[1].GetData<std::string>();
-        event.IsStartEvent  = pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_START ||
-                              pEventRecord->EventHeader.EventDescriptor.Opcode == EVENT_TRACE_TYPE_DC_START;
-
-        if (event.IsStartEvent) {
-            mNTProcessNames[event.ProcessId] = event.ImageFileName;
-        } else {
-            mNTProcessNames.erase(event.ProcessId);
-        }
-
-        std::lock_guard<std::mutex> lock(mProcessEventMutex);
-        mProcessEvents.emplace_back(event);
-        return;
     }
+
+    if (event.IsStartEvent) {
+        mNTProcessNames[event.ProcessId] = event.ImageFileName;
+    } else {
+        mNTProcessNames.erase(event.ProcessId);
+    }
+
+    std::lock_guard<std::mutex> lock(mProcessEventMutex);
+    mProcessEvents.emplace_back(event);
 }
 
 void PMTraceConsumer::HandleMetadataEvent(EVENT_RECORD* pEventRecord)

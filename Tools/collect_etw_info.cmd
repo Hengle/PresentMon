@@ -98,6 +98,11 @@ set events=%events% --event=PagingQueuePacket::Stop
 call :etw_list "Microsoft-Windows-DxgKrnl" "%out_dir%\Microsoft_Windows_DxgKrnl.h"
 
 set events=
+set events=%events% --event=ProcessStart::Start
+set events=%events% --event=ProcessStop::Stop
+call :etw_list "Microsoft-Windows-Kernel-Process" "%out_dir%\Microsoft_Windows_Kernel_Process.h"
+
+set events=
 set events=%events% --event=TokenCompositionSurfaceObject::Info
 set events=%events% --event=TokenStateChanged::Info
 set events=%events% --event=InputDeviceRead::Stop

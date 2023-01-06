@@ -1,22 +1,17 @@
 // Copyright (C) 2020-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 
-#include <assert.h>
-#include <stddef.h>
-#include <windows.h>
-#include <evntcons.h> // must include after windows.h
-
-#include "TraceSession.hpp"
-
 #include "Debug.hpp"
 #include "PresentMonTraceConsumer.hpp"
 #include "MixedRealityTraceConsumer.hpp"
+#include "TraceSession.hpp"
 
 #include "ETW/Microsoft_Windows_D3D9.h"
 #include "ETW/Microsoft_Windows_Dwm_Core.h"
 #include "ETW/Microsoft_Windows_DXGI.h"
 #include "ETW/Microsoft_Windows_DxgKrnl.h"
 #include "ETW/Microsoft_Windows_EventMetadata.h"
+#include "ETW/Microsoft_Windows_Kernel_Process.h"
 #include "ETW/Microsoft_Windows_Win32k.h"
 #include "ETW/NT_Process.h"
 #include "ETW/Intel_Graphics_D3D10.h"
@@ -114,7 +109,7 @@ struct FilteredProvider {
             AddKeyword((uint64_t) T::Keyword);
         }
 
-        maxLevel_ = max(maxLevel_, T::Level);
+        maxLevel_ = std::max(maxLevel_, T::Level);
     }
 
     ULONG Enable(
@@ -306,6 +301,13 @@ ULONG EnableProviders(
     status = provider.Enable(sessionHandle, Microsoft_Windows_DXGI::GUID);
     if (status != ERROR_SUCCESS) return status;
 
+    // Microsoft_Windows_Kernel_Process
+    provider.ClearFilter();
+    provider.AddEvent<Microsoft_Windows_Kernel_Process::ProcessStart_Start>();
+    provider.AddEvent<Microsoft_Windows_Kernel_Process::ProcessStop_Stop>();
+    status = provider.Enable(sessionHandle, Microsoft_Windows_Kernel_Process::GUID);
+    if (status != ERROR_SUCCESS && status != ERROR_ACCESS_DENIED) return status;
+
     // Microsoft_Windows_D3D9
     provider.ClearFilter();
     provider.AddEvent<Microsoft_Windows_D3D9::Present_Start>();
@@ -367,17 +369,18 @@ ULONG EnableProviders(
 void DisableProviders(TRACEHANDLE sessionHandle)
 {
     ULONG status = 0;
-    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_DXGI::GUID,           EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
-    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_D3D9::GUID,           EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
-    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_DxgKrnl::GUID,        EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
-    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_Win32k::GUID,         EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
-    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_Dwm_Core::GUID,       EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
-    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_Dwm_Core::Win7::GUID, EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
-    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_DxgKrnl::Win7::GUID,  EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
     status = EnableTraceEx2(sessionHandle, &DHD_PROVIDER_GUID,                      EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
-    status = EnableTraceEx2(sessionHandle, &SPECTRUMCONTINUOUS_PROVIDER_GUID,       EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
     status = EnableTraceEx2(sessionHandle, &Intel_Graphics_D3D10::GUID,             EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
     status = EnableTraceEx2(sessionHandle, &Intel_PCAT_Metrics::GUID,               EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
+    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_D3D9::GUID,           EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
+    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_DXGI::GUID,           EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
+    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_Dwm_Core::GUID,       EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
+    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_Dwm_Core::Win7::GUID, EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
+    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_DxgKrnl::GUID,        EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
+    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_DxgKrnl::Win7::GUID,  EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
+    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_Kernel_Process::GUID, EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
+    status = EnableTraceEx2(sessionHandle, &Microsoft_Windows_Win32k::GUID,         EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
+    status = EnableTraceEx2(sessionHandle, &SPECTRUMCONTINUOUS_PROVIDER_GUID,       EVENT_CONTROL_CODE_DISABLE_PROVIDER, 0, 0, 0, 0, nullptr);
 }
 
 template<
@@ -413,12 +416,25 @@ void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
         session->mPMConsumer->HandleDXGIEvent(pEventRecord);
         return;
     }
+    if constexpr (TRACK_DISPLAY || TRACK_INPUT) {
+        if (hdr.ProviderId == Microsoft_Windows_Win32k::GUID) {
+            session->mPMConsumer->HandleWin32kEvent(pEventRecord);
+            return;
+        }
+    }
+    if constexpr (TRACK_DISPLAY) {
+        if (hdr.ProviderId == Microsoft_Windows_Dwm_Core::GUID) {
+            session->mPMConsumer->HandleDWMEvent(pEventRecord);
+            return;
+        }
+    }
     if (hdr.ProviderId == Microsoft_Windows_D3D9::GUID) {
         session->mPMConsumer->HandleD3D9Event(pEventRecord);
         return;
     }
-    if (hdr.ProviderId == NT_Process::GUID) {
-        session->mPMConsumer->HandleNTProcessEvent(pEventRecord);
+    if (hdr.ProviderId == Microsoft_Windows_Kernel_Process::GUID ||
+        hdr.ProviderId == NT_Process::GUID) {
+        session->mPMConsumer->HandleProcessEvent(pEventRecord);
         return;
     }
     if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::Win7::PRESENTHISTORY_GUID) {
@@ -430,18 +446,7 @@ void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
         return;
     }
 
-    if constexpr (TRACK_DISPLAY || TRACK_INPUT) {
-        if (hdr.ProviderId == Microsoft_Windows_Win32k::GUID) {
-            session->mPMConsumer->HandleWin32kEvent(pEventRecord);
-            return;
-        }
-    }
-
     if constexpr (TRACK_DISPLAY) {
-        if (hdr.ProviderId == Microsoft_Windows_Dwm_Core::GUID) {
-            session->mPMConsumer->HandleDWMEvent(pEventRecord);
-            return;
-        }
         if (hdr.ProviderId == Microsoft_Windows_Dwm_Core::Win7::GUID) {
             session->mPMConsumer->HandleDWMEvent(pEventRecord);
             return;

@@ -1,17 +1,6 @@
-// Copyright (C) 2017-2020 Intel Corporation
+// Copyright (C) 2017-2020,2022 Intel Corporation
 // SPDX-License-Identifier: MIT
-
 #pragma once
-
-#include <assert.h>
-#include <deque>
-#include <map>
-#include <mutex>
-#include <numeric>
-#include <set>
-#include <vector>
-#include <windows.h>
-#include <evntcons.h> // must include after windows.h
 
 #include "PresentMonTraceConsumer.hpp"
 

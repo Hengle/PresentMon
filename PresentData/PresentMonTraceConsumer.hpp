@@ -1,9 +1,10 @@
 // Copyright (C) 2017-2022 Intel Corporation
 // SPDX-License-Identifier: MIT
-
 #pragma once
 
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 
 #include <deque>
 #include <map>
@@ -478,7 +479,7 @@ struct PMTraceConsumer
 
     void HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord);
     void HandleIntelPCATEvent(EVENT_RECORD* pEventRecord);
-    void HandleNTProcessEvent(EVENT_RECORD* pEventRecord);
+    void HandleProcessEvent(EVENT_RECORD* pEventRecord);
     void HandleDXGIEvent(EVENT_RECORD* pEventRecord);
     void HandleD3D9Event(EVENT_RECORD* pEventRecord);
     void HandleDXGKEvent(EVENT_RECORD* pEventRecord);

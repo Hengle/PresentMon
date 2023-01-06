@@ -80,21 +80,51 @@ static void UpdateRecordingToggles(size_t nextIndex)
 // ETL collection.  When reading an ETL, we receive NT_PROCESS events whenever
 // a process is created or exits which we use to update the active processes.
 //
-// When collecting events in realtime, we update the active processes whenever
-// we notice an event with a new process id.  If it's a target process, we
-// obtain a handle to the process, and periodically check it to see if it has
-// exited.
+// When collecting events in realtime and with elevated privilege, we should
+// get similar ProcessStart/ProcessStop events, but only if PresentMon is
+// running when the process started/stopped.  If we don't have elevated
+// privilege or we missed a process start/stop we update the active processes
+// whenever we notice an event with a new process id.  If it's a target
+// process, we obtain a handle to the process, and periodically check it to see
+// if it has exited.
 
 static std::unordered_map<uint32_t, ProcessInfo> gProcesses;
 static uint32_t gTargetProcessCount = 0;
+
+std::pair<size_t, size_t> GetProcessNameComparisonRange(char const* name, size_t length)
+{
+    std::pair<size_t, size_t> pr(0, length);
+
+    if (pr.second >= 4 && _stricmp(name + pr.second - 4, ".exe") == 0) {
+        pr.second -= 4;
+    }
+    for (size_t i = pr.second; i--; ) {
+        if (name[i] == '/' || name[i] == '\\') {
+            pr.first = i + 1;
+            break;
+        }
+    }
+
+    pr.second = pr.second - pr.first;
+    return pr;
+}
 
 static bool IsTargetProcess(uint32_t processId, std::string const& processName)
 {
     auto const& args = GetCommandLineArgs();
 
+    char const* compareName = nullptr;
+    size_t compareLength = 0;
+    if (args.mExcludeProcessNames.size() + args.mTargetProcessNames.size() > 0) {
+        compareName = processName.c_str();
+        auto pr = GetProcessNameComparisonRange(compareName, processName.size());
+        compareName += pr.first;
+        compareLength = pr.second;
+    }
+
     // -exclude
     for (auto excludeProcessName : args.mExcludeProcessNames) {
-        if (_stricmp(excludeProcessName, processName.c_str()) == 0) {
+        if (_strnicmp(excludeProcessName, compareName, compareLength) == 0) {
             return false;
         }
     }
@@ -111,7 +141,7 @@ static bool IsTargetProcess(uint32_t processId, std::string const& processName)
 
     // -process_name
     for (auto targetProcessName : args.mTargetProcessNames) {
-        if (_stricmp(targetProcessName, processName.c_str()) == 0) {
+        if (_strnicmp(targetProcessName, compareName, compareLength) == 0) {
             return true;
         }
     }
@@ -119,36 +149,33 @@ static bool IsTargetProcess(uint32_t processId, std::string const& processName)
     return false;
 }
 
-static void InitProcessInfo(ProcessInfo* processInfo, uint32_t processId, HANDLE handle, std::string const& processName)
+static ProcessInfo CreateProcessInfo(uint32_t processId, HANDLE handle, std::string const& processName)
 {
-    auto target = IsTargetProcess(processId, processName);
-
-    processInfo->mHandle             = handle;
-    processInfo->mModuleName         = processName;
-    processInfo->mOutputCsv.mFile    = nullptr;
-    processInfo->mOutputCsv.mWmrFile = nullptr;
-    processInfo->mTargetProcess      = target;
-
-    if (target) {
+    auto isTarget = IsTargetProcess(processId, processName);
+    if (isTarget) {
         gTargetProcessCount += 1;
     }
+
+    ProcessInfo info;
+    info.mHandle             = handle;
+    info.mModuleName         = processName;
+    info.mOutputCsv.mFile    = nullptr;
+    info.mOutputCsv.mWmrFile = nullptr;
+    info.mIsTargetProcess    = isTarget;
+    return info;
 }
 
 static ProcessInfo* GetProcessInfo(uint32_t processId)
 {
-    auto result = gProcesses.emplace(processId, ProcessInfo());
-    auto processInfo = &result.first->second;
-    auto newProcess = result.second;
+    auto ii = gProcesses.find(processId);
+    if (ii == gProcesses.end()) {
 
-    if (newProcess) {
-        // In ETL capture, we should have gotten an NTProcessEvent for this
-        // process updated via UpdateNTProcesses(), so this path should only
-        // happen in realtime capture.
-        //
-        // Try to open a limited handle into the process in order to query its
-        // name and also periodically check if it has terminated.  This will
-        // fail (with GetLastError() == ERROR_ACCESS_DENIED) if the process was
-        // run on another account, unless we're running with SeDebugPrivilege.
+        // In case we didn't get a ProcessStart event for this process (e.g.,
+        // if the process started before PresentMon did) try to open a limited
+        // handle into the process in order to query its name and also
+        // periodically check if it has terminated.  This will fail (with
+        // GetLastError() == ERROR_ACCESS_DENIED) if the process was run on
+        // another account, unless we're running with SeDebugPrivilege.
         auto const& args = GetCommandLineArgs();
         HANDLE handle = NULL;
         char const* processName = "<error>";
@@ -161,10 +188,10 @@ static ProcessInfo* GetProcessInfo(uint32_t processId)
             }
         }
 
-        InitProcessInfo(processInfo, processId, handle, processName);
+        ii = gProcesses.emplace(processId, CreateProcessInfo(processId, handle, processName)).first;
     }
 
-    return processInfo;
+    return &ii->second;
 }
 
 // Check if any realtime processes terminated and add them to the terminated
@@ -200,7 +227,7 @@ static void HandleTerminatedProcess(uint32_t processId)
     }
 
     auto processInfo = &iter->second;
-    if (processInfo->mTargetProcess) {
+    if (processInfo->mIsTargetProcess) {
         // Close this process' CSV.
         CloseOutputCsv(processInfo);
 
@@ -216,20 +243,16 @@ static void HandleTerminatedProcess(uint32_t processId)
 
 static void UpdateProcesses(std::vector<ProcessEvent> const& processEvents, std::vector<std::pair<uint32_t, uint64_t>>* terminatedProcesses)
 {
-    for (auto const& processEvent : processEvents) {
-        if (processEvent.IsStartEvent) {
-            // This event is a new process starting, the pid should not already be
-            // in gProcesses.
-            auto result = gProcesses.emplace(processEvent.ProcessId, ProcessInfo());
-            auto processInfo = &result.first->second;
-            auto newProcess = result.second;
-            if (newProcess) {
-                InitProcessInfo(processInfo, processEvent.ProcessId, NULL, processEvent.ImageFileName);
-            }
-        } else {
+    for (auto const& e : processEvents) {
+        auto ii = gProcesses.find(e.ProcessId);
+        if (ii == gProcesses.end()) {
+            gProcesses.emplace(e.ProcessId, CreateProcessInfo(e.ProcessId, NULL, e.ImageFileName));
+        }
+
+        if (!e.IsStartEvent) {
             // Note any process termination in terminatedProcess, to be handled
             // once the present event stream catches up to the termination time.
-            terminatedProcesses->emplace_back(processEvent.ProcessId, processEvent.QpcTime);
+            terminatedProcesses->emplace_back(e.ProcessId, e.QpcTime);
         }
     }
 }
@@ -250,7 +273,7 @@ static void AddPresents(std::vector<std::shared_ptr<PresentEvent>> const& presen
 
         // Look up the swapchain this present belongs to.
         auto processInfo = GetProcessInfo(presentEvent->ProcessId);
-        if (!processInfo->mTargetProcess) {
+        if (!processInfo->mIsTargetProcess) {
             continue;
         }
 
@@ -304,7 +327,7 @@ static void AddPresents(LateStageReprojectionData* lsrData,
 
         const uint32_t appProcessId = presentEvent->GetAppProcessId();
         auto processInfo = GetProcessInfo(appProcessId);
-        if (!processInfo->mTargetProcess) {
+        if (!processInfo->mIsTargetProcess) {
             continue;
         }
 
@@ -332,7 +355,7 @@ static void PruneHistory(
 {
     assert(processEvents.size() + presentEvents.size() + lsrEvents.size() > 0);
 
-    auto latestQpc = max(max(
+    auto latestQpc = std::max(std::max(
         processEvents.empty() ? 0ull : processEvents.back().QpcTime,
         presentEvents.empty() ? 0ull : presentEvents.back()->PresentStartTime),
         lsrEvents.empty()     ? 0ull : lsrEvents.back()->QpcTime);

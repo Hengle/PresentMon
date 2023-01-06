@@ -49,7 +49,7 @@ static void vConsolePrint(char const* format, va_list args)
 
     int r = vsnprintf(s, n, format, args);
     if (r > 0) {
-        gConsoleWriteBufferIndex = min((uint32_t) (n - 1), gConsoleWriteBufferIndex + r);
+        gConsoleWriteBufferIndex = std::min((uint32_t) (n - 1), gConsoleWriteBufferIndex + r);
     }
 }
 
@@ -132,7 +132,7 @@ void UpdateConsole(uint32_t processId, ProcessInfo const& processInfo)
     auto const& args = GetCommandLineArgs();
 
     // Don't display non-target or empty processes
-    if (!processInfo.mTargetProcess ||
+    if (!processInfo.mIsTargetProcess ||
         processInfo.mModuleName.empty() ||
         processInfo.mSwapChain.empty()) {
         return;

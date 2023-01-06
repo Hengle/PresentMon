@@ -11,6 +11,7 @@
 #include "ETW/Microsoft_Windows_Dwm_Core.h"
 #include "ETW/Microsoft_Windows_DXGI.h"
 #include "ETW/Microsoft_Windows_DxgKrnl.h"
+#include "ETW/Microsoft_Windows_Kernel_Process.h"
 #include "ETW/Microsoft_Windows_Win32k.h"
 
 #include <assert.h>
@@ -61,6 +62,8 @@ void PrintU32(uint32_t value) { printf("%u", value); }
 void PrintU64(uint64_t value) { printf("%llu", value); }
 void PrintU64x(uint64_t value) { printf("0x%llx", value); }
 void PrintBool(bool value) { printf("%s", value ? "true" : "false"); }
+void PrintString(std::string const& value) { printf("%s", value.c_str()); }
+void PrintWString(std::wstring const& value) { printf("%ls", value.c_str()); }
 void PrintRuntime(Runtime value)
 {
     switch (value) {
@@ -169,6 +172,8 @@ void PrintEventHeader(EVENT_RECORD* eventRecord, EventMetadata* metadata, char c
         else if (propFunc == PrintU32)                  PrintU32(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintU64)                  PrintU64(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintU64x)                 PrintU64x(metadata->GetEventData<uint64_t>(eventRecord, propName));
+        else if (propFunc == PrintString)               PrintString(metadata->GetEventData<std::string>(eventRecord, propName));
+        else if (propFunc == PrintWString)              PrintWString(metadata->GetEventData<std::wstring>(eventRecord, propName));
         else if (propFunc == PrintTime)                 PrintTime(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintTimeDelta)            PrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintQueuePacketType)      PrintQueuePacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
@@ -331,13 +336,12 @@ void InitializeVerboseTrace(LARGE_INTEGER* firstTimestamp, LARGE_INTEGER const& 
 void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, EventMetadata* metadata)
 {
     auto const& hdr = eventRecord->EventHeader;
-    auto id = hdr.EventDescriptor.Id;
 
     FlushModifiedPresent();
 
     if (hdr.ProviderId == Microsoft_Windows_D3D9::GUID) {
         using namespace Microsoft_Windows_D3D9;
-        switch (id) {
+        switch (hdr.EventDescriptor.Id) {
         case Present_Start::Id: PrintEventHeader(hdr, "D3D9PresentStart"); break;
         case Present_Stop::Id:  PrintEventHeader(hdr, "D3D9PresentStop"); break;
         }
@@ -346,7 +350,7 @@ void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, E
 
     if (hdr.ProviderId == Microsoft_Windows_DXGI::GUID) {
         using namespace Microsoft_Windows_DXGI;
-        switch (id) {
+        switch (hdr.EventDescriptor.Id) {
         case Present_Start::Id:                  PrintEventHeader(eventRecord, metadata, "DXGIPresent_Start",    { L"Flags", PrintPresentFlags, }); break;
         case PresentMultiplaneOverlay_Start::Id: PrintEventHeader(eventRecord, metadata, "DXGIPresentMPO_Start", { L"Flags", PrintPresentFlags, }); break;
         case Present_Stop::Id:                   PrintEventHeader(hdr, "DXGIPresent_Stop"); break;
@@ -364,7 +368,7 @@ void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, E
 
     if (hdr.ProviderId == Microsoft_Windows_DxgKrnl::GUID) {
         using namespace Microsoft_Windows_DxgKrnl;
-        switch (id) {
+        switch (hdr.EventDescriptor.Id) {
         case Blit_Info::Id:                     PrintEventHeader(hdr, "Blit_Info"); break;
         case BlitCancel_Info::Id:               PrintEventHeader(hdr, "BlitCancel_Info"); break;
         case FlipMultiPlaneOverlay_Info::Id:    PrintEventHeader(hdr, "FlipMultiPlaneOverlay_Info"); break;
@@ -433,7 +437,7 @@ void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, E
             auto FlipSubmitSequence = desc[1].GetArray<uint64_t>(FlipEntryCount);
 
             PrintEventHeader(hdr);
-            printf("%s", id == HSyncDPCMultiPlane_Info::Id ? "HSyncDPCMultiPlane_Info" : "VSyncDPCMultiPlane_Info");
+            printf("%s", hdr.EventDescriptor.Id == HSyncDPCMultiPlane_Info::Id ? "HSyncDPCMultiPlane_Info" : "VSyncDPCMultiPlane_Info");
             for (uint32_t i = 0; i < FlipEntryCount; ++i) {
                 if (i > 0) printf("\n                                                    ");
                 printf(" SubmitSequence[%u]=%llu FlipId[%u]=0x%llx",
@@ -466,7 +470,7 @@ void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, E
     if (hdr.ProviderId == Microsoft_Windows_Dwm_Core::GUID ||
         hdr.ProviderId == Microsoft_Windows_Dwm_Core::Win7::GUID) {
         using namespace Microsoft_Windows_Dwm_Core;
-        switch (id) {
+        switch (hdr.EventDescriptor.Id) {
         case MILEVENT_MEDIA_UCE_PROCESSPRESENTHISTORY_GetPresentHistory_Info::Id:
                                               PrintEventHeader(hdr, "DWM_GetPresentHistory"); break;
         case SCHEDULE_PRESENT_Start::Id:      PrintEventHeader(hdr, "DWM_SCHEDULE_PRESENT_Start"); break;
@@ -478,9 +482,18 @@ void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, E
         return;
     }
 
+    if (hdr.ProviderId == Microsoft_Windows_Kernel_Process::GUID) {
+        using namespace Microsoft_Windows_Kernel_Process;
+        switch (hdr.EventDescriptor.Id) {
+        case ProcessStart_Start::Id: PrintEventHeader(eventRecord, metadata, "ProcessStart", { L"ImageName", PrintWString }); break;
+        case ProcessStop_Stop::Id:   PrintEventHeader(eventRecord, metadata, "ProcessStop",  { L"ImageName", PrintString }); break;
+        }
+        return;
+    }
+
     if (hdr.ProviderId == Microsoft_Windows_Win32k::GUID) {
         using namespace Microsoft_Windows_Win32k;
-        switch (id) {
+        switch (hdr.EventDescriptor.Id) {
         case TokenCompositionSurfaceObject_Info::Id: PrintEventHeader(hdr, "Win32k_TokenCompositionSurfaceObject"); break;
         case InputDeviceRead_Stop::Id:               PrintEventHeader(eventRecord, metadata, "Win32k_InputDeviceRead_Stop", { L"DeviceType", PrintU32, }); break;
         case RetrieveInputMessage_Info::Id:          PrintEventHeader(eventRecord, metadata, "Win32k_RetrieveInputMessage", { L"flags",      PrintU32, }); break;
@@ -524,7 +537,7 @@ void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, E
 
     if (hdr.ProviderId == Intel_Graphics_D3D10::GUID) {
         using namespace Intel_Graphics_D3D10;
-        switch (id) {
+        switch (hdr.EventDescriptor.Id) {
         case QueueTimers_Info::Id:  PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Info",  { L"value", PrintU32 }); break;
         case QueueTimers_Start::Id: PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Start", { L"value", PrintU32 }); break;
         case QueueTimers_Stop::Id:  PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Stop",  { L"value", PrintU32 }); break;
@@ -598,7 +611,7 @@ void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, E
     }
 
     if (hdr.ProviderId == Intel_PCAT_Metrics::GUID) {
-        switch (id) {
+        switch (hdr.EventDescriptor.Id) {
         case Intel_PCAT_Metrics::Task_0_Opcode_0::Id: PrintEventHeader(hdr, "INTC_PCAT"); break;
         }
         return;

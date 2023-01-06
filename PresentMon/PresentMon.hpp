@@ -104,7 +104,7 @@ struct ProcessInfo {
     std::unordered_map<uint64_t, SwapChainData> mSwapChain;
     HANDLE mHandle;
     OutputCsv mOutputCsv;
-    bool mTargetProcess;
+    bool mIsTargetProcess;
 };
 
 #include "LateStageReprojectionData.hpp"
@@ -143,6 +143,7 @@ void ExitMainThread();
 void StartOutputThread();
 void StopOutputThread();
 void SetOutputRecordingState(bool record);
+std::pair<size_t, size_t> GetProcessNameComparisonRange(char const* name, size_t length);
 
 // Privilege.cpp:
 bool InPerfLogUsersGroup();
