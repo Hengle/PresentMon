@@ -7,9 +7,9 @@ We track feature requests and issues using GitHub Issues [here](https://github.c
 Provide an ETL trace with your issue report if possible:
 
 1. Install the [Windows Performance Toolkit](https://www.google.com/search?q=windows+performance+toolkit+download&btnI).
-2. Start a capture by running "%ProgramFiles(x86)%\Windows Kits\10\Windows Performance Toolkit\gpuview\log.cmd" as administrator.
-3. Run the test scneario.
-4. Stop the capture by running log.cmd again. The capture will be output to Merged.etl in the working directory.  Try to capture for as short as possible to limit the size of the file, while still capturing the problem.
+2. Start a capture by running "Tools\log_intc.cmd" as administrator.
+3. Run the test scenario.
+4. Stop the capture by running "Tools\log_intc.cmd" again. The capture will be output to Merged.etl in the working directory.  Try to capture for as short as possible to limit the size of the file, while still capturing the problem.
 5. Test that the .etl capture exhibits the issue you are reporting, by running PresentMon with "-etl_file Merged.etl" (to read from the capture instead of the system).
 6. Provide the resulting Merged.etl file.  ETL files compress well, so consider compressing to simplify sharing e.g.: `7z a MergeCompressed.7z Merged.etl`).
 
