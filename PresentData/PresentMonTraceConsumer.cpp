@@ -237,15 +237,15 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
         {
             // FRAME_TIME_DRIVER is emitted on the driver thread some time
             // after FRAME_TIME_APP.  It should be the first event emitted on
-            // the driver thread (since the present hasn't beem submitted yet).
+            // the driver thread (since the present hasn't beem submitted yet)
+            // so if the looked up preseent has seen Dxgk or Win32k events it
+            // is the wrong one.  This can happen during startup, for example.
             std::shared_ptr<PresentEvent> present;
             auto presentsByThisProcess = &mOrderedPresentsByProcessId[hdr.ProcessId];
             for (auto const& pr : *presentsByThisProcess) {
                 auto const& p = pr.second;
-                if (p->INTC_ProducerPresentTime != 0 && p->INTC_ConsumerPresentTime == 0) {
+                if (p->INTC_ProducerPresentTime != 0 && p->INTC_ConsumerPresentTime == 0 && !p->SeenDxgkPresent && !p->SeenWin32KEvents) {
                     DebugAssert(p->DriverThreadId == 0);
-                    DebugAssert(p->SeenDxgkPresent == false);
-                    DebugAssert(p->SeenWin32KEvents == false);
                     DebugAssert(p->PresentMode == PresentMode::Unknown);
 
                     present = p;

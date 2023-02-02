@@ -140,6 +140,24 @@ void PrintDmaPacketType(uint32_t type)
     default:                                             printf("Unknown (%u)", type); assert(false); break;
     }
 }
+void PrintINTCTimerType(uint32_t type)
+{
+    using namespace Intel_Graphics_D3D10;
+    switch (type) {
+    case mTimerType::WAIT_IF_FULL_TIMER:                 printf("WAIT_IF_FULL_TIMER"); break;
+    case mTimerType::WAIT_UNTIL_EMPTY_SYNC_TIMER:        printf("WAIT_UNTIL_EMPTY_SYNC_TIMER"); break;
+    case mTimerType::WAIT_UNTIL_EMPTY_SYNC_ASYNC_TIMER:  printf("WAIT_UNTIL_EMPTY_SYNC_ASYNC_TIMER"); break;
+    case mTimerType::WAIT_UNTIL_EMPTY_DRAIN_TIMER:       printf("WAIT_UNTIL_EMPTY_DRAIN_TIMER"); break;
+    case mTimerType::WAIT_UNTIL_EMPTY_DRAIN_ASYNC_TIMER: printf("WAIT_UNTIL_EMPTY_DRAIN_ASYNC_TIMER"); break;
+    case mTimerType::WAIT_FOR_FENCE:                     printf("WAIT_FOR_FENCE"); break;
+    case mTimerType::WAIT_UNTIL_FENCE_SUBMITTED:         printf("WAIT_UNTIL_FENCE_SUBMITTED"); break;
+    case mTimerType::WAIT_IF_EMPTY_TIMER:                printf("WAIT_IF_EMPTY_TIMER"); break;
+    case mTimerType::FRAME_TIME_APP:                     printf("FRAME_TIME_APP"); break;
+    case mTimerType::FRAME_TIME_DRIVER:                  printf("FRAME_TIME_DRIVER"); break;
+    case mTimerType::WAIT_TIMERS_COUNT:                  printf("WAIT_TIMERS_COUNT"); break;
+    default:                                             printf("Unknown (%u)", type); assert(false); break;
+    }
+}
 void PrintPresentFlags(uint32_t flags)
 {
     if (flags & DXGI_PRESENT_TEST) printf("TEST");
@@ -178,6 +196,7 @@ void PrintEventHeader(EVENT_RECORD* eventRecord, EventMetadata* metadata, char c
         else if (propFunc == PrintTimeDelta)            PrintTimeDelta(metadata->GetEventData<uint64_t>(eventRecord, propName));
         else if (propFunc == PrintQueuePacketType)      PrintQueuePacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintDmaPacketType)        PrintDmaPacketType(metadata->GetEventData<uint32_t>(eventRecord, propName));
+        else if (propFunc == PrintINTCTimerType)        PrintINTCTimerType(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintPresentFlags)         PrintPresentFlags(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else if (propFunc == PrintPresentHistoryModel)  PrintPresentHistoryModel(metadata->GetEventData<uint32_t>(eventRecord, propName));
         else assert(false);
@@ -538,11 +557,11 @@ void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, E
     if (hdr.ProviderId == Intel_Graphics_D3D10::GUID) {
         using namespace Intel_Graphics_D3D10;
         switch (hdr.EventDescriptor.Id) {
-        case QueueTimers_Info::Id:  PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Info",  { L"value", PrintU32 }); break;
-        case QueueTimers_Start::Id: PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Start", { L"value", PrintU32 }); break;
-        case QueueTimers_Stop::Id:  PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Stop",  { L"value", PrintU32 }); break;
-        case CpuGpuSync_Start::Id:  PrintEventHeader(eventRecord, metadata, "INTC_CpuGpuSync_Start",  { L"value", PrintU32 }); break;
-        case CpuGpuSync_Stop::Id:   PrintEventHeader(eventRecord, metadata, "INTC_CpuGpuSync_Stop",   { L"value", PrintU32 }); break;
+        case QueueTimers_Info::Id:  PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Info",  { L"value", PrintINTCTimerType }); break;
+        case QueueTimers_Start::Id: PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Start", { L"value", PrintINTCTimerType }); break;
+        case QueueTimers_Stop::Id:  PrintEventHeader(eventRecord, metadata, "INTC_QueueTimers_Stop",  { L"value", PrintINTCTimerType }); break;
+        case CpuGpuSync_Start::Id:  PrintEventHeader(eventRecord, metadata, "INTC_CpuGpuSync_Start",  { L"value", PrintINTCTimerType }); break;
+        case CpuGpuSync_Stop::Id:   PrintEventHeader(eventRecord, metadata, "INTC_CpuGpuSync_Stop",   { L"value", PrintINTCTimerType }); break;
 
         case ShaderCompilationTrackingEvents_Start_3::Id: PrintEventHeader(hdr, "INTC_ShaderCompilationTrackingEvents_Start_3"); break;
         case ShaderCompilationTrackingEvents_Stop_3::Id:  PrintEventHeader(hdr, "INTC_ShaderCompilationTrackingEvents_Stop_3"); break;
