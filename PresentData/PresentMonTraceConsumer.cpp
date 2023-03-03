@@ -305,17 +305,19 @@ void PMTraceConsumer::HandleIntelGraphicsEvent(EVENT_RECORD* pEventRecord)
             default: DebugAssert(false); break;
             }
 
-            if (hdr.EventDescriptor.Id == Intel_Graphics_D3D10::QueueTimers_Start::Id) {
-                timer->mStartCount += 1;
-                if (timer->mStartCount == 1) {
-                    timer->mStartTime = hdr.TimeStamp.QuadPart;
-                }
-            } else {
-                if (timer->mStartCount >= 1) {
-                    timer->mStartCount -= 1;
-                    if (timer->mStartCount == 0) {
-                        timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime;
-                        timer->mStartTime = 0;
+            if (timer) {
+                if (hdr.EventDescriptor.Id == Intel_Graphics_D3D10::QueueTimers_Start::Id) {
+                    timer->mStartCount += 1;
+                    if (timer->mStartCount == 1) {
+                        timer->mStartTime = hdr.TimeStamp.QuadPart;
+                    }
+                } else {
+                    if (timer->mStartCount >= 1) {
+                        timer->mStartCount -= 1;
+                        if (timer->mStartCount == 0) {
+                            timer->mAccumulatedTime += hdr.TimeStamp.QuadPart - timer->mStartTime;
+                            timer->mStartTime = 0;
+                        }
                     }
                 }
             }

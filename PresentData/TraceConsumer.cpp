@@ -101,7 +101,7 @@ PropertyInfo GetPropertyInfo(TRACE_EVENT_INFO const& tei, EVENT_RECORD const& ev
         case TDH_INTYPE_WBEMSID:
             // TODO: can't figure out how to decode these... so reverting to TDH for now
             {
-                PROPERTY_DATA_DESCRIPTOR descriptor;
+                PROPERTY_DATA_DESCRIPTOR descriptor{};
                 descriptor.PropertyName = (ULONGLONG) &tei + epi.NameOffset;
                 descriptor.ArrayIndex = UINT32_MAX;
                 auto status = TdhGetPropertySize((EVENT_RECORD*) &eventRecord, 0, nullptr, 1, &descriptor, (ULONG*) &info.size_);

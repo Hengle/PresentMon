@@ -99,7 +99,7 @@ void PrintPresentResult(PresentResult value)
 void PrintPresentHistoryModel(uint32_t model)
 {
     using namespace Microsoft_Windows_DxgKrnl;
-    switch (model) {
+    switch ((PresentModel)model) {
     case PresentModel::D3DKMT_PM_UNINITIALIZED:          printf("UNINITIALIZED");          break;
     case PresentModel::D3DKMT_PM_REDIRECTED_GDI:         printf("REDIRECTED_GDI");         break;
     case PresentModel::D3DKMT_PM_REDIRECTED_FLIP:        printf("REDIRECTED_FLIP");        break;
@@ -116,7 +116,7 @@ void PrintPresentHistoryModel(uint32_t model)
 void PrintQueuePacketType(uint32_t type)
 {
     using namespace Microsoft_Windows_DxgKrnl;
-    switch (type) {
+    switch ((QueuePacketType)type) {
     case QueuePacketType::DXGKETW_RENDER_COMMAND_BUFFER:   printf("RENDER"); break;
     case QueuePacketType::DXGKETW_DEFERRED_COMMAND_BUFFER: printf("DEFERRED"); break;
     case QueuePacketType::DXGKETW_SYSTEM_COMMAND_BUFFER:   printf("SYSTEM"); break;
@@ -132,7 +132,7 @@ void PrintQueuePacketType(uint32_t type)
 void PrintDmaPacketType(uint32_t type)
 {
     using namespace Microsoft_Windows_DxgKrnl;
-    switch (type) {
+    switch ((DmaPacketType)type) {
     case DmaPacketType::DXGKETW_CLIENT_RENDER_BUFFER:    printf("CLIENT_RENDER"); break;
     case DmaPacketType::DXGKETW_CLIENT_PAGING_BUFFER:    printf("CLIENT_PAGING"); break;
     case DmaPacketType::DXGKETW_SYSTEM_PAGING_BUFFER:    printf("SYSTEM_PAGING"); break;
@@ -143,7 +143,7 @@ void PrintDmaPacketType(uint32_t type)
 void PrintINTCTimerType(uint32_t type)
 {
     using namespace Intel_Graphics_D3D10;
-    switch (type) {
+    switch ((mTimerType)type) {
     case mTimerType::WAIT_IF_FULL_TIMER:                 printf("WAIT_IF_FULL_TIMER"); break;
     case mTimerType::WAIT_UNTIL_EMPTY_SYNC_TIMER:        printf("WAIT_UNTIL_EMPTY_SYNC_TIMER"); break;
     case mTimerType::WAIT_UNTIL_EMPTY_SYNC_ASYNC_TIMER:  printf("WAIT_UNTIL_EMPTY_SYNC_ASYNC_TIMER"); break;
@@ -473,7 +473,7 @@ void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, E
                 FlipSubmitSequence >> 32,
                 FlipSubmitSequence & 0xffffffffll);
             if (hdr.EventDescriptor.Version >= 2) {
-                switch (metadata->GetEventData<uint32_t>(eventRecord, L"FlipEntryStatusAfterFlip")) {
+                switch ((FlipEntryStatus)metadata->GetEventData<uint32_t>(eventRecord, L"FlipEntryStatusAfterFlip")) {
                 case FlipEntryStatus::FlipWaitVSync:    printf(" FlipWaitVSync"); break;
                 case FlipEntryStatus::FlipWaitComplete: printf(" FlipWaitComplete"); break;
                 case FlipEntryStatus::FlipWaitHSync:    printf(" FlipWaitHSync"); break;
@@ -539,7 +539,7 @@ void VerboseTraceEvent(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecord, E
                 printf(" p%llu", presentId);
             }
 
-            switch (NewState) {
+            switch ((TokenState)NewState) {
             case TokenState::Completed: printf(" NewState=Completed"); break;
             case TokenState::InFrame:   printf(" NewState=InFrame");   break;
             case TokenState::Confirmed: printf(" NewState=Confirmed"); break;
