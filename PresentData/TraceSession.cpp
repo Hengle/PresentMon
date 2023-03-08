@@ -504,45 +504,46 @@ void CALLBACK EventRecordCallback(EVENT_RECORD* pEventRecord)
     #pragma warning(pop)
 }
 
-template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY, bool TRACK_INPUT, bool TRACK_WMR, bool TRACK_INTC>
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackPower)
+template<bool... Ts>
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool t1)
 {
-    return trackPower ? &EventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, TRACK_INTC, true>
-                      : &EventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, TRACK_INTC, false>;
+    return t1 ? &EventRecordCallback<Ts..., true>
+              : &EventRecordCallback<Ts..., false>;
 }
 
-template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY, bool TRACK_INPUT, bool TRACK_WMR>
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackINTC, bool trackPower)
+template<bool... Ts>
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool t1, bool t2)
 {
-    return trackINTC ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, true>(trackPower)
-                     : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, TRACK_WMR, false>(trackPower);
+    return t1 ? GetEventRecordCallback<Ts..., true>(t2)
+              : GetEventRecordCallback<Ts..., false>(t2);
 }
 
-template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY, bool TRACK_INPUT>
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackWMR, bool trackINTC, bool trackPower)
+template<bool... Ts>
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool t1, bool t2, bool t3)
 {
-    return trackWMR ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, true>(trackINTC, trackPower)
-                    : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, TRACK_INPUT, false>(trackINTC, trackPower);
+    return t1 ? GetEventRecordCallback<Ts..., true>(t2, t3)
+              : GetEventRecordCallback<Ts..., false>(t2, t3);
 }
 
-template<bool SAVE_FIRST_TIMESTAMP, bool TRACK_DISPLAY>
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackInput, bool trackWMR, bool trackINTC, bool trackPower)
+template<bool... Ts>
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool t1, bool t2, bool t3, bool t4)
 {
-    return trackInput ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, true>(trackWMR, trackINTC, trackPower)
-                      : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, TRACK_DISPLAY, false>(trackWMR, trackINTC, trackPower);
+    return t1 ? GetEventRecordCallback<Ts..., true>(t2, t3, t4)
+              : GetEventRecordCallback<Ts..., false>(t2, t3, t4);
 }
 
-template<bool SAVE_FIRST_TIMESTAMP>
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool trackDisplay, bool trackInput, bool trackWMR, bool trackINTC, bool trackPower)
+template<bool... Ts>
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool t1, bool t2, bool t3, bool t4, bool t5)
 {
-    return trackDisplay ? GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, true>(trackInput, trackWMR, trackINTC, trackPower)
-                        : GetEventRecordCallback<SAVE_FIRST_TIMESTAMP, false>(trackInput, trackWMR, trackINTC, trackPower);
+    return t1 ? GetEventRecordCallback<Ts..., true>(t2, t3, t4, t5)
+              : GetEventRecordCallback<Ts..., false>(t2, t3, t4, t5);
 }
 
-PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool saveFirstTimestamp, bool trackDisplay, bool trackInput, bool trackWMR, bool trackINTC, bool trackPower)
+template<bool... Ts>
+PEVENT_RECORD_CALLBACK GetEventRecordCallback(bool t1, bool t2, bool t3, bool t4, bool t5, bool t6)
 {
-    return saveFirstTimestamp ? GetEventRecordCallback<true>(trackDisplay, trackInput, trackWMR, trackINTC, trackPower)
-                              : GetEventRecordCallback<false>(trackDisplay, trackInput, trackWMR, trackINTC, trackPower);
+    return t1 ? GetEventRecordCallback<Ts..., true>(t2, t3, t4, t5, t6)
+              : GetEventRecordCallback<Ts..., false>(t2, t3, t4, t5, t6);
 }
 
 ULONG CALLBACK BufferCallback(EVENT_TRACE_LOGFILEA* pLogFile)

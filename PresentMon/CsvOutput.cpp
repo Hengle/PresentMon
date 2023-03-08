@@ -56,10 +56,9 @@ static void WriteCsvHeader(FILE* fp)
         ",SyncInterval"
         ",PresentFlags"
         ",Dropped"
-        ",%s"
+        ",TimeInSeconds"
         ",msInPresentAPI"
-        ",msBetweenPresents",
-        args.mOutputDateTime ? "PresentTime" : "TimeInSeconds");
+        ",msBetweenPresents");
     if (args.mTrackDisplay) {
         fprintf(fp,
             ",AllowsTearing"

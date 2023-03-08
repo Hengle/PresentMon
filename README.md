@@ -258,7 +258,7 @@ Applications that do not use D3D9 or DXGI APIs for presenting frames (e.g., as i
 - *SwapChainAddress* = 0
 - *msInPresentAPI* = 0
 
-In this case, *PresentTime* or *TimeInSeconds* will represent the first time the present is observed in the kernel, as opposed to the runtime, and therefore will be sometime after the application presented the frame (typically ~0.5ms).  Since *msUntilRenderComplete* and *msUntilDisplayed* are deltas from *TimeInSeconds*, they will be correspondingly smaller then they would have been if measured from application present.  *msBetweenDisplayChange* will still be correct, and *msBetweenPresents* should be correct on average.
+In this case, *TimeInSeconds* will represent the first time the present is observed in the kernel, as opposed to the runtime, and therefore will be sometime after the application presented the frame (typically ~0.5ms).  Since *msUntilRenderComplete* and *msUntilDisplayed* are deltas from *TimeInSeconds*, they will be correspondingly smaller then they would have been if measured from application present.  *msBetweenDisplayChange* will still be correct, and *msBetweenPresents* should be correct on average.
 
 ### Tracking GPU work with Hardware-Accelerated GPU Scheduling enabled
 

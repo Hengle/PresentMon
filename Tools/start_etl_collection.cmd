@@ -31,7 +31,7 @@ set      dwm=9e9bba3c-2e38-40cb-99f4-9e8281425164:0xffff:6
 set dwm_win7=8c9dd1ad-e6e5-4b07-b455-684a9d879900:0xffff:6
 set   win32k=8c416c79-d49b-4f01-a467-e56d3aa8234c:0xffff
 set     pcat=1b3cf3cc-8167-47d2-9b6a-8e99043ccafc
-set     intc=8c416c79-d49b-4f01-a467-e56d3aa8234c
+set     intc=ad367e62-97ef-4b20-8235-e8ab49db0c23
 
 set providers=LOADER
 set providers=%providers%+PROC_THREAD

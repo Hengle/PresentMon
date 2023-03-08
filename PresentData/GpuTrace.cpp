@@ -213,7 +213,7 @@ void GpuTrace::SetContextProcessId(Context* context, uint32_t processId)
 {
     auto p = mProcessFrameInfo.emplace(processId, ProcessFrameInfo{});
 
-    if (mPMConsumer->mTrackGPUVideo && (context->mNode->mIsVideo || context->mNode->mIsVideoDecode)) {
+    if (mPMConsumer->mTrackGPUVideo && context->mNode->mIsVideo) {
         context->mPacketTrace = &p.first->second.mVideoEngines;
     } else {
         context->mPacketTrace = &p.first->second.mOtherEngines;

@@ -1987,14 +1987,26 @@ void PMTraceConsumer::HandleDWMEvent(EVENT_RECORD* pEventRecord)
             break;
         }
 
+        // ulFlipChain and ulSerialNumber are expected to be uint32_t data, but
+        // on Windows 8.1 the event properties are specified as uint64_t.
+        auto GetU32FromU32OrU64 = [](EventDataDesc const& desc) {
+            if (desc.size_ == 4) {
+                return desc.GetData<uint32_t>();
+            } else {
+                auto u64 = desc.GetData<uint64_t>();
+                DebugAssert(u64 <= UINT32_MAX);
+                return (uint32_t) u64;
+            }
+        };
+
         EventDataDesc desc[] = {
             { L"ulFlipChain" },
             { L"ulSerialNumber" },
             { L"hwnd" },
         };
         mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-        auto ulFlipChain    = desc[0].GetData<uint32_t>();
-        auto ulSerialNumber = desc[1].GetData<uint32_t>();
+        auto ulFlipChain    = GetU32FromU32OrU64(desc[0]);
+        auto ulSerialNumber = GetU32FromU32OrU64(desc[1]);
         auto hwnd           = desc[2].GetData<uint64_t>();
 
         // Lookup the present using the 64-bit token data from the PHT
@@ -2019,15 +2031,20 @@ void PMTraceConsumer::HandleDWMEvent(EVENT_RECORD* pEventRecord)
     }
     case Microsoft_Windows_Dwm_Core::SCHEDULE_SURFACEUPDATE_Info::Id:
     {
+        // On Windows 8.1 PresentCount is named
+        // OutOfFrameDirectFlipPresentCount, so we look up both allowing one to
+        // be optional and then check which one we found.
         EventDataDesc desc[] = {
             { L"luidSurface" },
             { L"PresentCount" },
+            { L"OutOfFrameDirectFlipPresentCount" },
             { L"bindId" },
         };
-        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+        mMetadata.GetEventData(pEventRecord, desc, _countof(desc), 1);
         auto luidSurface  = desc[0].GetData<uint64_t>();
-        auto PresentCount = desc[1].GetData<uint64_t>();
-        auto bindId       = desc[2].GetData<uint64_t>();
+        auto PresentCount = (desc[1].status_ & PROP_STATUS_FOUND) ? desc[1].GetData<uint64_t>()
+                                                                  : desc[2].GetData<uint64_t>();
+        auto bindId       = desc[3].GetData<uint64_t>();
 
         Win32KPresentHistoryToken key(luidSurface, PresentCount, bindId);
         auto eventIter = mPresentByWin32KPresentHistoryToken.find(key);
