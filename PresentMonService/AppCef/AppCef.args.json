@@ -1,0 +1,22 @@
+{
+  "FileVersion": 2,
+  "Id": "3c80b001-e165-4e0e-a92d-5767cf4fb1f8",
+  "Items": [
+    {
+      "Id": "743d8a24-b0af-4416-b754-364d42c1ccaa",
+      "Command": "--p2c-files-working"
+    },
+    {
+      "Id": "85807b6c-301d-4b9b-9f63-28ec30c95fb1",
+      "Command": "--p2c-verbose"
+    },
+    {
+      "Id": "892e9566-9271-49a0-8eea-4c1750a4c3bb",
+      "Command": "--p2c-url=http://localhost:8080/"
+    },
+    {
+      "Id": "84d92b33-37d5-43e8-b7ed-fe8bf667b0fd",
+      "Command": "--p2c-url=https://google.com"
+    }
+  ]
+}
