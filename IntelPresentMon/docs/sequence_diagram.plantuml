@@ -1,0 +1,75 @@
+@startuml PresentMon2_Sequence_Diagram
+
+participant Service
+boundary OS
+
+box ETW Process
+participant PMTraceConsumer
+end box
+
+collections PMSessions
+
+participant PresentMon
+
+collections "ProcessInfo CircularBuffer" as cb
+
+participant NamedPipeServer as s << (s, #AAD2FF) >>
+
+collections "Pipes" as p << (p,#ADD1B2) >>
+Actor "Client1" as c <<c, #ABCDEF>>
+
+
+' Specify the events (in order):
+group Service Launch
+    Service -> OS: Register Service
+    OS -> Service: Service created
+    Service -> OS: CreateStopEvent
+    create PresentMon
+    Service->PresentMon : PresentMon thread started
+    group loop
+        Service->OS: Wait for stop event
+    end
+end
+
+
+create s
+PresentMon->s: NamedPipeServer thread started
+create p
+s->p: Pipes created
+
+group ProcessEvents every 100ms
+PMTraceConsumer -> cb: UpdateSessions
+end
+
+
+
+box NamedPipeServer RunServer Loop
+
+    participant NamedPipeServer as s << (s, #AAD2FF) >>
+    collections "Pipes" as p << (p,#ADD1B2) >>
+    Actor "Client1" as c <<c, #ABCDEF>>
+
+    group Client Connect
+    c->p : PmInitialize
+    c->p : PmCreateSession
+    s->PresentMon: CreateSession
+    create PMSessions
+    PresentMon -> PMSessions: Session created
+    c-> p: PmEnableMetrics
+    c-> p: PmStartSession
+    end
+
+    c->p : PmReadData
+    p->s : Notify pipe event
+    s->p : ReadRequestMessage
+    s->PresentMon : DequeueAvgFpsMetricData
+    PresentMon -> cb: DequeueMetrics
+    cb -> s: CB data copied to pipe
+    s -> p: WriteReplyMessage
+    p -> c : Data read back
+end box
+
+
+
+
+@enduml

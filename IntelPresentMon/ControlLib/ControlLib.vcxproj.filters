@@ -1,0 +1,165 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Header Files\Intel">
+      <UniqueIdentifier>{6fdc92dc-eee8-4ed8-8d24-9005f36520e3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Intel">
+      <UniqueIdentifier>{b3c9259a-5798-4d47-b305-c04a77824db5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Nvidia">
+      <UniqueIdentifier>{b9383b96-c78b-4e0f-bd7a-bb9eace086ef}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Nvidia">
+      <UniqueIdentifier>{206c1c82-b94b-4b32-b4b7-3b7217849cea}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Amd">
+      <UniqueIdentifier>{f8731b1b-322e-4f20-8736-eedff7c8835d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Amd">
+      <UniqueIdentifier>{7be1b9fe-f3a5-48d2-b9f7-4b1ffa529257}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="PowerTelemetryProvider.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PresentMonPowerTelemetry.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TelemetryHistory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PowerTelemetryAdapter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Logging.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="IntelPowerTelemetryAdapter.h">
+      <Filter>Header Files\Intel</Filter>
+    </ClInclude>
+    <ClInclude Include="IntelPowerTelemetryProvider.h">
+      <Filter>Header Files\Intel</Filter>
+    </ClInclude>
+    <ClInclude Include="igcl_api.h">
+      <Filter>Header Files\Intel</Filter>
+    </ClInclude>
+    <ClInclude Include="NvidiaPowerTelemetryAdapter.h">
+      <Filter>Header Files\Nvidia</Filter>
+    </ClInclude>
+    <ClInclude Include="NvidiaPowerTelemetryProvider.h">
+      <Filter>Header Files\Nvidia</Filter>
+    </ClInclude>
+    <ClInclude Include="nvapi_interface_table.h">
+      <Filter>Header Files\Nvidia</Filter>
+    </ClInclude>
+    <ClInclude Include="nvapi.h">
+      <Filter>Header Files\Nvidia</Filter>
+    </ClInclude>
+    <ClInclude Include="NvapiWrapper.h">
+      <Filter>Header Files\Nvidia</Filter>
+    </ClInclude>
+    <ClInclude Include="MacroHelpers.h">
+      <Filter>Header Files\Nvidia</Filter>
+    </ClInclude>
+    <ClInclude Include="DllModule.h">
+      <Filter>Header Files\Nvidia</Filter>
+    </ClInclude>
+    <ClInclude Include="PowerTelemetryProviderFactory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nvml.h">
+      <Filter>Header Files\Nvidia</Filter>
+    </ClInclude>
+    <ClInclude Include="NvmlWrapper.h">
+      <Filter>Header Files\Nvidia</Filter>
+    </ClInclude>
+    <ClInclude Include="SignatureComparison.h">
+      <Filter>Header Files\Nvidia</Filter>
+    </ClInclude>
+    <ClInclude Include="AmdPowerTelemetryAdapter.h">
+      <Filter>Header Files\Amd</Filter>
+    </ClInclude>
+    <ClInclude Include="AmdPowerTelemetryProvider.h">
+      <Filter>Header Files\Amd</Filter>
+    </ClInclude>
+    <ClInclude Include="Adl2Wrapper.h">
+      <Filter>Header Files\Amd</Filter>
+    </ClInclude>
+    <ClInclude Include="IntelCpu.h">
+      <Filter>Header Files\Intel</Filter>
+    </ClInclude>
+    <ClInclude Include="ipf_core_api.h">
+      <Filter>Header Files\Intel</Filter>
+    </ClInclude>
+    <ClInclude Include="CpuTelemetry.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CpuTelemetryInfo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WmiCpu.h">
+      <Filter>Header Files\Intel</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="IntelPowerTelemetryAdapter.cpp">
+      <Filter>Source Files\Intel</Filter>
+    </ClCompile>
+    <ClCompile Include="IntelPowerTelemetryProvider.cpp">
+      <Filter>Source Files\Intel</Filter>
+    </ClCompile>
+    <ClCompile Include="cApiWrapper.cpp">
+      <Filter>Source Files\Intel</Filter>
+    </ClCompile>
+    <ClCompile Include="NvidiaPowerTelemetryAdapter.cpp">
+      <Filter>Source Files\Nvidia</Filter>
+    </ClCompile>
+    <ClCompile Include="NvidiaPowerTelemetryProvider.cpp">
+      <Filter>Source Files\Nvidia</Filter>
+    </ClCompile>
+    <ClCompile Include="NvapiWrapper.cpp">
+      <Filter>Source Files\Nvidia</Filter>
+    </ClCompile>
+    <ClCompile Include="PowerTelemetryProviderFactory.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="NvmlWrapper.cpp">
+      <Filter>Source Files\Nvidia</Filter>
+    </ClCompile>
+    <ClCompile Include="SignatureComparison.cpp">
+      <Filter>Source Files\Nvidia</Filter>
+    </ClCompile>
+    <ClCompile Include="AmdPowerTelemetryAdapter.cpp">
+      <Filter>Source Files\Amd</Filter>
+    </ClCompile>
+    <ClCompile Include="AmdPowerTelemetryProvider.cpp">
+      <Filter>Source Files\Amd</Filter>
+    </ClCompile>
+    <ClCompile Include="Adl2Wrapper.cpp">
+      <Filter>Source Files\Amd</Filter>
+    </ClCompile>
+    <ClCompile Include="IntelCpu.cpp">
+      <Filter>Source Files\Intel</Filter>
+    </ClCompile>
+    <ClCompile Include="WmiCpu.cpp">
+      <Filter>Source Files\Intel</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\vcpkg.json" />
+  </ItemGroup>
+</Project>
