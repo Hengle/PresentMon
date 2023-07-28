@@ -66,6 +66,8 @@ npm ci
 
 You need to build the Vue.js web application (compile single file components and bundle into chunks) before it can be loaded by the Chromium engine embedded in the desktop application.
 
+These build artifacts are automatically copied to the output directory as a post-build step in the MSVC project. Furthermore, in Release builds the post-build script automatically downloads dependencies and executes a production build.
+
 You can either run a development build process, which builds in dev mode and starts a local server with hotloading support:
 
 ```
@@ -78,7 +80,7 @@ Or you can do a full production build, which places all necessary build artifact
 npm run build
 ```
 
-These build artifacts are automatically copied to the output directory as a post-build step in the MSVC project. Furthermore, in Release builds the post-build script automatically downloads dependencies and executes a production build.
+Note that the command line option `--p2c-url=http://localhost:8080/` is necessary to use the local development server.
 
 ### C++ Application
 
@@ -88,7 +90,7 @@ Debug configuration has no special requirements to build. It can be built and ru
 
 #### Release Configuration
 
-Release configuration requires a specific Trusted Root Certificate to be present on the system in order to successfully build. Release configuration creates its overlay window in an elevated Z-band, requiring uiAccess to be set, which in turn requires that the executable be cryptographically signed.
+Release configuration requires a specific Trusted Root Certificate to be present on the system in order to successfully build (see next section). Release configuration creates its overlay window in an elevated Z-band, requiring uiAccess to be set, which in turn requires that the executable be cryptographically signed.
 
 ### Trusted Root Certificate
 
@@ -126,6 +128,14 @@ Logs and cache files are written to %AppData%\PresentMon2Capture by default. You
 ```
 --p2c-files-working
 ```
+Enable experimental support for tearing presents (required for Variable Refresh Rate):
+```
+--p2c-allow-tearing
+```
+In Debug configuration, the application will halt with a modal error dialog whenever a resource is requested from a non-local (network) URL. This flag disables that behavior:
+```
+--p2c-no-net-fail
+```
 
 ## Projects
 
@@ -137,21 +147,13 @@ Depends on: Core, Shaders
 
 Dependencies: None
 
-### AppTest
-
-App for interactive testing of Core (overlay). Suited to debugging overlay issues due to lack of complications related to CEF (such as multi-process architecture).
-
-Depends on: Core, Shaders
-
-Dependencies: None
-
 ### Core
 
 Contains code for spawning Z-band overlay window, rendering realtime graphs in Direct 3D, and interfacing with PresentMon 2 service.
 
 Depends on: None
 
-Dependencies: AppCef, AppTest, Unit Tests
+Dependencies: AppCef, Unit Tests
 
 ### Unit Tests
 
@@ -167,7 +169,7 @@ Contains shaders needed for rendering the overlay.
 
 Depends on: None
 
-Dependencies: AppCef, AppTest
+Dependencies: AppCef
 
 ## Technology
 

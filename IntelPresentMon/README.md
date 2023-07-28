@@ -29,29 +29,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### PresentMon Service Prerequisites
 #### WiX Installer
-To build the .msi installer package, the WiX toolset and VS extension need to be present in the build environment. Installer links can be found here: [WiX Downloads](https://wixtoolset.org/releases/)
+To build the .msi installer package, v3 of the WiX toolset and VS extension need to be present in the build environment. Installer links can be found here: [WiX Downloads](https://wixtoolset.org/docs/wix3/)
 #### vcpkg Dependencies
 PresentMon Service uses the C++ package manager vcpkg for third-party dependencies.
 #### Install vcpkg
-Navigate to your source directory (eg. C:\Source\)
+Vcpkg comes pre-installed by default with newer installations of Visual Studio. Note that the command `vcpkg integrate install` must be run manually as administrator from *Developer Command Prompt for Visual Studio* or *Developer PowerShell for Visual Studio* (See: https://devblogs.microsoft.com/cppblog/vcpkg-is-now-included-with-visual-studio/).
+
+Alternatively, a stand-alone installation of vcpkg can be used. To install, navigate to the directory you want to host vcpkg from (eg. C:\vcpkg\), and run the following commands:
 ```powershell
 git clone https://github.com/Microsoft/vcpkg.git
 cd vcpkg
 .\bootstrap-vcpkg.bat
 .\vcpkg.exe integrate install
 ```
-#### Install Packages for Release
-```powershell
-git clone https://github.com/Microsoft/vcpkg.git
-.\vcpkg.exe install glog --triplet=x64-windows-static
-.\vcpkg.exe install glog --triplet=x86-windows-static
-```
-#### Install Additional Packages for Debug
-```powershell
-git clone https://github.com/Microsoft/vcpkg.git
-.\vcpkg.exe install glog --triplet=x64-windows
-.\vcpkg.exe install glog --triplet=x86-windows
-```
+#### Package Installation
+Packages are installed automatically via vcpkg manifest files.
 #### Internal Intel Builds - ONLY
 Internal PresentMon Service builds require ipfcorelib.lib to build. This file can be found inside the Core SDK zip file here: [IPF Release](https://wiki.ith.intel.com/display/ITSIPF/IPF+Releases). Choose a recent verson of the SDK and install on the development machine. Next set a Windows environment variable named "IPF_SDK_PATH" to the location of where the SDK was installed.
 
