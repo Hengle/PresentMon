@@ -16,7 +16,7 @@
 #include <Windows.h>
 #include <tchar.h>
 #include <bitset>
-#include "../PresentMonService/PresentData/PresentMonTraceConsumer.hpp"
+#include "..\..\PresentData\PresentMonTraceConsumer.hpp"
 #include "..\PresentMonAPI\PresentMonAPI.h"
 #include "..\ControlLib\PowerTelemetryProvider.h"
 #include "..\ControlLib\CpuTelemetryInfo.h"

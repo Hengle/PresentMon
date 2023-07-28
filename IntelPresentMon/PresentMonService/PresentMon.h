@@ -7,11 +7,11 @@
 #include <random>
 #include <atomic>
 
-#include "../ControlLib/PowerTelemetryProvider.h"
-#include "../ControlLib/CpuTelemetry.h"
-#include "../Streamer/Streamer.h"
-#include "PresentData/PresentMonTraceConsumer.hpp"
-#include "PresentData/TraceSession.hpp"
+#include "..\ControlLib\PowerTelemetryProvider.h"
+#include "..\ControlLib\CpuTelemetry.h"
+#include "..\Streamer\Streamer.h"
+#include "..\..\PresentData\PresentMonTraceConsumer.hpp"
+#include "..\..\PresentData\TraceSession.hpp"
 #include "PowerTelemetryContainer.h"
 
 

@@ -1,8 +1,8 @@
 #pragma once
 #include <iostream>
-#include "../PresentMonService/PresentData/PresentMonTraceConsumer.hpp"
-#include "../PresentMonAPI/PresentMonAPI.h"
-#include "../ControlLib/PresentMonPowerTelemetry.h"
+#include "..\..\PresentData\PresentMonTraceConsumer.hpp"
+#include "..\PresentMonAPI\PresentMonAPI.h"
+#include "..\ControlLib\PresentMonPowerTelemetry.h"
 
 inline const char* PresentModeToString(PresentMode mode) {
   switch (mode) {

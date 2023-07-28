@@ -204,7 +204,7 @@
     <None Include="framedata.proto" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\PresentMonService\PresentData\PresentData.vcxproj">
+    <ProjectReference Include="..\..\PresentData\PresentData.vcxproj">
       <Project>{892028e5-32f6-45fc-8ab2-90fcbcac4bf6}</Project>
     </ProjectReference>
     <ProjectReference Include="..\PresentMonUtils\PresentMonUtils.vcxproj">
