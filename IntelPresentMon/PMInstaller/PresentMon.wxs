@@ -2,9 +2,9 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
     <Product
 		Id="776814D5-3B95-424A-8DB3-5AEE94DD2EC3"
-		Name="PresentMon"
+		Name="Intel PresentMon"
 		Language="1033"
-		Version="0.8.0.0"
+		Version="0.5.0.0"
 		Manufacturer="Intel Corporation"
 		UpgradeCode="CD0D489E-0FE7-452D-90D9-F94F3F5FF410">
         <Package
@@ -21,7 +21,7 @@
 
         <Feature
             Id="complete_install"
-            Title="PresentMon"
+            Title="Intel PresentMon"
             Description="!(loc.feature_complete_install_description)"
             Display="expand">
             <Feature
@@ -1423,7 +1423,7 @@
                 <?endif?>
                 <Shortcut
 					Id="uninstall_shortcut"
-					Name="Uninstall PresentMon"
+					Name="Uninstall Intel PresentMon"
 					Target="[System64Folder]msiexec.exe"
 					Arguments="/x [ProductCode]"/>
                 <RemoveFolder
