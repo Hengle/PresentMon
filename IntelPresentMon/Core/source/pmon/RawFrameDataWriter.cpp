@@ -63,8 +63,6 @@ namespace p2c::pmon
             "VRAMVoltage[V],"
             "VRAMFrequency[Mhz],"
             "VRAMEffectiveFrequency[GBps],"
-            "VRAMReadBandwidth[GBps],"
-            "VRAMWriteBandwidth[GBps],"
             "VRAMTemperature[C],"
             "GPUMemTotalSize[B],"
             "GPUMemUsed[B],"
