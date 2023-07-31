@@ -38,5 +38,3 @@ namespace p2c::client
 		};
 	}
 }
-
-// dummy change for linking merge
