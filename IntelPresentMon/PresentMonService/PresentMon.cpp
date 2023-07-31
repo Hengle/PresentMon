@@ -194,42 +194,6 @@ void PresentMonSession::StopOutputThread() {
   }
 }
 
-bool PresentMonSession::IsTargetProcess(uint32_t processId,
-                                 std::string const& processName) {
-  // TODO(megalvan): Determine how this information is passed in. For now capture
-  // everything...
-
-  /*
-  auto const& args = GetCommandLineArgs();
-
-  // -exclude
-  for (auto excludeProcessName : args.mExcludeProcessNames) {
-      if (_stricmp(excludeProcessName, processName.c_str()) == 0) {
-          return false;
-      }
-  }
-
-  // -capture_all
-  if (args.mTargetPid == 0 && args.mTargetProcessNames.empty()) {
-      return true;
-  }
-
-  // -process_id
-  if (args.mTargetPid != 0 && args.mTargetPid == processId) {
-      return true;
-  }
-
-  // -process_name
-  for (auto targetProcessName : args.mTargetProcessNames) {
-      if (_stricmp(targetProcessName, processName.c_str()) == 0) {
-          return true;
-      }
-  }
-  */
-
-  return true;
-}
-
 ProcessInfo* PresentMonSession::GetProcessInfo(uint32_t processId) {
   std::lock_guard<std::mutex> lock(process_mutex_);
   auto result = processes_.emplace(processId, ProcessInfo());
@@ -259,15 +223,11 @@ ProcessInfo* PresentMonSession::GetProcessInfo(uint32_t processId) {
 void PresentMonSession::InitProcessInfo(ProcessInfo* processInfo, uint32_t processId,
                                  HANDLE handle,
                                  std::string const& processName) {
-  auto target = IsTargetProcess(processId, processName);
-
   processInfo->mHandle = handle;
   processInfo->mModuleName = processName;
-  processInfo->mTargetProcess = target;
+  processInfo->mTargetProcess = true;
 
-  if (target) {
-    target_process_count_ += 1;
-  }
+  target_process_count_ += 1;
 }
 
 void PresentMonSession::UpdateProcesses(
@@ -330,7 +290,7 @@ void PresentMonSession::AddPresents(
     PresentMonPowerTelemetryInfo power_telemetry = {};
     std::bitset<static_cast<size_t>(GpuTelemetryCapBits::gpu_telemetry_count)>
         gpu_telemetry_cap_bits = {};
-    // Only grab control lib data when we performing real time
+    // Only grab control lib data when performing real time
     // tracing
     if ((pm_session_name_.compare(kRealTimeSessionName) == 0) &&
         (telemetry_container_)) {
@@ -351,7 +311,7 @@ void PresentMonSession::AddPresents(
     CpuTelemetryInfo cpu_telemetry = {};
     std::bitset<static_cast<size_t>(CpuTelemetryCapBits::cpu_telemetry_count)>
         cpu_telemetry_cap_bits = {};
-    // Only grab control lib data when we performing real time
+    // Only grab control lib data when performing real time
     // tracing
     if ((pm_session_name_.compare(kRealTimeSessionName) == 0) &&
         (cpu_)) {

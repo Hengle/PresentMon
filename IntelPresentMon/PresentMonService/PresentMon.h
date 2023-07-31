@@ -93,7 +93,6 @@ class PresentMonSession {
       std::vector<std::shared_ptr<PresentEvent>> const& presentEvents,
       size_t* presentEventIndex, bool recording, bool checkStopQpc,
       uint64_t stopQpc, bool* hitStopQpc);
-  bool IsTargetProcess(uint32_t processId, std::string const& processName);
   ProcessInfo* GetProcessInfo(uint32_t processId);
   void InitProcessInfo(ProcessInfo* processInfo, uint32_t processId,
                        HANDLE handle, std::string const& processName);
