@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "presentmon",
+  "version": "0.6.0",
+  "dependencies": [
+    "gtest",
+    "gflags",
+    "glog",
+    "cli11"
+  ],
+  "builtin-baseline": "5269f4f4f6b3970ad21f6956f6bb2322c024910c"
+}
