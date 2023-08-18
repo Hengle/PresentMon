@@ -71,7 +71,7 @@ export function makeDefaultPreferences(): Preferences {
         metricsOffset: 1020, 
         metricsWindow: 1000, 
         overlayPosition: 0, 
-        timeRange: 5, 
+        timeRange: 10, 
         overlayMargin: 0, 
         overlayBorder: 0, 
         overlayPadding: 10, 
