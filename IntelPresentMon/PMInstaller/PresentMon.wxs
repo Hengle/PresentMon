@@ -731,11 +731,11 @@
 			Id="present_mon_console_application"
 			Directory="pm_console_app_folder">
             <Component
-				Id="present_mon_dev_x64_exe"
+				Id="present_mon_1_8_0_x64_exe"
 				Guid="12C3F55B-9586-4FD2-A705-C89A224ECBB5">
                 <File
-					Id="present_mon_dev_x64_exe"
-					Name="PresentMon-dev-x64.exe"
+					Id="present_mon_1_8_0_x64_exe"
+					Name="PresentMon-1.8.0-x64.exe"
 					Source="$(var.console_dir)"
 					KeyPath="yes">
                 </File>
