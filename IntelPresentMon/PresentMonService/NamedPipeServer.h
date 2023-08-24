@@ -6,7 +6,7 @@
 
 #include "..\PresentMonUtils\MemBuffer.h"
 #include "PresentMon.h"
-#include "PresentMonNamedPipe.h"
+#include "..\PresentMonUtils\PresentMonNamedPipe.h"
 #include "Service.h"
 #include "sddl.h"
 

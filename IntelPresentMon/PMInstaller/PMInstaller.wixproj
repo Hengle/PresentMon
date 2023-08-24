@@ -6,13 +6,13 @@
     <ProductVersion>3.10</ProductVersion>
     <ProjectGuid>bb48bbc7-e308-4da5-ab22-16d7a8d1eb3e</ProjectGuid>
     <SchemaVersion>2.0</SchemaVersion>
-    <OutputName>PMInstaller</OutputName>
+    <OutputName>PresentMon</OutputName>
     <OutputType>Package</OutputType>
     <Name>PMInstaller</Name>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
-    <OutputPath>bin\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+    <OutputPath>..\..\build\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>..\..\build\obj\PMInstaller-$(Platform)-$(Configuration)\</IntermediateOutputPath>
     <DefineConstants>Debug;</DefineConstants>
     <CompilerAdditionalOptions>-arch x64</CompilerAdditionalOptions>
     <LinkerAdditionalOptions>
@@ -21,8 +21,8 @@
     </SuppressIces>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
-    <OutputPath>bin\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+    <OutputPath>..\..\build\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>..\..\build\obj\PMInstaller-$(Platform)-$(Configuration)\</IntermediateOutputPath>
     <CompilerAdditionalOptions>-arch x64 -ext WixUtilExtension</CompilerAdditionalOptions>
     <DefineConstants>
     </DefineConstants>
@@ -36,8 +36,18 @@
     <EmbeddedResource Include="en-us.wxl" />
   </ItemGroup>
   <ItemGroup>
+    <WixExtension Include="PMInstallerExtension">
+      <HintPath>..\..\build\obj\PMInstallerExtension-$(Configuration)\PMInstallerExtension.dll</HintPath>
+      <Name>PMInstallerExtension</Name>
+    </WixExtension>
+    <WixExtension Include="WixUIExtension">
+      <HintPath>$(WixExtDir)\WixUIExtension.dll</HintPath>
+      <Name>WixUIExtension</Name>
+    </WixExtension>
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\AppCef\CefNano.vcxproj">
-      <Name>AppCef</Name>
+      <Name>PresentMon</Name>
       <Project>{3c80b001-e165-4e0e-a92d-5767cf4fb1f8}</Project>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>
@@ -68,16 +78,6 @@
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
       <RefTargetDir>INSTALLFOLDER</RefTargetDir>
     </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <WixExtension Include="PMInstallerExtension">
-      <HintPath>..\PMInstallerExtension\bin\Release\PMInstallerExtension.dll</HintPath>
-      <Name>PMInstallerExtension</Name>
-    </WixExtension>
-    <WixExtension Include="WixUIExtension">
-      <HintPath>$(WixExtDir)\WixUIExtension.dll</HintPath>
-      <Name>WixUIExtension</Name>
-    </WixExtension>
   </ItemGroup>
   <Import Project="$(WixTargetsPath)" Condition=" '$(WixTargetsPath)' != '' " />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets" Condition=" '$(WixTargetsPath)' == '' AND Exists('$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets') " />

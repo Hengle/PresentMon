@@ -135,10 +135,10 @@ bool CompareFrameData(const PM_FRAME_DATA &data1, const PM_FRAME_DATA &data2) {
     return false;
   }
 
-  // Internal frame data fields; Remove for public build
   if (!fltCmp(data1.ms_since_input, data2.ms_since_input, kErrorTolerance)) {
     return false;
   }
+  // Internal frame data fields; Remove for public build
   if (!fltCmp(data1.ms_stalled_on_queue_full, data2.ms_stalled_on_queue_full,
               kErrorTolerance)) {
     return false;

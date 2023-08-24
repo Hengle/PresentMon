@@ -111,18 +111,16 @@ void Streamer::CopyFromPresentMonPresentEvent(
     nsm_present_event->PresentInDwmWaitingStruct =
         present_event->PresentInDwmWaitingStruct;
 
-    // Beta options
-    // Remove for public build
     nsm_present_event->GPUDuration = present_event->GPUDuration;
     nsm_present_event->GPUVideoDuration = present_event->GPUVideoDuration;
     nsm_present_event->InputType = present_event->InputType;
     nsm_present_event->InputTime = present_event->InputTime;
+    // Internal options
+    // Remove for public build
     for (uint32_t i = 0; i < ResidencyEventTypes::DXGK_RESIDENCY_EVENT_COUNT;
          i++) {
       nsm_present_event->MemoryResidency[i] = present_event->MemoryResidency[i];
     }
-    // Internal options
-    // Remove for public build
     // "-track_queue_timers"
     nsm_present_event->INTC_ProducerPresentTime =
         present_event->INTC_ProducerPresentTime;

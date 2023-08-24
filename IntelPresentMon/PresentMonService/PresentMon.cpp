@@ -43,14 +43,11 @@ PM_STATUS PresentMonSession::StartTraceSession() {
   pm_consumer_->mFilteredEvents = expectFilteredEvents;
   pm_consumer_->mFilteredProcessIds = filterProcessIds;
   pm_consumer_->mTrackDisplay = true;
-  // Turn on Beta options
-  // Remove for public build
   pm_consumer_->mTrackGPU = true;
   pm_consumer_->mTrackGPUVideo = true;
   pm_consumer_->mTrackInput = true;
+  // INTERNAL:
   pm_consumer_->mTrackMemoryResidency = true;
-  // Turn on INTERNAL Intel options
-  // Remove for public build
   //pm_consumer_->mTrackINTCTimers = true;
   pm_consumer_->mTrackINTCCpuGpuSync = true;
   pm_consumer_->mTrackINTCShaderCompilation = true;

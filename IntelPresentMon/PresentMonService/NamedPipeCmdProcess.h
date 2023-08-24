@@ -3,7 +3,7 @@
 #pragma once
 
 #include "PresentMon.h"
-#include "MemBuffer.h"
-#include "PresentMonNamedPipe.h"
+#include "..\PresentMonUtils\MemBuffer.h"
+#include "..\PresentMonUtils\PresentMonNamedPipe.h"
 
 void ProcessRequests(PresentMon* pm, MemBuffer* rqstBuf, MemBuffer* rspBuf);

@@ -1,7 +1,7 @@
 // Copyright (C) 2022 Intel Corporation
 // SPDX-License-Identifier: MIT
 #include "NamedPipeCmdProcess.h"
-#include "NamedPipeHelper.h"
+#include "..\PresentMonUtils\NamedPipeHelper.h"
 
 #define GOOGLE_GLOG_DLL_DECL
 #define GLOG_NO_ABBREVIATED_SEVERITIES

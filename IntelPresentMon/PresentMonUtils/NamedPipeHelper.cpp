@@ -30,6 +30,7 @@ void NamedPipeHelper::PopulateRequestHeader(IPMSMRequestHeader& rqstHeader,
 // been added to a memory buffer.
 void NamedPipeHelper::UpdateResponseHeaderPayloadSize(
     MemBuffer* buffer, IPMSMResponseHeader& rsp_header, DWORD payload_size) {
+  (void) rsp_header;
   // The response header is the very first item in the memory buffer.
   IPMSMResponseHeader* currentResponse =
       static_cast<IPMSMResponseHeader*>(buffer->AccessMem());
@@ -95,7 +96,6 @@ bool NamedPipeHelper::ValidatePayloadResponseSize(PM_ACTION action,
         return false;
       }
       return true;
-      break;
     }
     case PM_ACTION::STOP_STREAM:
     case PM_ACTION::SELECT_ADAPTER:
@@ -109,7 +109,6 @@ bool NamedPipeHelper::ValidatePayloadResponseSize(PM_ACTION action,
       }
 
       return true;
-      break;
     }
     case PM_ACTION::ENUMERATE_ADAPTERS: {
       // The emumerate adapters response consists of the header and
@@ -120,7 +119,6 @@ bool NamedPipeHelper::ValidatePayloadResponseSize(PM_ACTION action,
         return false;
       }
       return true;
-      break;
     }
     case PM_ACTION::GET_CPU_NAME: {
       // The get cpu name response consists of the header and
@@ -135,13 +133,9 @@ bool NamedPipeHelper::ValidatePayloadResponseSize(PM_ACTION action,
         return false;
       }
       return true;
-      break;
     }
-    default:
-      return false;
   }
-
-  return true;
+  return false;
 }
 
 bool NamedPipeHelper::ValidateRequest(MemBuffer* rqst_buf, PM_ACTION action) {

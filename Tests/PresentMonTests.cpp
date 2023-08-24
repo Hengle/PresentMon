@@ -4,6 +4,8 @@
 #include <generated/version.h>
 #include "PresentMonTests.h"
 
+#include <src/gtest-all.cc>
+
 bool EnsureDirectoryCreated(std::wstring path)
 {
     auto dir = path.c_str();

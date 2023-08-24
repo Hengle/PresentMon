@@ -254,7 +254,6 @@ void StreamClient::CopyFrameData(uint64_t start_qpc,
                        GetQpcFrequency());
     }
   }
-  // Beta fields; Remove for public build
   dst_frame->ms_gpu_active =
       QpcDeltaToMs(src_frame->present_event.GPUDuration, GetQpcFrequency());
   dst_frame->ms_gpu_video_active = QpcDeltaToMs(
@@ -265,7 +264,6 @@ void StreamClient::CopyFrameData(uint64_t start_qpc,
         QpcDeltaToMs(src_frame->present_event.PresentStartTime -
                          src_frame->present_event.InputTime,
                      GetQpcFrequency());
-
   }
   // Internal fields; Remove for public build
   dst_frame->ms_stalled_on_queue_full =

@@ -25,7 +25,7 @@ enum class CpuTelemetryCapBits {
   cpu_power_limit,
   cpu_temperature,
   cpu_frequency,
-  cpu_gpu_bias_weights,
+  cpu_gpu_bias_weights, // INTERNAL
   cpu_telemetry_count
 };
 

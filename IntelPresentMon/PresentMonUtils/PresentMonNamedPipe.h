@@ -1,10 +1,10 @@
 /*
-�*
-�* Copyright (C) 2021 Intel Corporation
-�*
-�* SPDX-License-Identifier: MIT
-�*
-�*
+ *
+ * Copyright (C) 2021 Intel Corporation
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ *
  * File Name:  PresentMonNamedPipe.h
  *
  * Abstract:   Header for Intel PresentMon Named Pipe IPC
@@ -115,19 +115,13 @@ struct PmNsmPresentEvent {
   uint64_t GPUStartTime;  // QPC value when the frame's first DMA packet started
   uint64_t ReadyTime;    // QPC value when the frame's last DMA packet completed
 
-  // Beta feature
-  // Remove for public build
   uint64_t GPUDuration;  // QPC duration during which a frame's DMA packet was
                          // running on any node
-  // Beta feature
-  // Remove for public build
   uint64_t
       GPUVideoDuration;  // QPC duration during which a frame's DMA packet was
                          // running on a video node (if mTrackGPUVideo==true)
   uint64_t ScreenTime;   // QPC value when the present was displayed on screen
 
-  // Beta feature
-  // Remove for public build
   uint64_t InputTime;  // Earliest QPC value when the keyboard/mouse was clicked
                        // and used by this frame
 

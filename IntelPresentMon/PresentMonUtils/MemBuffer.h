@@ -18,7 +18,7 @@ class MemBuffer {
       return false;
     }
     BYTE* copy_ptr = (BYTE*)item;
-    for (auto i = 0; i < item_size; i++) {
+    for (size_t i = 0; i < item_size; i++) {
       try {
         buffer_.emplace_back(*copy_ptr++);
       } catch (...) {

@@ -1517,6 +1517,7 @@ void PresentMonClient::CopyCpuTelemetryItem(
     case CpuTelemetryCapBits::cpu_frequency:
       telemetry_item.push_back(cpu_telemetry_info.cpu_frequency);
       break;
+    // INTERNAL:
     case CpuTelemetryCapBits::cpu_gpu_bias_weights:
       // We do not produce metrics for cpu/gpu bias
       // weights. Silently ignore
@@ -1728,6 +1729,7 @@ void PresentMonClient::SetCpuData(std::vector<double>& telemetry_item,
       CalculateMetricDoubleData(telemetry_item, cpu_data->cpu_frequency,
                                 valid);
       break;
+    // INTERNAL:
     case CpuTelemetryCapBits::cpu_gpu_bias_weights:
       // We do not produce metrics for cpu/gpu bias
       // weights. Silently ignore

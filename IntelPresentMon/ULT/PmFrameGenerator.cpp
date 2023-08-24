@@ -252,7 +252,6 @@ PM_FRAME_DATA PmFrameGenerator::GetPmFrameData(
     temp_frame.ms_until_render_start =
         pmft_frames_[frame_num].ms_until_render_start;
     temp_frame.qpc_time = pmft_frames_[frame_num].qpc_time;
-    // Beta fields; Remove for public build
     temp_frame.ms_since_input = pmft_frames_[frame_num].ms_until_input;
     // Internal fields; Remove for public build
     temp_frame.ms_stalled_on_queue_full =

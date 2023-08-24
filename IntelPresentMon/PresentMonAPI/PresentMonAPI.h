@@ -139,7 +139,8 @@ extern "C" {
     // @brief The time of the Present() call, as a performance counter value.
     uint64_t qpc_time;
 
-    // Beta fields; Remove for public build
+    // @brief The time between the Present() call and the earliest keyboard or
+    // mouse interaction that contributed to this frame.
     double ms_since_input;
     // Internal fields; Remove for public build
     double ms_stalled_on_queue_full;
@@ -156,6 +157,7 @@ extern "C" {
     // @brief The time video encode/decode was active separate from the other
     // engines in milliseconds. Not supported on Win7
     double ms_gpu_video_active;
+    // Internal fields; Remove for public build
     double ms_waiting_on_sync_object;
     double ms_waiting_on_query_data;
     double ms_waiting_on_draw_time_compilation;

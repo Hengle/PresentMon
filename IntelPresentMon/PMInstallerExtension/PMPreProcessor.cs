@@ -52,63 +52,38 @@ namespace pm_installer
                     switch (function)
                     {
                         case "CheckFileExists":
-                            if (args.Length > 0)
+                            if (args.Length == 1 && File.Exists(args[0]))
                             {
-                                if(File.Exists(args[0]))
-                                {
-                                    result = "true";
-                                } else
-                                {
-                                    result = "false";
-                                }
+                                result = "true";
                             }
                             else
                             {
                                 result = "false";
                             }
                             break;
-                        case "GetPmConsoleAppDir":
-                            if (args.Length > 0)
+
+                        case "GetConsoleAppPath":
+                            if (args.Length == 2)
                             {
-                                DirectoryInfo di = Directory.GetParent(args[0]);
-                                if (args[0].EndsWith(@"\") == true)
-                                {
-                                    // If the incoming path ends in a "\" we need to
-                                    // call GetParent one more time
-                                    di = Directory.GetParent(di.FullName);
-                                }
-                                // We only check for release when packaging up the PresentMon console application
-                                string pm_console_full_path = Path.Combine(di.FullName, @"Build\Release\PresentMon-dev-x64.exe");
-                                if (File.Exists(pm_console_full_path))
-                                {
-                                    result = pm_console_full_path;
-                                }
-                            }
-                            break;
-                        case "ConsoleAppExists":
-                            if (args.Length > 0)
-                            {
-                                DirectoryInfo di = Directory.GetParent(args[0]);
-                                if (args[0].EndsWith(@"\") == true)
-                                {
-                                    // If the incoming path ends in a "\" we need to
-                                    // call GetParent one more time
-                                    di = Directory.GetParent(di.FullName);
-                                }
-                                // We only check for release when packaging up the PresentMon console application
-                                string pm_console_full_path = Path.Combine(di.FullName, @"Build\Release\PresentMon-dev-x64.exe");
-                                if (File.Exists(pm_console_full_path))
-                                {
-                                    result = "true";
-                                }
-                                else
-                                {
-                                    result = "false";
-                                }
+                                var slnDir = args[0];
+                                var ver = args[1];
+                                result = Path.GetFullPath(Path.Combine(args[0], "build", "Release", $"PresentMon-{ver}-x64.exe"));
                             }
                             else
                             {
-                                result = "false";
+                                result = "";
+                            }
+                            break;
+
+                        case "GetConsoleAppFileName":
+                            if (args.Length == 1)
+                            {
+                                var ver = args[0];
+                                result = $"PresentMon-{ver}-x64.exe";
+                            }
+                            else
+                            {
+                                result = "";
                             }
                             break;
                     }

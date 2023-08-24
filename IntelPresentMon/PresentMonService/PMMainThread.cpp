@@ -4,8 +4,8 @@
 #include "NamedPipeServer.h"
 #include "PresentMon.h"
 #include "PowerTelemetryContainer.h"
-#include "IntelCpu.h"
-#include "WmiCpu.h"
+#include "..\ControlLib\IntelCpu.h"
+#include "..\ControlLib\WmiCpu.h"
 #include "..\PresentMonUtils\StringUtils.h"
 #include <filesystem>
 
@@ -277,10 +277,10 @@ DWORD WINAPI PresentMonMainThread(LPVOID lpParam)
       cpu = std::make_shared<pwr::cpu::intel::IntelCpu>();
     } catch (...) {
       try {
-        // If not successful try to use WMI for metrics sampling
+        // If not successful,
+        // Try to use WMI for metrics sampling
         cpu = std::make_shared<pwr::cpu::wmi::WmiCpu>();
-      } catch (...) {
-      }
+      } catch (...) {}
     }
 
     if (cpu) {

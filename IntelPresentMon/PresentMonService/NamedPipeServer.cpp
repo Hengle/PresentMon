@@ -6,7 +6,7 @@
 #include <tchar.h>
 #include <thread>
 #include "NamedPipeCmdProcess.h"
-#include "NamedPipeHelper.h"
+#include "..\PresentMonUtils\NamedPipeHelper.h"
 #include "sddl.h"
 
 NamedPipeServer::NamedPipeServer(Service* srv, PresentMon* pm)

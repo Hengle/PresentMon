@@ -1,7 +1,8 @@
-echo "Copy CEF binaries..."
+@echo off
+echo Copy CEF binaries...
 xcopy /SY "Cef\Bin\" "%~2"
 
-echo "Copy CEF resources..."
+echo Copy CEF resources...
 xcopy /SY "Cef\Resources" "%~2"
 
 if "%~1"=="Release" (
@@ -9,13 +10,13 @@ if "%~1"=="Release" (
 	call "%~dp0build-web.bat"
 )
 
-echo "Copy web resources..."
+echo Copy web resources...
 xcopy /SY "Web\dist" "%~2Web\"
 
-echo "Copy presets..."
+echo Copy presets...
 xcopy /SY "Web\presets" "%~2Presets\"
 
-echo "Copy block list..."
+echo Copy block list...
 xcopy /SY "Web\BlockLists" "%~2BlockLists\"
 
 if "%4"=="uiAccessOn" (

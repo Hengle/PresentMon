@@ -22,8 +22,8 @@ struct PMFrameTimingInformation {
   uint64_t qpc_time = 0;
   PM_PRESENT_MODE present_mode =
       PM_PRESENT_MODE::PM_PRESENT_MODE_HARDWARE_INDEPENDENT_FLIP;
-  // Internal frame data fields; Remove for public build
   double ms_until_input = 0.;
+  // Internal frame data fields; Remove for public build
   double ms_stalled_on_queue_full = 0.;
   double ms_waiting_on_queue_sync = 0.;
   double ms_waiting_on_queue_drain = 0.;
@@ -347,10 +347,10 @@ class PmFrameGenerator {
   double until_render_start_ms_;
   double until_render_start_variation_ms_;
   double qpc_time_;
-
-  // Internal frame data fields; Remove for public build
   double since_input_ms_;
   double since_input_variation_ms_;
+
+  // Internal frame data fields; Remove for public build
   double stalled_on_queue_full_ms_;
   double stalled_on_queue_full_variation_ms_;
   double waiting_on_queue_sync_ms_;

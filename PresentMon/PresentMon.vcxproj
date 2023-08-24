@@ -39,8 +39,6 @@
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>PresentMon</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <WindowsTargetPlatformVersion Condition="'$(Platform)'=='ARM'">10.0</WindowsTargetPlatformVersion>
-    <WindowsTargetPlatformVersion Condition="'$(Platform)'=='ARM64'">10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
@@ -70,6 +68,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnabled>false</VcpkgEnabled>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -134,17 +135,18 @@
     <ClInclude Include="PresentMon.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="..\CONTRIBUTING.md" />
-    <Text Include="..\LICENSE.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <CustomBuild Include="..\README.md">
+    <CustomBuild Include="..\README-ConsoleApplication.md">
       <FileType>Document</FileType>
       <Message>..\Tools\generate_options_header.cmd %(Identity) ..\build\obj\generated\command_line_options.inl</Message>
       <Command>..\Tools\generate_options_header.cmd %(Identity) ..\build\obj\generated\command_line_options.inl</Command>
       <Outputs>..\build\obj\generated\command_line_options.inl</Outputs>
       <AdditionalInputs>..\Tools\generate_options_header.cmd</AdditionalInputs>
     </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PresentData\PresentData.vcxproj">
+      <Project>{892028e5-32f6-45fc-8ab2-90fcbcac4bf6}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

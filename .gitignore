@@ -4,6 +4,9 @@
 # Build results
 /build/
 
+# vcpkg dependencies
+/vcpkg_installed/
+
 # User-specific files
 *.suo
 *.user

@@ -94,10 +94,10 @@ bool WmiCpu::Sample() noexcept {
         result == ERROR_SUCCESS) {
       info.cpu_frequency = counter_value.doubleValue;
 
-      if (const auto result = PdhGetFormattedCounterValue(
+      if (const auto result2 = PdhGetFormattedCounterValue(
               processor_performance_counter_, PDH_FMT_DOUBLE, &counter_type,
               &counter_value);
-          result == ERROR_SUCCESS) {
+          result2 == ERROR_SUCCESS) {
         info.cpu_frequency =
             info.cpu_frequency * (counter_value.doubleValue / 100.);
         SetTelemetryCapBit(CpuTelemetryCapBits::cpu_frequency);

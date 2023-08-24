@@ -103,7 +103,8 @@ echo [96mBuilding...[90m
 if %do_build% EQU 0 (
     echo [31mwarning: skipping build[0m
 ) else (
-    for %%a in (%build_platforms%) do for %%b in (%build_configs%) do call :build %%a %%b "PresentMon.sln"
+    for %%a in (%build_platforms%) do for %%b in (%build_configs%) do call :build %%a %%b "PresentMon\PresentMon.vcxproj"
+    for %%a in (%build_platforms%) do for %%b in (%build_configs%) do call :build %%a %%b "Tests\PresentMonTests.vcxproj"
     for %%a in (%test_platforms%)  do for %%b in (%build_configs%) do call :build %%a %%b "Tools\etw_list\etw_list.sln"
 )
 

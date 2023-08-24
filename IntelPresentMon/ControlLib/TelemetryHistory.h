@@ -193,13 +193,13 @@ namespace pwr
     }
 
     template<class T>
-    TelemetryHistory<T>::ConstIterator TelemetryHistory<T>::begin() const noexcept
+    typename TelemetryHistory<T>::ConstIterator TelemetryHistory<T>::begin() const noexcept
     {
         return ConstIterator{ this, 0 };
     }
 
     template<class T>
-    TelemetryHistory<T>::ConstIterator TelemetryHistory<T>::end() const noexcept
+    typename TelemetryHistory<T>::ConstIterator TelemetryHistory<T>::end() const noexcept
     {
         if (indexBegin == indexEnd) // begin/end indices locked mean container full
         {

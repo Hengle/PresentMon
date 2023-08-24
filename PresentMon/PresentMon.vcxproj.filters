@@ -26,19 +26,11 @@
       <UniqueIdentifier>{f09f81fa-1336-4ff5-8273-d1c8f9c8871e}</UniqueIdentifier>
     </Filter>
     <Filter Include="docs">
-      <UniqueIdentifier>{8cd50319-dd68-4a65-94f0-7a4c40e4f4e5}</UniqueIdentifier>
+      <UniqueIdentifier>{25a6786b-03ca-4b25-8448-0eed359238bd}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="..\CONTRIBUTING.md">
-      <Filter>docs</Filter>
-    </Text>
-    <Text Include="..\LICENSE.txt">
-      <Filter>docs</Filter>
-    </Text>
-  </ItemGroup>
-  <ItemGroup>
-    <CustomBuild Include="..\README.md">
+    <CustomBuild Include="..\README-ConsoleApplication.md">
       <Filter>docs</Filter>
     </CustomBuild>
   </ItemGroup>
