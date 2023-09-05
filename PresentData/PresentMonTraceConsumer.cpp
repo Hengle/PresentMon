@@ -2692,21 +2692,23 @@ void PMTraceConsumer::HandleProcessEvent(EVENT_RECORD* pEventRecord)
             auto ImageName      = desc[1].GetData<std::wstring>();
             event.IsStartEvent  = true;
 
-            auto size = ImageName.size();
+            // When run as-administrator, ImageName will be a fully-qualified path.
+            // e.g.: \Device\HarddiskVolume...\...\Proces.exe.  We prune off everything other than
+            // the filename here to be consistent.
+            size_t start = ImageName.find_last_of('\\') + 1;
+            size_t size = ImageName.size() - start;
             event.ImageFileName.resize(size + 1);
-            wcstombs_s(&size, &event.ImageFileName[0], size + 1, ImageName.c_str(), size);
+            wcstombs_s(&size, &event.ImageFileName[0], size + 1, ImageName.c_str() + start, size);
             event.ImageFileName.resize(size - 1);
             break;
         }
         case Microsoft_Windows_Kernel_Process::ProcessStop_Stop::Id: {
             EventDataDesc desc[] = {
                 { L"ProcessID" },
-                { L"ImageName" },
             };
             mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-            event.ProcessId     = desc[0].GetData<uint32_t>();
-            event.ImageFileName = desc[1].GetData<std::string>();
-            event.IsStartEvent  = false;
+            event.ProcessId    = desc[0].GetData<uint32_t>();
+            event.IsStartEvent = false;
             break;
         }
         default:
@@ -2716,21 +2718,25 @@ void PMTraceConsumer::HandleProcessEvent(EVENT_RECORD* pEventRecord)
     } else { // hdr.ProviderId == NT_Process::GUID
         if (hdr.EventDescriptor.Opcode == EVENT_TRACE_TYPE_START ||
             hdr.EventDescriptor.Opcode == EVENT_TRACE_TYPE_DC_START) {
-            event.IsStartEvent = true;
+            EventDataDesc desc[] = {
+                { L"ProcessId" },
+                { L"ImageFileName" },
+            };
+            mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+            event.ProcessId     = desc[0].GetData<uint32_t>();
+            event.ImageFileName = desc[1].GetData<std::string>();
+            event.IsStartEvent  = true;
         } else if (hdr.EventDescriptor.Opcode == EVENT_TRACE_TYPE_END||
                    hdr.EventDescriptor.Opcode == EVENT_TRACE_TYPE_DC_END) {
+            EventDataDesc desc[] = {
+                { L"ProcessId" },
+            };
+            mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
+            event.ProcessId    = desc[0].GetData<uint32_t>();
             event.IsStartEvent = false;
         } else {
             return;
         }
-
-        EventDataDesc desc[] = {
-            { L"ProcessId" },
-            { L"ImageFileName" },
-        };
-        mMetadata.GetEventData(pEventRecord, desc, _countof(desc));
-        event.ProcessId     = desc[0].GetData<uint32_t>();
-        event.ImageFileName = desc[1].GetData<std::string>();
     }
 
     if (event.IsStartEvent) {

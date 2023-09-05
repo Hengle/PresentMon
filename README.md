@@ -20,10 +20,11 @@ This repository contains several components:
 
 There are also several other programs that build on this functionality and/or help visualize the resulting data.  For example, see:
 
-- [CapFrameX](https://github.com/DevTechProfile/CapFrameX)
-- [FrameView](https://www.nvidia.com/en-us/geforce/technologies/frameview/)
-- [OCAT](https://github.com/GPUOpen-Tools/OCAT)
-- [PIX](https://devblogs.microsoft.com/pix/download/) (used as part of its [system monitor UI](https://devblogs.microsoft.com/pix/system-monitor/))
+- [AMD OCAT](https://gpuopen.com/ocat/)
+- [CapFrameX](https://capframex.com/)
+- [Guru3D RTSS RivaTuner Statistics Server](https://www.guru3d.com/files-details/rtss-rivatuner-statistics-server-download.html)
+- [Microsoft PIX on Windows System Monitor](https://devblogs.microsoft.com/pix/system-monitor/)
+- [NVIDIA FrameView](https://www.nvidia.com/en-us/geforce/technologies/frameview/)
 
 Binaries for the main releases of PresentMon are provided on [intel.com](game.intel.com/story/intel-presentmon/) or [github.com](https://github.com/GameTechDev/PresentMon/releases/latest) ([list of all releases](https://github.com/GameTechDev/PresentMon/releases)).
 

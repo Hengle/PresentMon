@@ -244,6 +244,11 @@
                     Name="LICENSE.txt"
                     Source="..\..\LICENSE.txt">
                 </File>
+                <File
+                    Id="third_party_text"
+                    Name="THIRD_PARTY.txt"
+                    Source="..\..\THIRD_PARTY.txt">
+                </File>
             </Component>
         </DirectoryRef>
         <ComponentGroup

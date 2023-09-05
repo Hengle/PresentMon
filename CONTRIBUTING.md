@@ -4,22 +4,34 @@
 
 We track feature requests and issues using GitHub Issues [here](https://github.com/GameTechDev/PresentMon/issues).  Clearly describe the issue/request, as well as the impact and priority from your perspective.
 
-Provide an ETL trace with your issue report if possible:
+### If you are having an issue with the installer...
+
+Provide an installer log:
+
+1. Collect a log while running the installer: `msiexec /i PresentMon.msi /l*v PresentMonInstallerLog.txt`
+2. Attach the resulting "PresentMonInstallerLog.txt" to the issue
+
+### If PresentMon is crashing...
+
+Provide a user-mode minidump of the crash:
+
+1. Set up dump collection as described [here](https://docs.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps).
+2. Re-run PresentMon in the scenario that crashes.
+3. Provide the captured PresentMon-....exe.####.dmp file.
+
+### If there is something wrong with the data PresentMon is reporting...
+
+Provide an ETL trace:
 
 1. Install the [Windows Performance Toolkit](https://www.google.com/search?q=windows+performance+toolkit+download&btnI).
 2. Start a capture by running "%ProgramFiles(x86)%\Windows Kits\10\Windows Performance Toolkit\gpuview\log.cmd" as administrator.
 3. Run the test scenario.
 4. Stop the capture by running log.cmd again. The capture will be output to Merged.etl in the working directory.  Try to capture for as short as possible to limit the size of the file, while still capturing the problem.
-5. Test that the .etl capture exhibits the issue you are reporting, by running PresentMon with "-etl_file Merged.etl" (to read from the capture instead of the system).
+5. Test that the .etl capture exhibits the issue you are reporting, by running the PresentMon console application with "-etl_file Merged.etl" (to read from the capture instead of the system).
 6. Provide the resulting Merged.etl file.  ETL files compress well, so consider compressing to simplify sharing e.g.: `7z a MergeCompressed.7z Merged.etl`).
 
-To capture Internal events, use `Tools\log_intc.cmd` instead of gpuview's log.cmd.
+To capture Intel Release-Internal driver events, use `Tools\log_intc.cmd` instead of gpuview's log.cmd.
 
-If PresentMon is crashing, provide a user-mode minidump of the crash if possible:
-
-1. Set up dump collection as described [here](https://docs.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps).
-2. Re-run PresentMon in the scenario that crashes.
-3. Provide the captured PresentMon-....exe.####.dmp file.
 
 ## Contributing Source Code
 
