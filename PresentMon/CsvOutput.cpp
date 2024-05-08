@@ -261,6 +261,10 @@ void WriteCsvHeader<FrameMetrics>(FILE* fp)
         fwprintf(fp, L",ClickToPhotonLatency");
     }
     fwprintf(fp, L"\n");
+
+    if (args.mCSVOutput == CSVOutput::Stdout) {
+        fflush(fp);
+    }
 }
 
 template<>
@@ -324,6 +328,10 @@ void WriteCsvRow<FrameMetrics>(
         fwprintf(fp, L",%.6lf", metrics.mClickToPhotonLatency);
     }
     fwprintf(fp, L"\n");
+
+    if (args.mCSVOutput == CSVOutput::Stdout) {
+        fflush(fp);
+    }
 }
 
 template<typename FrameMetricsT>
