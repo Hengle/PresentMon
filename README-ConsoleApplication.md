@@ -5,7 +5,7 @@ The PresentMon/ directory contains source for a standalone console application t
 CSV file(s).
 
 A binary of the console application is provided in the release, e.g.:
-[PresentMon-2.0.1-x64.exe](https://github.com/GameTechDev/PresentMon/releases/download/v2.0.1/PresentMon-2.0.1-x64.exe).
+[PresentMon-2.0.2-x64.exe](https://github.com/GameTechDev/PresentMon/releases/download/v2.0.2/PresentMon-2.0.2-x64.exe).
 
 ## Command line options
 
