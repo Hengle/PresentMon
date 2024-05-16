@@ -545,16 +545,14 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
             wprintf(L"                             GPU: pid=%u completing frame\n", pEvent->ProcessId);
         }
 
-        // There are some cases where the QueuePacket_Stop timestamp is before
-        // the previous dma packet completes.  e.g., this seems to be typical
-        // of DWM present packets.  In these cases, instead of loosing track of
-        // the previous dma work, we split it at this time and assign portions
-        // to both frames.  Note this is incorrect, as the dma's full cost
-        // should be fully attributed to the previous frame.
+        // If there are any running packets, mark the first as the next frame's first packet.
         if (packetTrace->mRunningPacketCount > 0) {
 
-            pEvent->ReadyTime = timestamp;
-
+            // There are some cases where the QueuePacket_Stop timestamp is before the previous dma
+            // packet completes.  e.g., this seems to be typical of DWM present packets.  In these
+            // cases, instead of loosing track of the previous dma work, we split it at this time
+            // and assign portions to both frames.  Note this is incorrect, as the dma's full cost
+            // should be fully attributed to the previous frame.
             auto accumulatedTime = timestamp - packetTrace->mRunningPacketStartTime;
             if (accumulatedTime > 0) {
                 if (IsVerboseTraceEnabled()) {
@@ -565,10 +563,16 @@ void GpuTrace::CompleteFrame(PresentEvent* pEvent, uint64_t timestamp)
                     wprintf(L"                             GPU: work still running; splitting and considering as new work for next frame\n");
                 }
 
+                pEvent->ReadyTime = timestamp;
                 pEvent->GPUDuration += accumulatedTime;
-                packetTrace->mFirstPacketTime = timestamp;
-                packetTrace->mRunningPacketStartTime = timestamp;
             }
+
+            if (IsVerboseTraceEnabled()) {
+                wprintf(L"                             GPU: pid=%u frame's first work\n", LookupPacketTraceProcessId(packetTrace));
+            }
+
+            packetTrace->mFirstPacketTime = timestamp;
+            packetTrace->mRunningPacketStartTime = timestamp;
         }
         if (videoTrace->mRunningPacketCount > 0) {
             pEvent->GPUVideoDuration += timestamp - videoTrace->mRunningPacketStartTime;

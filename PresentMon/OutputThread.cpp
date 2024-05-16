@@ -314,6 +314,11 @@ static void ReportMetrics(
     // DisplayLatency:             |----------------->|                       |
     // DisplayedTime:                                 |---------------------->|
 
+    // mGPULatency can be negative.  Normally, that won't be true but there are some presentation
+    // modes (e.g., D3D9 present -> Composed_Copy_with_GPU_GDI) that submit GPU work immediately
+    // after presenting.  That work is attributed to the next frame (since it is after the present
+    // packet) but can happen before the previous Present() call returns.
+
     bool displayed = p.FinalState == PresentResult::Presented;
 
     double gpuDuration = pmSession.TimestampDeltaToUnsignedMilliSeconds(p.GPUStartTime, p.ReadyTime);
@@ -322,7 +327,7 @@ static void ReportMetrics(
     metrics.mCPUStart             = chain->mNextFrameCPUStart;
     metrics.mCPUBusy              = pmSession.TimestampDeltaToUnsignedMilliSeconds(metrics.mCPUStart, p.PresentStartTime);
     metrics.mCPUWait              = pmSession.TimestampDeltaToMilliSeconds(p.TimeInPresent);
-    metrics.mGPULatency           = pmSession.TimestampDeltaToUnsignedMilliSeconds(metrics.mCPUStart, p.GPUStartTime);
+    metrics.mGPULatency           = pmSession.TimestampDeltaToMilliSeconds(metrics.mCPUStart, p.GPUStartTime);
     metrics.mGPUBusy              = pmSession.TimestampDeltaToMilliSeconds(p.GPUDuration);
     metrics.mVideoBusy            = pmSession.TimestampDeltaToMilliSeconds(p.GPUVideoDuration);
     metrics.mGPUWait              = std::max(0.0, gpuDuration - metrics.mGPUBusy);

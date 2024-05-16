@@ -243,8 +243,8 @@ void FlushModifiedPresent()
     FLUSH_MEMBER(PrintPresentMode,   PresentMode)
     FLUSH_MEMBER(PrintPresentResult, FinalState)
     FLUSH_MEMBER(PrintBool,          SupportsTearing)
-    FLUSH_MEMBER(PrintBool,          WaitForFlipEvent)
-    FLUSH_MEMBER(PrintBool,          WaitForMPOFlipEvent)
+    FLUSH_MEMBER(PrintBool,          IsMMIOFlip)
+    FLUSH_MEMBER(PrintBool,          IsMPOFlip)
     FLUSH_MEMBER(PrintBool,          SeenDxgkPresent)
     FLUSH_MEMBER(PrintBool,          SeenWin32KEvents)
     FLUSH_MEMBER(PrintBool,          IsCompleted)
@@ -336,10 +336,10 @@ void VerboseTraceEventImpl(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecor
     if (hdr.ProviderId == Microsoft_Windows_DXGI::GUID) {
         using namespace Microsoft_Windows_DXGI;
         switch (hdr.EventDescriptor.Id) {
-        case Present_Start::Id:                  PrintEventHeader(eventRecord, metadata, "DXGIPresent_Start",    { L"Flags", PrintPresentFlags, }); break;
-        case PresentMultiplaneOverlay_Start::Id: PrintEventHeader(eventRecord, metadata, "DXGIPresentMPO_Start", { L"Flags", PrintPresentFlags, }); break;
+        case Present_Start::Id:                  PrintEventHeader(eventRecord, metadata, "DXGIPresent_Start",                  { L"Flags", PrintPresentFlags, }); break;
+        case PresentMultiplaneOverlay_Start::Id: PrintEventHeader(eventRecord, metadata, "DXGIPresentMultiplaneOverlay_Start", { L"Flags", PrintPresentFlags, }); break;
         case Present_Stop::Id:                   PrintEventHeader(hdr, "DXGIPresent_Stop"); break;
-        case PresentMultiplaneOverlay_Stop::Id:  PrintEventHeader(hdr, "DXGIPresentMPO_Stop"); break;
+        case PresentMultiplaneOverlay_Stop::Id:  PrintEventHeader(hdr, "DXGIPresentMultiplaneOverlay_Stop"); break;
         }
         return;
     }
@@ -356,7 +356,8 @@ void VerboseTraceEventImpl(PMTraceConsumer* pmConsumer, EVENT_RECORD* eventRecor
         switch (hdr.EventDescriptor.Id) {
         case Blit_Info::Id:                     PrintEventHeader(hdr, "Blit_Info"); break;
         case BlitCancel_Info::Id:               PrintEventHeader(hdr, "BlitCancel_Info"); break;
-        case FlipMultiPlaneOverlay_Info::Id:    PrintEventHeader(hdr, "FlipMultiPlaneOverlay_Info"); break;
+        case FlipMultiPlaneOverlay_Info::Id:    PrintEventHeader(eventRecord, metadata, "FlipMultiPlaneOverlay_Info",   { L"VidPnSourceId",  PrintU32,
+                                                                                                                          L"LayerIndex",     PrintU32 }); break;
         case Present_Info::Id:                  PrintEventHeader(hdr, "DxgKrnl_Present_Info"); break;
 
         case MMIOFlip_Info::Id:                 PrintEventHeader(eventRecord, metadata, "MMIOFlip_Info",                { L"FlipSubmitSequence", PrintU64, }); break;

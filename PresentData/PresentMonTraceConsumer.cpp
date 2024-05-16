@@ -110,8 +110,8 @@ PresentEvent::PresentEvent()
     , InputType(InputDeviceType::None)
 
     , SupportsTearing(false)
-    , WaitForFlipEvent(false)
-    , WaitForMPOFlipEvent(false)
+    , IsMMIOFlip(false)
+    , IsMPOFlip(false)
     , SeenDxgkPresent(false)
     , SeenWin32KEvents(false)
     , SeenInFrameEvent(false)
@@ -281,10 +281,10 @@ void PMTraceConsumer::HandleDxgkFlip(EVENT_HEADER const& hdr, int32_t flipInterv
             presentEvent->SyncInterval = flipInterval;
         }
         if (isMMIOFlip) {
-            presentEvent->WaitForFlipEvent = true;
+            presentEvent->IsMMIOFlip = true;
         }
         if (isMPOFlip) {
-            presentEvent->WaitForMPOFlipEvent = true;
+            presentEvent->IsMPOFlip = true;
         }
         if (!isMMIOFlip && flipInterval == 0) {
             presentEvent->SupportsTearing = true;
@@ -390,24 +390,12 @@ void PMTraceConsumer::HandleDxgkQueueComplete(uint64_t timestamp, uint64_t hCont
 
             TRACK_PRESENT_PATH_SAVE_GENERATED_ID(pEvent);
 
-            // Stop tracking GPU work for this present.
-            //
-            // Note: there is a potential race here because QueuePacket_Stop
-            // occurs sometime after DmaPacket_Info it's possible that some
-            // small portion of the next frame's GPU work has started before
-            // QueuePacket_Stop and will be attributed to this frame.  However,
-            // this is necessarily a small amount of work, and we can't use DMA
-            // packets as not all present types create them.
-            if (mTrackGPU) {
-                mGpuTrace.CompleteFrame(pEvent.get(), timestamp);
-            }
-
             // We use present packet completion as the screen time for
             // Hardware_Legacy_Copy_To_Front_Buffer and Hardware_Legacy_Flip
             // present modes, unless we are expecting a subsequent flip/*sync
             // event from DXGK.
             if (pEvent->PresentMode == PresentMode::Hardware_Legacy_Copy_To_Front_Buffer ||
-                (pEvent->PresentMode == PresentMode::Hardware_Legacy_Flip && !pEvent->WaitForFlipEvent)) {
+                (pEvent->PresentMode == PresentMode::Hardware_Legacy_Flip && !pEvent->IsMMIOFlip)) {
                 VerboseTraceBeforeModifyingPresent(pEvent.get());
 
                 if (pEvent->ReadyTime == 0) {
@@ -416,6 +404,18 @@ void PMTraceConsumer::HandleDxgkQueueComplete(uint64_t timestamp, uint64_t hCont
 
                 pEvent->ScreenTime = timestamp;
                 pEvent->FinalState = PresentResult::Presented;
+
+                // Stop tracking GPU work for this present.
+                //
+                // Note: there is a potential race here because QueuePacket_Stop
+                // occurs sometime after DmaPacket_Info it's possible that some
+                // small portion of the next frame's GPU work has started before
+                // QueuePacket_Stop and will be attributed to this frame.  However,
+                // this is necessarily a small amount of work, and we can't use DMA
+                // packets as not all present types create them.
+                if (mTrackGPU) {
+                    mGpuTrace.CompleteFrame(pEvent.get(), timestamp);
+                }
 
                 // Sometimes, the queue packets associated with a present will complete
                 // before the DxgKrnl PresentInfo event is fired.  For blit presents in
@@ -471,6 +471,8 @@ void PMTraceConsumer::HandleDxgkMMIOFlip(uint64_t timestamp, uint32_t submitSequ
         VerboseTraceBeforeModifyingPresent(pEvent.get());
         pEvent->ReadyTime = timestamp;
 
+        mGpuTrace.CompleteFrame(pEvent.get(), timestamp);
+
         if (pEvent->PresentMode == PresentMode::Composed_Flip) {
             pEvent->PresentMode = PresentMode::Hardware_Independent_Flip;
         }
@@ -508,7 +510,7 @@ void PMTraceConsumer::HandleDxgkSyncDPC(uint64_t timestamp, uint32_t submitSeque
         // rare cases where there may be multiple in-flight presents with the
         // same submit sequence and waiting ensures that both the VSyncDPC and
         // *SyncMultiPlaneDPC events match to the same present.
-        if (pEvent->PresentMode == PresentMode::Hardware_Legacy_Flip && !pEvent->WaitForMPOFlipEvent) {
+        if (pEvent->PresentMode == PresentMode::Hardware_Legacy_Flip && !pEvent->IsMPOFlip) {
             CompletePresent(pEvent);
         }
     }
@@ -634,6 +636,12 @@ void PMTraceConsumer::HandleDxgkPresentHistoryInfo(EVENT_HEADER const& hdr, uint
         // present, we'll query for the most recent blt targeting this window
         // and take it out of the map.
         mLastPresentByWindow[eventIter->second->Hwnd] = eventIter->second;
+    }
+
+    // End the GPU frame, except for Composed_Copy_GPU_GDI present path where it is completed on
+    // DmaPacket_Info.
+    if (mTrackGPU && eventIter->second->PresentMode != PresentMode::Composed_Copy_GPU_GDI) {
+        mGpuTrace.CompleteFrame(eventIter->second.get(), hdr.TimeStamp.QuadPart);
     }
 
     mPresentByDxgkPresentHistoryToken.erase(eventIter);
@@ -1132,6 +1140,18 @@ void PMTraceConsumer::HandleDXGKEvent(EVENT_RECORD* pEventRecord)
 
             if (SequenceId != 0) {
                 mGpuTrace.CompleteDmaPacket(hContext, SequenceId, hdr.TimeStamp.QuadPart);
+
+                auto ii = mPresentBySubmitSequence.find(SequenceId);
+                if (ii != mPresentBySubmitSequence.end()) {
+                    auto presentByContext = &ii->second;
+                    auto jj = presentByContext->find(hContext);
+                    if (jj != presentByContext->end()) {
+                        auto p = jj->second;
+                        if (p->PresentMode == PresentMode::Composed_Copy_GPU_GDI) {
+                            mGpuTrace.CompleteFrame(p.get(), hdr.TimeStamp.QuadPart);
+                        }
+                    }
+                }
             }
             return;
         }
@@ -1290,6 +1310,7 @@ void PMTraceConsumer::HandleWin32kEvent(EVENT_RECORD* pEventRecord)
 
         TRACK_PRESENT_PATH(present);
 
+        VerboseTraceBeforeModifyingPresent(present.get());
         present->PresentMode = PresentMode::Composed_Flip;
         present->SeenWin32KEvents = true;
 

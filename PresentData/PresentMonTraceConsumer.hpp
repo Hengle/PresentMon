@@ -29,9 +29,10 @@
 // Hardware_Legacy_Flip:
 //     Runtime PresentStart
 //     -> Flip (by thread/process, for classification)
-//     -> QueueSubmit (by thread, for submit sequence)
+//     -> QueueSubmit (by thread, for submit sequence if MMIO/MPO flip, or for screen time if non-MMIO/MPO flip)
 //     -> MMIOFlip (by submit sequence, for ready time and immediate flags)
 //     -> VSyncDPC (by submit sequence, for screen time)
+//     -> VSyncDPCMPO (by submit sequence, for screen time if MPO flip)
 //
 // Hardware_Legacy_Copy_To_Front_Buffer:
 //     Runtime PresentStart
@@ -177,8 +178,18 @@ struct PresentEvent {
     PresentResult FinalState;
     InputDeviceType InputType;
     bool SupportsTearing;
-    bool WaitForFlipEvent;
-    bool WaitForMPOFlipEvent;
+
+    // IsMMIOFlip is set to true for Hardware_Legacy_Flip presentations using MMIO flip.  When
+    // false, Hardware_Legacy_Flip presents are considered complete when their present queue packet
+    // completes.  When true, they are not considered complete until an
+    // MMIOFlipMultiPlaneOverlay_Info event with a matching SubmitSequenceq is observed.
+    bool IsMMIOFlip;
+
+    // IsMPOFlip is set to true for Hardware_Legacy_Flip presentations using MPO.  When false,
+    // Hardware_Legacy_Flip presents are considered complete on a VSyncDPC with a matching
+    // SubmitSequence. When true, we wait for the subsequent VSyncDPCMPO event.
+    bool IsMPOFlip;
+
     bool SeenDxgkPresent;
     bool SeenWin32KEvents;
     bool SeenInFrameEvent;      // This present has gotten a Win32k TokenStateChanged event into InFrame state
