@@ -4,6 +4,9 @@ The PresentMon/ directory contains source for a standalone console application t
 *PresentMon SDK* to capture and analyze graphics applications, outputting data to the console and/or
 CSV file(s).
 
+A binary of the console application is provided in the release, e.g.:
+[PresentMon-2.1.1-x64.exe](https://github.com/GameTechDev/PresentMon/releases/download/v2.1.1/PresentMon-2.1.1-x64.exe).
+
 ## Command line options
 
 | Capture Target Options         |     |
