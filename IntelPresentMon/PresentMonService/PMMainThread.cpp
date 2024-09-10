@@ -129,7 +129,9 @@ void PowerTelemetryThreadEntry_(Service* const srv, PresentMon* const pm,
                 for (auto& adapter : ptc->GetPowerTelemetryAdapters()) {
                     adapter->Sample();
                 }
-                waiter.SetInterval(pm->GetGpuTelemetryPeriod());
+                // Convert from the ms to seconds as GetTelemetryPeriod returns back
+                // ms and SetInterval expects seconds.
+                waiter.SetInterval(pm->GetGpuTelemetryPeriod()/1000.);
                 waiter.Wait();
                 // go dormant if there are no active streams left
                 // TODO: consider race condition here if client stops and starts streams rapidly
@@ -163,7 +165,9 @@ void CpuTelemetryThreadEntry_(Service* const srv, PresentMon* const pm,
 		}
 		while (WaitForSingleObject(srv->GetServiceStopHandle(), 0) != WAIT_OBJECT_0) {
 			cpu->Sample();
-            waiter.SetInterval(pm->GetGpuTelemetryPeriod());
+            // Convert from the ms to seconds as GetTelemetryPeriod returns back
+            // ms and SetInterval expects seconds.
+            waiter.SetInterval(pm->GetGpuTelemetryPeriod() / 1000.);
             waiter.Wait();
 			// Get the number of currently active streams
 			auto num_active_streams = pm->GetActiveStreams();
