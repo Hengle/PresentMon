@@ -190,10 +190,14 @@ void MockPresentMonSession::AddPresents(
     uint64_t stopQpc, bool* hitStopQpc) {
     auto i = *presentEventIndex;
 
-    assert(trace_session_.mStartTimestamp.QuadPart != 0);
-    // If mStartTimestamp contains a value an etl file is being processed.
-    // Set this value in the streamer to have the correct start time.
-    streamer_.SetStartQpc(trace_session_.mStartTimestamp.QuadPart);
+    {
+        std::lock_guard<std::mutex> lock(session_mutex_);
+        assert(trace_session_.mStartTimestamp.QuadPart != 0);
+        // If mStartTimestamp contains a value an etl file is being processed.
+        // Set this value in the streamer to have the correct start time.
+        streamer_.SetStartQpc(trace_session_.mStartTimestamp.QuadPart);
+    }
+
     streamer_.SetStreamMode(StreamMode::kOfflineEtl);
 
     for (auto n = presentEvents.size(); i < n; ++i) {

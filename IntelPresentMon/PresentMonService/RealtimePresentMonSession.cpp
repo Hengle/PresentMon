@@ -99,6 +99,7 @@ void RealtimePresentMonSession::FlushEvents()
     } props{};
     props.Wnode.BufferSize = (ULONG)sizeof(TraceProperties);
     props.LoggerNameOffset = offsetof(TraceProperties, mSessionName);
+    std::lock_guard<std::mutex> lock(session_mutex_);
     if (ControlTraceW(trace_session_.mSessionHandle, nullptr, &props, EVENT_TRACE_CONTROL_FLUSH)) {
         pmlog_warn("Failed manual flush of ETW event buffer").hr();
     }
@@ -226,8 +227,11 @@ void RealtimePresentMonSession::AddPresents(
     uint64_t stopQpc, bool* hitStopQpc) {
     auto i = *presentEventIndex;
 
-    if (trace_session_.mStartTimestamp.QuadPart != 0) {
-        streamer_.SetStartQpc(trace_session_.mStartTimestamp.QuadPart);
+    {
+        std::lock_guard<std::mutex> lock(session_mutex_);
+        if (trace_session_.mStartTimestamp.QuadPart != 0) {
+            streamer_.SetStartQpc(trace_session_.mStartTimestamp.QuadPart);
+        }
     }
 
     // logging of ETW latency

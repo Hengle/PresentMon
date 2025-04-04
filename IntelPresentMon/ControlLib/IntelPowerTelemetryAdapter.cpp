@@ -341,7 +341,7 @@ namespace pwr::intel
             if (const auto result = ctlPowerGetLimits(powerDomains[0], &limits);
                 result == CTL_RESULT_SUCCESS) {
                 gpuSustainedPowerLimit = (double)limits.sustainedPowerLimit.power;
-                pmlog_verb(v::gpu)(std::format("ctlPowerGetLimits output")).pmwatch(GetName())
+                pmlog_verb(v::gpu)("ctlPowerGetLimits output").pmwatch(GetName())
                     .pmwatch(ref::DumpGenerated(limits));
             }
             else {

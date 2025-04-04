@@ -343,7 +343,8 @@ static int PrintColor(WORD color, wchar_t const* format, va_list val)
         SetConsoleTextAttribute(console, info.wAttributes);
 
         if (pformat != format) {
-            c += fwprintf(stderr, L"\n");
+            auto result = fwprintf(stderr, L"\n");
+            c = (result >= 0) ? c + result : c;
             free(pformat);
         }
     }

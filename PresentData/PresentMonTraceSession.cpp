@@ -134,6 +134,9 @@ struct FilteredProvider {
         }
     }
 
+    FilteredProvider(const FilteredProvider&) = delete;
+    FilteredProvider& operator=(const FilteredProvider& other) = delete;
+
     void ClearFilter()
     {
         if (filterDesc_.Ptr != 0) {

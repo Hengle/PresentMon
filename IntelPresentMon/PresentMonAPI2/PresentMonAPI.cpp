@@ -55,7 +55,7 @@ void RemoveHandleMapping_(const void* dependentHandle)
 
 PRESENTMON_API2_EXPORT _CrtMemState pmCreateHeapCheckpoint_()
 {
-	_CrtMemState s;
+	_CrtMemState s = {};
 	_CrtMemCheckpoint(&s);
 	return s;
 }

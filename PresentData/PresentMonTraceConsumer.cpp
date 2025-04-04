@@ -172,6 +172,17 @@ PresentEvent::PresentEvent(uint32_t fid)
     , GPUVideoDuration(0)
     , InputTime(0)
     , MouseClickTime(0)
+    , AppFrameId(0)
+    , AppSleepStartTime(0)
+    , AppSleepEndTime(0)
+    , AppSimStartTime(0)
+    , AppSimEndTime(0)
+    , AppRenderSubmitStartTime(0)
+    , AppRenderSubmitEndTime(0)
+    , AppPresentStartTime(0)
+    , AppPresentEndTime(0)
+    , AppInputSample{ 0, InputDeviceType::None }
+
     , SwapChainAddress(0)
     , SyncInterval(-1)
     , PresentFlags(0)
@@ -207,10 +218,13 @@ PresentEvent::PresentEvent(uint32_t fid)
     , IsCompleted(false)
     , IsLost(false)
     , PresentFailed(false)
+    , IsHybridPresent(false)
     , PresentInDwmWaitingStruct(false)
 
     , WaitingForPresentStop(false)
     , WaitingForFlipFrameType(false)
+    , DoneWaitingForFlipFrameType(false)
+    , WaitingForFrameId(false)
 {
 }
 
