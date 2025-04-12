@@ -9,14 +9,14 @@ namespace pmon::util
 {
 	PrecisionWaiter::PrecisionWaiter(double waitBuffer) noexcept
 		:
-		defaultWaitBuffer_{ waitBuffer }
-	{
-		waitableTimer_ = win::Handle(CreateWaitableTimerExW(
+		defaultWaitBuffer_{ waitBuffer },
+		waitableTimer_{win::Handle(CreateWaitableTimerExW(
 			nullptr,
 			nullptr,
 			CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
 			TIMER_ALL_ACCESS
-		));
+		))}
+	{
 		if (!waitableTimer_) {
 			pmlog_error("Failed creating high resolution timer").hr();
 		}

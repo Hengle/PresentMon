@@ -13,7 +13,6 @@
 #include "GlobalIdentifiers.h"
 #include <ranges>
 #include "../CommonUtilities/IntervalWaiter.h"
-#include "../CommonUtilities/PrecisionWaiter.h"
 #include "../CommonUtilities/win/Event.h"
 
 #include "../CommonUtilities/log/GlogShim.h"

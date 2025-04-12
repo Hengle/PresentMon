@@ -23,7 +23,7 @@ namespace GfxLayer
         static IUnknown*                    GetRootIUnknown(IUnknown* pUnknown);
 
 		IUnknown_Wrapper(REFIID riid, IUnknown* pObject);
-		~IUnknown_Wrapper() = default;
+		virtual ~IUnknown_Wrapper() = default;
 
 		// IUnknown
 

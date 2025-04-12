@@ -1,5 +1,6 @@
 #include "../CommonUtilities/win/MessageBox.h"
 #include "../CommonUtilities/win/Utilities.h"
+#include "../CommonUtilities/Exception.h"
 #include <memory>
 #include <string>
 #include <format>
@@ -25,9 +26,15 @@ namespace GfxLayer
 {
     void WaitForUserInput()
     {
-        auto message = "GfxLayer.dll has been injected to the following application: \n"s + win::GetExecutableModulePath().string() + "\n\n"s;
-        message += "Press OK to continue running the application."s;
-        win::MsgBox{ std::move(message) }.WithTitle("Pausing Target Application").AsModal();
+        try {
+            auto message = "GfxLayer.dll has been injected to the following application: \n"s + win::GetExecutableModulePath().string() + "\n\n"s;
+            message += "Press OK to continue running the application."s;
+            win::MsgBox{ std::move(message) }.WithTitle("Pausing Target Application").AsModal();
+        }
+        catch (...) {
+            const auto rep = ReportException("Failure opening message box to wait for user input");
+            LOGE << rep.first << std::endl;
+        }
     }
 
     void Initialize()
@@ -60,16 +67,22 @@ namespace GfxLayer
 
 BOOL WINAPI DllMain(HINSTANCE hInstance, DWORD reason, LPVOID pReserved)
 {
-    switch (reason)
-    {
+    try {
+        switch (reason)
+        {
         case DLL_PROCESS_ATTACH:
             GfxLayer::Initialize();
             break;
 
         case DLL_PROCESS_DETACH:
-            if (pReserved == nullptr)
-            {}
+            if (pReserved == nullptr) {
+            }
             break;
+        }
+    }
+    catch (...) {
+        // TODO: implement better reporting here
+        return FALSE;
     }
 
     return TRUE;

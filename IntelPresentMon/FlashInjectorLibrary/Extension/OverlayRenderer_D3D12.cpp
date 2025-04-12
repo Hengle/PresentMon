@@ -58,11 +58,8 @@ namespace GfxLayer::Extension
 
 	void OverlayRenderer_D3D12::Render(bool renderBar)
 	{
-		float* pColor = GetConfig().BackgroundColor;
-		if (renderBar)
-		{
-			pColor = GetConfig().BarColor;
-		}
+		const auto config = GetConfig();
+		const float* pColor = renderBar ? config.BarColor : config.BackgroundColor;
 
 		auto backBufferIdx = GetSwapChain()->GetCurrentBackBufferIndex();
 		auto rtvHandle = m_RtvHeap->GetCPUDescriptorHandleForHeapStart();

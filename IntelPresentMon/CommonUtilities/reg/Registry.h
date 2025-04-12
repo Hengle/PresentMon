@@ -158,31 +158,36 @@ namespace pmon::util::reg
 			hive_{ hive },
 			keyPath_{ keyPath }
 		{
-			// opening existing key
 			try {
-				key_.Open(hive_, keyPath_, readOnly ? (KEY_READ) : (KEY_READ | KEY_WRITE));
-				return;
-			}
-			catch (const winreg::RegException& e) {
-				if (e.code().value() == 2) {
-					pmlog_warn(std::format("Registry key [{}] does not exist, creating...", str::ToNarrow(keyPath)));
-					// note the lack of return here, allowing us to continue on to the creation routine below
+				// opening existing key
+				try {
+					key_.Open(hive_, keyPath_, readOnly ? (KEY_READ) : (KEY_READ | KEY_WRITE));
+					return;
 				}
-				else {
+				catch (const winreg::RegException& e) {
+					if (e.code().value() == 2) {
+						pmlog_warn(std::format("Registry key [{}] does not exist, creating...", str::ToNarrow(keyPath)));
+						// note the lack of return here, allowing us to continue on to the creation routine below
+					}
+					else {
+						pmlog_error(ReportException(std::format("Failed to open registry key [{}]", str::ToNarrow(keyPath))));
+						return;
+					}
+				}
+				catch (...) {
 					pmlog_error(ReportException(std::format("Failed to open registry key [{}]", str::ToNarrow(keyPath))));
 					return;
 				}
+				// creating new key
+				try {
+					key_.Create(hive_, keyPath_);
+				}
+				catch (...) {
+					pmlog_error(ReportException(std::format("Failed to create registry key [{}]", str::ToNarrow(keyPath))));
+				}
 			}
 			catch (...) {
-				pmlog_error(ReportException(std::format("Failed to open registry key [{}]", str::ToNarrow(keyPath))));
-				return;
-			}
-			// creating new key
-			try {
-				key_.Create(hive_, keyPath_);
-			}
-			catch (...) {
-				pmlog_error(ReportException(std::format("Failed to create registry key [{}]", str::ToNarrow(keyPath))));
+				pmlog_error("final error in registry");
 			}
 		}
 	private:

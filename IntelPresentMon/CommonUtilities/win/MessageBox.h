@@ -14,6 +14,12 @@ namespace pmon::util::win
 		MsgBox& WithTitle(std::string title);
 		MsgBox& AsError();
 		MsgBox& AsModal(const void* hWnd = nullptr);
+
+		MsgBox(const MsgBox&) = delete;
+		MsgBox& operator=(const MsgBox&) = delete;
+		MsgBox(MsgBox&&) = delete;
+		MsgBox& operator=(MsgBox&&) = delete;
+
 	private:
 		enum class Type_
 		{

@@ -1,6 +1,7 @@
 #include "../IntelPresentMon/CommonUtilities/win/WinAPI.h"
 #include "../IntelPresentMon/CommonUtilities/win/Utilities.h"
 #include "../IntelPresentMon/CommonUtilities/Hash.h"
+#include "../IntelPresentMon/CommonUtilities/Exception.h"
 #include <initguid.h>
 #include <evntcons.h>
 #include <cguid.h>
@@ -283,6 +284,13 @@ public:
     {
         std::filesystem::remove((const wchar_t*)name_);
     }
+
+    TempFile() = default;
+    TempFile(const TempFile&) = delete;
+    TempFile & operator=(const TempFile&) = delete;
+    TempFile(TempFile&&) = delete;
+    TempFile & operator=(TempFile&&) = delete;
+
 private:
     CComBSTR name_ = "null-log.etl.tmp";
 };
@@ -292,115 +300,122 @@ int main(int argc, const char** argv)
 {
     using namespace pmon;
 
-    // parse command line, return with error code from CLI11 if running as app
-    if (auto e = clio::Options::Init(argc, argv)) {
-        return *e;
-    }
-    auto& opt = clio::Options::Get();
-
-    const auto ValidateRange = [](const auto& range) {
-        if (range) {
-            auto& r = *range;
-            if (r.first > r.second) {
-                std::cout << "Lower bound of trim range [" << r.first <<
-                    "] must not exceed upper [" << r.second << "]" << std::endl;
-                return 1;
-            }
+    try {
+        // parse command line, return with error code from CLI11 if running as app
+        if (auto e = clio::Options::Init(argc, argv)) {
+            return *e;
         }
-        return 0;
-    };
-    if (ValidateRange(opt.trimRangeQpc)) return -1;
-    if (ValidateRange(opt.trimRangeMs)) return -1;
-    if (ValidateRange(opt.trimRangeNs)) return -1;
+        auto& opt = clio::Options::Get();
 
-    std::locale::global(std::locale("en_US.UTF-8"));
+        const auto ValidateRange = [](const auto& range) {
+            if (range) {
+                auto& r = *range;
+                if (r.first > r.second) {
+                    std::cout << "Lower bound of trim range [" << r.first <<
+                        "] must not exceed upper [" << r.second << "]" << std::endl;
+                    return 1;
+                }
+            }
+            return 0;
+            };
+        if (ValidateRange(opt.trimRangeQpc)) return -1;
+        if (ValidateRange(opt.trimRangeMs)) return -1;
+        if (ValidateRange(opt.trimRangeNs)) return -1;
 
-    if (auto hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED); FAILED(hr)) {
-        std::cout << "Failed to init COM" << std::endl;
+        std::locale::global(std::locale("en_US.UTF-8"));
+
+        if (auto hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED); FAILED(hr)) {
+            std::cout << "Failed to init COM" << std::endl;
+            return -1;
+        }
+
+        ITraceRelogger* pRelogger = nullptr;
+        if (auto hr = CoCreateInstance(CLSID_TraceRelogger, 0, CLSCTX_INPROC_SERVER, IID_ITraceRelogger, reinterpret_cast<void**>(&pRelogger));
+            FAILED(hr)) {
+            std::cout << "Failed to create trace relogger instance" << std::endl;
+            return -1;
+        }
+
+        TRACEHANDLE relogTraceHandle;
+        const CComBSTR inputEtlName = (*opt.inputFile).c_str();
+        if (auto hr = pRelogger->AddLogfileTraceStream(inputEtlName, nullptr, &relogTraceHandle); FAILED(hr)) {
+            std::cout << "Failed to add logfile: " << *opt.inputFile << std::endl;
+        }
+
+        // we must output to etl file no matter what
+        // create a dummy temp etl if user did not specify output
+        CComBSTR outputEtlName;
+        std::optional<TempFile> temp;
+        if (opt.outputFile) {
+            outputEtlName = (*opt.outputFile).c_str();
+        }
+        else {
+            temp.emplace();
+            outputEtlName = *temp;
+        }
+        if (auto hr = pRelogger->SetOutputFilename(outputEtlName); FAILED(hr)) {
+            std::cout << "Failed to set output file: " << *opt.outputFile << std::endl;
+        }
+
+        // do a dry run of PresentMon provider/filter processing to enumerate the filter parameters
+        std::shared_ptr<Filter> pFilter;
+        if (opt.provider) {
+            pFilter = std::make_shared<Filter>();
+            PMTraceConsumer traceConsumer;
+            traceConsumer.mTrackDisplay = true;   // ... presents to the display.
+            traceConsumer.mTrackGPU = true;       // ... GPU work.
+            traceConsumer.mTrackGPUVideo = true;  // ... GPU video work (separately from non-video GPU work).
+            traceConsumer.mTrackInput = true;     // ... keyboard/mouse latency.
+            traceConsumer.mTrackFrameType = true; // ... the frame type communicated through the Intel-PresentMon provider.
+            EnableProvidersListing(0, nullptr, &traceConsumer, true, true, pFilter);
+        }
+
+        auto pCallbackProcessor = std::make_unique<EventCallback>(!opt.outputFile,
+            pFilter, (bool)opt.trimState, (bool)opt.event);
+        if (auto hr = pRelogger->RegisterCallback(pCallbackProcessor.get()); FAILED(hr)) {
+            std::cout << "Failed to register callback" << std::endl;
+        }
+
+        if (opt.trimRangeQpc) {
+            pCallbackProcessor->SetTrimRangeQpc(*opt.trimRangeQpc);
+        }
+        else if (opt.trimRangeMs) {
+            pCallbackProcessor->SetTrimRangeMs(*opt.trimRangeMs);
+        }
+        else if (opt.trimRangeNs) {
+            auto& r = *opt.trimRangeNs;
+            pCallbackProcessor->SetTrimRangeMs({
+                r.first * 1'000'000.,
+                r.second * 1'000'000.
+                });
+        }
+
+        if (auto hr = pRelogger->ProcessTrace(); FAILED(hr)) {
+            std::cout << "Failed to process trace: " << util::win::GetErrorDescription(hr) << std::endl;
+        }
+
+        const auto tsr = pCallbackProcessor->GetTimestampRange();
+        const auto dur = tsr.second - tsr.first;
+        std::cout << std::format(" ======== Report for [ {} ] ========\n", *opt.inputFile);
+        std::cout << std::format("Total event count: {:L}\n", pCallbackProcessor->GetEventCount());
+        std::cout << std::format("Timestamp range {:L} - {:L} (duration: {:L})\n", tsr.first, tsr.second, dur);
+        std::cout << std::format("Duration of trace in milliseconds: {:L}\n\n", double(dur) / 10'000.);
+
+        std::cout << std::format("Events trimmed and/or filtered: {:L}\n",
+            pCallbackProcessor->GetEventCount() - pCallbackProcessor->GetKeepCount());
+        std::cout << std::format("Count of persisted events: {:L}\n", pCallbackProcessor->GetKeepCount());
+
+        if (!opt.outputFile) {
+            std::cout << "No output specified; running in analysis mode\n";
+        }
+        else {
+            std::cout << "Output written to: " << *opt.outputFile << std::endl;
+        }
+    }
+    catch (...) {
+        auto rep = util::ReportException("exception caught in main");
+        std::cerr << rep.first << std::endl;
         return -1;
-    }
-
-    ITraceRelogger* pRelogger = nullptr;
-    if (auto hr = CoCreateInstance(CLSID_TraceRelogger, 0, CLSCTX_INPROC_SERVER, IID_ITraceRelogger, reinterpret_cast<void**>(&pRelogger));
-        FAILED(hr)) {
-        std::cout << "Failed to create trace relogger instance" << std::endl;
-        return -1;
-    }
-
-    TRACEHANDLE relogTraceHandle;
-    const CComBSTR inputEtlName = (*opt.inputFile).c_str();
-    if (auto hr = pRelogger->AddLogfileTraceStream(inputEtlName, nullptr, &relogTraceHandle); FAILED(hr)) {
-        std::cout << "Failed to add logfile: " << *opt.inputFile << std::endl;
-    }
-
-    // we must output to etl file no matter what
-    // create a dummy temp etl if user did not specify output
-    CComBSTR outputEtlName;
-    std::optional<TempFile> temp;
-    if (opt.outputFile) {
-        outputEtlName = (*opt.outputFile).c_str();
-    }
-    else {
-        temp.emplace();
-        outputEtlName = *temp;
-    }
-    if (auto hr = pRelogger->SetOutputFilename(outputEtlName); FAILED(hr)) {
-        std::cout << "Failed to set output file: " << *opt.outputFile << std::endl;
-    }
-
-    // do a dry run of PresentMon provider/filter processing to enumerate the filter parameters
-    std::shared_ptr<Filter> pFilter;
-    if (opt.provider) {
-        pFilter = std::make_shared<Filter>();
-        PMTraceConsumer traceConsumer;
-        traceConsumer.mTrackDisplay = true;   // ... presents to the display.
-        traceConsumer.mTrackGPU = true;       // ... GPU work.
-        traceConsumer.mTrackGPUVideo = true;  // ... GPU video work (separately from non-video GPU work).
-        traceConsumer.mTrackInput = true;     // ... keyboard/mouse latency.
-        traceConsumer.mTrackFrameType = true; // ... the frame type communicated through the Intel-PresentMon provider.
-        EnableProvidersListing(0, nullptr, &traceConsumer, true, true, pFilter);
-    }
-
-    auto pCallbackProcessor = std::make_unique<EventCallback>(!opt.outputFile,
-        pFilter, (bool)opt.trimState, (bool)opt.event);
-    if (auto hr = pRelogger->RegisterCallback(pCallbackProcessor.get()); FAILED(hr)) {
-        std::cout << "Failed to register callback" << std::endl;
-    }
-
-    if (opt.trimRangeQpc) {
-        pCallbackProcessor->SetTrimRangeQpc(*opt.trimRangeQpc);
-    }
-    else if (opt.trimRangeMs) {
-        pCallbackProcessor->SetTrimRangeMs(*opt.trimRangeMs);
-    }
-    else if (opt.trimRangeNs) {
-        auto& r = *opt.trimRangeNs;
-        pCallbackProcessor->SetTrimRangeMs({
-            r.first * 1'000'000.,
-            r.second * 1'000'000.
-        });
-    }
-
-    if (auto hr = pRelogger->ProcessTrace(); FAILED(hr)) {
-        std::cout << "Failed to process trace: " << util::win::GetErrorDescription(hr) << std::endl;
-    }
-
-    const auto tsr = pCallbackProcessor->GetTimestampRange();
-    const auto dur = tsr.second - tsr.first;
-    std::cout << std::format(" ======== Report for [ {} ] ========\n", *opt.inputFile);
-    std::cout << std::format("Total event count: {:L}\n", pCallbackProcessor->GetEventCount());
-    std::cout << std::format("Timestamp range {:L} - {:L} (duration: {:L})\n", tsr.first, tsr.second, dur);
-    std::cout << std::format("Duration of trace in milliseconds: {:L}\n\n", double(dur) / 10'000.);
-
-    std::cout << std::format("Events trimmed and/or filtered: {:L}\n",
-        pCallbackProcessor->GetEventCount() - pCallbackProcessor->GetKeepCount());
-    std::cout << std::format("Count of persisted events: {:L}\n", pCallbackProcessor->GetKeepCount());
-
-    if (!opt.outputFile) {
-        std::cout << "No output specified; running in analysis mode\n";
-    }
-    else {
-        std::cout << "Output written to: " << *opt.outputFile << std::endl;
     }
 
     return 0;
