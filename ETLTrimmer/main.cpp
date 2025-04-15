@@ -282,7 +282,12 @@ public:
     }
     ~TempFile()
     {
-        std::filesystem::remove((const wchar_t*)name_);
+        try {
+            std::filesystem::remove((const wchar_t*)name_);
+        }
+        catch (...) {
+            std::cerr << pmon::util::ReportException("Failed removing file").first << std::endl;
+        }
     }
 
     TempFile() = default;
